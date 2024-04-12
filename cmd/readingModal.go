@@ -10,16 +10,6 @@ import (
 	"github.com/isabelroses/izrss/lib"
 )
 
-var (
-	titleStyle = func() lipgloss.Style {
-		return lipgloss.NewStyle().Padding(0, 1)
-	}()
-
-	infoStyle = func() lipgloss.Style {
-		return titleStyle.Copy()
-	}()
-)
-
 type ReadingModel struct {
 	Post     Post
 	viewport viewport.Model
@@ -91,13 +81,13 @@ func (m ReadingModel) View() string {
 }
 
 func (m ReadingModel) headerView() string {
-	title := titleStyle.Render(m.Post.Title)
+	title := mainStyle.Render(m.Post.Title)
 	line := strings.Repeat("─", max(0, m.viewport.Width-lipgloss.Width(title)))
 	return lipgloss.JoinHorizontal(lipgloss.Center, title, line)
 }
 
 func (m ReadingModel) footerView() string {
-	info := infoStyle.Render(fmt.Sprintf("%3.f%%", m.viewport.ScrollPercent()*100))
+	info := mainStyle.Render(fmt.Sprintf("%3.f%%", m.viewport.ScrollPercent()*100))
 	line := strings.Repeat("─", max(0, m.viewport.Width-lipgloss.Width(info)))
 	return lipgloss.JoinHorizontal(lipgloss.Center, line, info)
 }
