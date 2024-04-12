@@ -6,7 +6,7 @@
 
 &nbsp;
 
-![demo](./.github/demo.gif)
+![demo](./.github/assets/demo.gif)
 
 ### Usage
 
