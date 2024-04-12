@@ -47,6 +47,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.viewport.Width = msg.Width
 			m.viewport.Height = msg.Height
+			m.table.SetWidth(msg.Width)
+			m.table.SetHeight(msg.Height)
 		}
 
 	case tea.KeyMsg:
