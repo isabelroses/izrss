@@ -10,8 +10,8 @@ import (
 	"github.com/isabelroses/izrss/lib"
 )
 
-type ReadingModel struct {
-	Post     Post
+type readingModel struct {
+	Post     lib.Post
 	viewport viewport.Model
 	ready    bool
 }
@@ -23,9 +23,9 @@ func max(a, b int) int {
 	return b
 }
 
-func (m ReadingModel) Init() tea.Cmd { return nil }
+func (m readingModel) Init() tea.Cmd { return nil }
 
-func (m ReadingModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m readingModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var (
 		cmd  tea.Cmd
 		cmds []tea.Cmd
@@ -69,7 +69,7 @@ func (m ReadingModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-func (m ReadingModel) View() string {
+func (m readingModel) View() string {
 	if !m.ready {
 		return "\n  Initializing..."
 	}
@@ -77,13 +77,13 @@ func (m ReadingModel) View() string {
 	return fmt.Sprintf("%s\n%s\n%s", m.headerView(), m.viewport.View(), m.footerView())
 }
 
-func (m ReadingModel) headerView() string {
+func (m readingModel) headerView() string {
 	title := lib.MainStyle().Render(m.Post.Title)
 	line := strings.Repeat("─", max(0, m.viewport.Width-lipgloss.Width(title)))
 	return lipgloss.JoinHorizontal(lipgloss.Center, title, line)
 }
 
-func (m ReadingModel) footerView() string {
+func (m readingModel) footerView() string {
 	info := lib.MainStyle().Render(fmt.Sprintf("%3.f%%", m.viewport.ScrollPercent()*100))
 	line := strings.Repeat("─", max(0, m.viewport.Width-lipgloss.Width(info)))
 	return lipgloss.JoinHorizontal(lipgloss.Center, line, info)
