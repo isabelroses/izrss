@@ -1,7 +1,7 @@
-package cmd
+package lib
 
 import "github.com/charmbracelet/lipgloss"
 
-var mainStyle = func() lipgloss.Style {
+func MainStyle() lipgloss.Style {
 	return lipgloss.NewStyle().Padding(0, 1)
-}()
+}

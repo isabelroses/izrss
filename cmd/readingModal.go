@@ -23,9 +23,7 @@ func max(a, b int) int {
 	return b
 }
 
-func (m ReadingModel) Init() tea.Cmd {
-	return nil
-}
+func (m ReadingModel) Init() tea.Cmd { return nil }
 
 func (m ReadingModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var (
@@ -51,7 +49,6 @@ func (m ReadingModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.ready {
 			m.viewport = viewport.New(msg.Width, msg.Height-verticalMarginHeight)
 			m.viewport.YPosition = headerHeight
-			m.viewport.HighPerformanceRendering = false
 
 			content := RenderMarkdown(m.Post.Content)
 			m.viewport.SetContent(content)
@@ -81,13 +78,13 @@ func (m ReadingModel) View() string {
 }
 
 func (m ReadingModel) headerView() string {
-	title := mainStyle.Render(m.Post.Title)
+	title := lib.MainStyle().Render(m.Post.Title)
 	line := strings.Repeat("─", max(0, m.viewport.Width-lipgloss.Width(title)))
 	return lipgloss.JoinHorizontal(lipgloss.Center, title, line)
 }
 
 func (m ReadingModel) footerView() string {
-	info := mainStyle.Render(fmt.Sprintf("%3.f%%", m.viewport.ScrollPercent()*100))
+	info := lib.MainStyle().Render(fmt.Sprintf("%3.f%%", m.viewport.ScrollPercent()*100))
 	line := strings.Repeat("─", max(0, m.viewport.Width-lipgloss.Width(info)))
 	return lipgloss.JoinHorizontal(lipgloss.Center, line, info)
 }

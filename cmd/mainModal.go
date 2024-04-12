@@ -38,6 +38,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
+		// dynaimcally update the viewport size
 		if !m.ready {
 			m.viewport = viewport.New(msg.Width, msg.Height)
 			m.ready = true
@@ -59,6 +60,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				id, _ := strconv.Atoi(m.table.SelectedRow()[0])
 				post := m.posts.Posts[id]
 				loadReader(post)
+				// early return since we don't need to update the model
 				return m, nil
 			} else {
 				id, _ := strconv.Atoi(m.table.SelectedRow()[0])
@@ -104,7 +106,7 @@ func loadHome(m model) model {
 		Bold(false)
 	t.SetStyles(s)
 
-	m.context = "urls"
+	m.context = "home"
 	m.table = t
 	m.ready = true
 
@@ -159,7 +161,7 @@ func loadReader(post Post) {
 }
 
 func Run() {
-	m := model{"urls", feeds, Posts{}, viewport.Model{}, table.Model{}, false}
+	m := model{"home", feeds, Posts{}, viewport.Model{}, table.Model{}, false}
 	m = loadHome(m)
 
 	if _, err := tea.NewProgram(m).Run(); err != nil {
