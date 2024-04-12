@@ -48,12 +48,15 @@ func isWSL() bool {
 
 func ConvertDate(dateString string) string {
 	layoutList := []string{
+		"Mon, 02 Jan 2006 15:04:05 -0700",
 		"Mon, 02 Jan 2006 15:04:05 MST",
 		"Monday, 02-Jan-06 15:04:05 MST",
 		"02 Jan 2006 15:04:05 -0700",
 		"02 Jan 2006 15:04:05 +0000",
 		"02 Jan 2006 15:04:05 MST",
 		"02-Jan-06 15:04:05 MST",
+		"2006-02-01T15:04:05",
+		"2006-01-02T15:04:05",
 		"January 02, 2006",
 		"02/Jan/2006",
 		"02-Jan-2006",
