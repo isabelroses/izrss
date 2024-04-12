@@ -9,6 +9,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+var feeds = GetAllContent()
+
 type model struct {
 	context string
 	feeds   Feeds
@@ -29,7 +31,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "esc", "q", "ctrl+c":
 			if m.context == "content" {
-				return loadUrls(), nil
+				return loadHome(m), nil
 			} else {
 				return m, tea.Quit
 			}
@@ -49,7 +51,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func loadUrls() model {
+func loadHome(m model) model {
 	columns := []table.Column{
 		{Title: "ID", Width: 2},
 		{Title: "Title", Width: 60},
@@ -57,11 +59,8 @@ func loadUrls() model {
 
 	rows := []table.Row{}
 
-	feeds := Feeds{}
-
-	for i, Feeds := range GetAllContent() {
+	for i, Feeds := range feeds {
 		rows = append(rows, table.Row{strconv.Itoa(i), Feeds.Title})
-		feeds = append(feeds, Feeds)
 	}
 
 	t := table.New(
@@ -79,7 +78,8 @@ func loadUrls() model {
 		Bold(false)
 	t.SetStyles(s)
 
-	m := model{"urls", feeds, Posts{}, t}
+	m.context = "urls"
+	m.table = t
 
 	return m
 }
@@ -132,7 +132,8 @@ func loadReader(post Post) {
 }
 
 func Run() {
-	m := loadUrls()
+	m := model{"urls", feeds, Posts{}, table.Model{}}
+	m = loadHome(m)
 
 	if _, err := tea.NewProgram(m).Run(); err != nil {
 		log.Fatal(err)
