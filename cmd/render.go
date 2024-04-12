@@ -13,7 +13,7 @@ var (
 		glamour.WithAutoStyle(),
 		glamour.WithEnvironmentConfig(),
 
-		// glamour.WithWordWrap(0),
+		glamour.WithWordWrap(100),
 	)
 
 	htom = tomd.NewConverter("", true, nil)
