@@ -8,5 +8,14 @@
 
 ![demo](./.github/demo.gif)
 
-### Installation
+### Usage
 
+
+Ensure you have a `~/.config/izrss/urls` file, or your systems eqivelent, with the following structure:
+
+```txt
+https://isabelroses/rss.xml
+https://uncenter.dev/feed.xml
+```
+
+Then run `izrss` to read the feeds.
