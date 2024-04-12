@@ -93,10 +93,10 @@ func GetContentForURL(url string) Posts {
 
 func createPost(item *gofeed.Item) Post {
 	content := ""
-	if item.Description != "" {
-		content = item.Description
-	} else {
+	if item.Content != "" {
 		content = item.Content
+	} else {
+		content = item.Description
 	}
 
 	post := Post{
