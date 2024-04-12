@@ -1,9 +1,11 @@
 package lib
 
 import (
+	"log"
 	"os/exec"
 	"runtime"
 	"strings"
+	"time"
 )
 
 // https://stackoverflow.com/questions/39320371/how-start-web-server-to-open-page-in-browser-in-golang
@@ -42,4 +44,39 @@ func isWSL() bool {
 		return false
 	}
 	return strings.Contains(strings.ToLower(string(releaseData)), "microsoft")
+}
+
+func ConvertDate(dateString string) string {
+	layoutList := []string{
+		"Mon, 02 Jan 2006 15:04:05 MST",
+		"Monday, 02-Jan-06 15:04:05 MST",
+		"02 Jan 2006 15:04:05 -0700",
+		"02 Jan 2006 15:04:05 +0000",
+		"02 Jan 2006 15:04:05 MST",
+		"02-Jan-06 15:04:05 MST",
+		"January 02, 2006",
+		"02/Jan/2006",
+		"02-Jan-2006",
+		"2006-01-02",
+		"01/02/2006",
+		time.RFC3339,
+	}
+
+	var parsedDate time.Time
+	var err error
+
+	for _, layout := range layoutList {
+		parsedDate, err = time.Parse(layout, dateString)
+		if err == nil {
+			break
+		}
+	}
+
+	if err != nil {
+		log.Fatalf("could not parse date: %v", err)
+	}
+
+	date := parsedDate.Format("02/01/2006")
+
+	return date
 }

@@ -20,6 +20,7 @@ type Post struct {
 type Posts struct {
 	Title string
 	Posts []Post
+	Url   string
 }
 
 type Feeds []Posts
@@ -57,6 +58,7 @@ func GetContentForUrl(url string) Posts {
 	postList := Posts{}
 	postList.Title = feed.Title
 	postList.Posts = []Post{}
+	postList.Url = url
 
 	for _, item := range feed.Items {
 		post := createPost(item)
@@ -79,7 +81,7 @@ func createPost(item *gofeed.Item) Post {
 		Title:   item.Title,
 		Content: content,
 		Link:    item.Link,
-		Date:    item.Published,
+		Date:    lib.ConvertDate(item.Published),
 	}
 
 	return post
