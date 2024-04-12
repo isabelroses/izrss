@@ -8,14 +8,16 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/isabelroses/izrss/lib"
 )
 
-var feeds = GetAllContent()
+var feeds = lib.GetAllContent()
 
 type model struct {
 	context  string
-	feeds    Feeds
-	posts    Posts
+	feeds    lib.Feeds
+	posts    lib.Posts
 	viewport viewport.Model
 	table    table.Model
 	ready    bool
@@ -113,7 +115,7 @@ func loadHome(m model) model {
 	return m
 }
 
-func loadContent(m model, posts Posts) model {
+func loadContent(m model, posts lib.Posts) model {
 	columns := []table.Column{
 		{Title: "ID", Width: 2},
 		{Title: "Title", Width: 60},
@@ -148,9 +150,9 @@ func loadContent(m model, posts Posts) model {
 	return m
 }
 
-func loadReader(post Post) {
+func loadReader(post lib.Post) {
 	p := tea.NewProgram(
-		ReadingModel{Post: post},
+		readingModel{Post: post},
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 	)
@@ -161,7 +163,7 @@ func loadReader(post Post) {
 }
 
 func Run() {
-	m := model{"home", feeds, Posts{}, viewport.Model{}, table.Model{}, false}
+	m := model{"home", feeds, lib.Posts{}, viewport.Model{}, table.Model{}, false}
 	m = loadHome(m)
 
 	if _, err := tea.NewProgram(m).Run(); err != nil {
