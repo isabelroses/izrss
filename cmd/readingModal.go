@@ -78,13 +78,13 @@ func (m readingModel) View() string {
 }
 
 func (m readingModel) headerView() string {
-	title := lib.MainStyle().Render(m.Post.Title)
+	title := lib.ReaderStyle().Render(m.Post.Title)
 	line := strings.Repeat("─", max(0, m.viewport.Width-lipgloss.Width(title)))
 	return lipgloss.JoinHorizontal(lipgloss.Center, title, line)
 }
 
 func (m readingModel) footerView() string {
-	info := lib.MainStyle().Render(fmt.Sprintf("%3.f%%", m.viewport.ScrollPercent()*100))
+	info := lib.ReaderStyle().Render(fmt.Sprintf("%3.f%%", m.viewport.ScrollPercent()*100))
 	line := strings.Repeat("─", max(0, m.viewport.Width-lipgloss.Width(info)))
 	return lipgloss.JoinHorizontal(lipgloss.Center, line, info)
 }

@@ -29,7 +29,7 @@ func (m model) View() string {
 	if !m.ready {
 		return "\n  Initializing..."
 	}
-	return m.viewport.View()
+	return lib.MainStyle().Render(m.viewport.View())
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -44,11 +44,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.ready {
 			m.viewport = viewport.New(msg.Width, msg.Height)
 			m.ready = true
+			return m, nil
 		} else {
-			m.viewport.Width = msg.Width
-			m.viewport.Height = msg.Height
-			m.table.SetWidth(msg.Width)
-			m.table.SetHeight(msg.Height)
+			// somewhat abitary values to handle the borders, but they work
+			width := msg.Width - 2
+			height := msg.Height - 2
+			m.viewport.Width = width
+			m.viewport.Height = height
+			m.table.SetWidth(width)
+			m.table.SetHeight(height)
 		}
 
 	case tea.KeyMsg:
@@ -99,16 +103,9 @@ func loadHome(m model) model {
 		table.WithColumns(columns),
 		table.WithRows(rows),
 		table.WithFocused(true),
-		table.WithHeight(20),
 	)
 
-	s := table.DefaultStyles()
-	s.Header = s.Header.
-		BorderBottom(true).
-		Bold(false)
-	s.Selected = s.Selected.
-		Bold(false)
-	t.SetStyles(s)
+	t.SetStyles(lib.TableStyle())
 
 	m.context = "home"
 	m.table = t
@@ -134,16 +131,9 @@ func loadContent(m model, posts lib.Posts) model {
 		table.WithColumns(columns),
 		table.WithRows(rows),
 		table.WithFocused(true),
-		table.WithHeight(20),
 	)
 
-	s := table.DefaultStyles()
-	s.Header = s.Header.
-		BorderBottom(true).
-		Bold(false)
-	s.Selected = s.Selected.
-		Bold(false)
-	t.SetStyles(s)
+	t.SetStyles(lib.TableStyle())
 
 	m.context = "content"
 	m.posts = posts
