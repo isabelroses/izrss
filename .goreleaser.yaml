@@ -29,9 +29,12 @@ changelog:
     - title: Features
       regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
       order: 0
+    - title: Preformance Improvements
+      regexp: '^.*?perf(\([[:word:]]+\))??!?:.+$'
+      order: 1
     - title: "Fixes"
       regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
-      order: 1
+      order: 2
     - title: Others
       order: 999
   filters:
