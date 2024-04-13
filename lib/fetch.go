@@ -51,23 +51,6 @@ func URLToDir(url string) string {
 	return url
 }
 
-func setupReader(url string) *gofeed.Feed {
-	fp := gofeed.NewParser()
-
-	file := string(FetchURL(url, true))
-
-	if file == "" {
-		return nil
-	}
-
-	feed, err := fp.ParseString(file)
-	if err != nil {
-		log.Fatalf("could not parse feed: %v", err)
-	}
-
-	return feed
-}
-
 func GetAllContent() Feeds {
 	urls := ParseUrls()
 	feeds := Feeds{}
@@ -97,6 +80,7 @@ func GetContentForURL(url string) Posts {
 		url,
 	}
 
+	// could be deduplicated but unsure what the best way to do that is
 	for _, item := range feed.Items {
 		post := createPost(item)
 
@@ -104,6 +88,20 @@ func GetContentForURL(url string) Posts {
 	}
 
 	return postList
+}
+
+func GetPosts(url string) []Post {
+	feed := setupReader(url)
+
+	posts := []Post{}
+
+	for _, item := range feed.Items {
+		post := createPost(item)
+
+		posts = append(posts, post)
+	}
+
+	return posts
 }
 
 func createPost(item *gofeed.Item) Post {
@@ -122,4 +120,21 @@ func createPost(item *gofeed.Item) Post {
 	}
 
 	return post
+}
+
+func setupReader(url string) *gofeed.Feed {
+	fp := gofeed.NewParser()
+
+	file := string(FetchURL(url, true))
+
+	if file == "" {
+		return nil
+	}
+
+	feed, err := fp.ParseString(file)
+	if err != nil {
+		log.Fatalf("could not parse feed: %v", err)
+	}
+
+	return feed
 }

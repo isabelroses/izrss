@@ -63,6 +63,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				return m, tea.Quit
 			}
+		case "r":
+			if m.context == "home" {
+				id, _ := strconv.Atoi(m.table.SelectedRow()[0])
+				feed := &m.feeds[id]
+				lib.FetchURL(feed.URL, false)
+				feed.Posts = lib.GetPosts(feed.URL)
+			}
 		case "enter":
 			if m.context == "content" {
 				id, _ := strconv.Atoi(m.table.SelectedRow()[0])
