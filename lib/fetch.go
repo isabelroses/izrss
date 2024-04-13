@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -24,7 +25,8 @@ func FetchURL(url string, preferCache bool) []byte {
 
 	resp, err := http.Get(url)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
+		return nil
 	}
 	defer resp.Body.Close()
 
@@ -54,6 +56,10 @@ func setupReader(url string) *gofeed.Feed {
 
 	file := string(FetchURL(url, true))
 
+	if file == "" {
+		return nil
+	}
+
 	feed, err := fp.ParseString(file)
 	if err != nil {
 		log.Fatalf("could not parse feed: %v", err)
@@ -77,10 +83,19 @@ func GetAllContent() Feeds {
 func GetContentForURL(url string) Posts {
 	feed := setupReader(url)
 
-	postList := Posts{}
-	postList.Title = feed.Title
-	postList.Posts = []Post{}
-	postList.URL = url
+	if feed == nil {
+		return Posts{
+			fmt.Sprintf("Error loading %s", url),
+			[]Post{},
+			url,
+		}
+	}
+
+	postList := Posts{
+		feed.Title,
+		[]Post{},
+		url,
+	}
 
 	for _, item := range feed.Items {
 		post := createPost(item)
