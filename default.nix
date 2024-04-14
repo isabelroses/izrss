@@ -1,22 +1,28 @@
 {
   lib,
   buildGoModule,
-}:
-buildGoModule {
-  pname = "izrss";
-  version = "0.0.1";
+}: let
+  version = "0.0.3";
+in
+  buildGoModule {
+    pname = "izrss";
+    inherit version;
 
-  src = ./.;
+    src = ./.;
 
-  vendorHash = "sha256-a/Zo5ISGYhIrYR1i2UGd2dBqA7Qn3EW9MemzTtm0HNA";
+    vendorHash = "sha256-UFP9F4zNpA+FP3OFMm5OZbqA8hKGOz0d966wQJN5gK4=";
 
-  ldflags = ["-s" "-w"];
+    ldflags = [
+      "-s"
+      "-w"
+      "-X main.Version=${version}"
+    ];
 
-  meta = {
-    description = "A RSS feed reader";
-    homepage = "https://github.com/isabelroses/izrss";
-    license = with lib.licenses; [gpl3];
-    maintainers = with lib.maintainers; [isabelroses];
-    platforms = lib.platforms.all;
-  };
-}
+    meta = {
+      description = "A RSS feed reader";
+      homepage = "https://github.com/isabelroses/izrss";
+      license = with lib.licenses; [gpl3];
+      maintainers = with lib.maintainers; [isabelroses];
+      platforms = lib.platforms.all;
+    };
+  }
