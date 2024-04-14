@@ -25,7 +25,6 @@ func FetchURL(url string, preferCache bool) []byte {
 
 	resp, err := http.Get(url)
 	if err != nil {
-		log.Println(err)
 		return nil
 	}
 	defer resp.Body.Close()
