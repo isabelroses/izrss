@@ -1,6 +1,7 @@
 {
   go,
   gopls,
+  hyperfine,
   goreleaser,
   callPackage,
 }: let
@@ -11,6 +12,7 @@ in
       [
         go
         gopls
+        hyperfine # lets benchmark
         goreleaser
       ]
       ++ (oa.nativeBuildInputs or []);
