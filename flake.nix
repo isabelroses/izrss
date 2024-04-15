@@ -1,5 +1,5 @@
 {
-  description = "izrss - a RSS reader for the terminal";
+  description = "izrss - A RSS reader for the terminal";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
