@@ -4,23 +4,24 @@ import (
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/viewport"
+	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/isabelroses/izrss/lib"
 )
 
-func loadNewTable(m model, columns []table.Column, rows []table.Row) model {
-	// NOTE: clear the rows first to prevent panic
-	m.table.SetRows([]table.Row{})
-
-	m.table.SetColumns(columns)
-	m.table.SetRows(rows)
-
-	// reset the cursor and how far down the viewport is
-	m.table.SetCursor(0)
-	m.viewport.YPosition = 0
-
-	return m
+type model struct {
+	help     help.Model
+	post     lib.Post
+	context  string
+	viewport viewport.Model
+	keys     keyMap
+	feed     lib.Feed
+	feeds    lib.Feeds
+	table    table.Model
+	ready    bool
 }
+
+func (m model) Init() tea.Cmd { return nil }
 
 func newModel() model {
 	t := table.New(table.WithFocused(true))

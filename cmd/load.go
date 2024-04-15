@@ -44,3 +44,19 @@ func loadContent(m model, feed lib.Feed) model {
 
 	return m
 }
+
+func loadNewTable(m model, columns []table.Column, rows []table.Row) model {
+	t := &m.table
+
+	// NOTE: clear the rows first to prevent panic
+	t.SetRows([]table.Row{})
+
+	t.SetColumns(columns)
+	t.SetRows(rows)
+
+	// reset the cursor and how far down the viewport is
+	t.SetCursor(0)
+	m.viewport.YPosition = 0
+
+	return m
+}

@@ -5,48 +5,13 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/isabelroses/izrss/lib"
 )
-
-type model struct {
-	help     help.Model
-	post     lib.Post
-	context  string
-	viewport viewport.Model
-	keys     keyMap
-	feed     lib.Feed
-	feeds    lib.Feeds
-	table    table.Model
-	ready    bool
-}
-
-func (m model) Init() tea.Cmd { return nil }
-
-func (m model) View() string {
-	out := ""
-
-	if !m.ready {
-		out = "Initializing..."
-	} else if m.context == "reader" {
-		out = lipgloss.JoinVertical(
-			lipgloss.Top,
-			m.headerView(),
-			m.viewport.View(),
-			m.footerView(),
-		)
-	} else {
-		out = lib.MainStyle().Render(m.viewport.View())
-	}
-
-	return out
-}
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var (
@@ -55,13 +20,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	)
 
 	switch msg := msg.(type) {
+	// dynaimcally update the viewport size
+	// somewhat abitary width and height to handle the borders, but they work
 	case tea.WindowSizeMsg:
-		// dynaimcally update the viewport size
-		// somewhat abitary width and height to handle the borders, but they work
 		width := msg.Width - 2
 		height := msg.Height - 2
 		if !m.ready {
-			m.feeds = lib.GetAllContent()
+			m.feeds = lib.GetAllContent(true)
 			m = loadHome(m)
 			m.viewport = viewport.New(width, height)
 			m.ready = true
@@ -78,6 +43,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.help.ShowAll = !m.help.ShowAll
 			// since the help text is dynamic, we need to update the table height
 			m.table.SetHeight(m.viewport.Height - lipgloss.Height(m.help.View(m.keys)) - 1)
+
 		case key.Matches(msg, m.keys.Quit):
 			switch m.context {
 			case "reader":
@@ -89,11 +55,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case key.Matches(msg, m.keys.Refresh):
-			if m.context == "home" {
+			switch m.context {
+			case "home":
 				id, _ := strconv.Atoi(m.table.SelectedRow()[0])
 				feed := &m.feeds[id]
 				lib.FetchURL(feed.URL, false)
 				feed.Posts = lib.GetPosts(feed.URL)
+				m = loadHome(m)
+			case "content":
+				feed := &m.feed
+				feed.Posts = lib.GetPosts(feed.URL)
+				m = loadContent(m, m.feed)
+			}
+
+		case key.Matches(msg, m.keys.RefreshAll):
+			if m.context == "home" {
+				m.feeds = lib.GetAllContent(false)
+				m = loadHome(m)
 			}
 
 		case key.Matches(msg, m.keys.Open):
@@ -114,10 +92,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// update the table, help, and viewport
 	m.help, cmd = m.help.Update(msg)
 	cmds = append(cmds, cmd)
+	m.table, cmd = m.table.Update(msg)
+	cmds = append(cmds, cmd)
 
 	if m.context != "reader" {
-		m.table, cmd = m.table.Update(msg)
-		cmds = append(cmds, cmd)
 		view := lipgloss.JoinVertical(lipgloss.Top,
 			m.table.View(),
 			m.help.View(m.keys),
@@ -131,11 +109,28 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-func Run() {
-	m := newModel()
+func (m model) View() string {
+	out := ""
 
+	if !m.ready {
+		out = "Initializing..."
+	} else if m.context == "reader" {
+		out = lipgloss.JoinVertical(
+			lipgloss.Top,
+			m.headerView(),
+			m.viewport.View(),
+			m.footerView(),
+		)
+	} else {
+		out = lib.MainStyle().Render(m.viewport.View())
+	}
+
+	return out
+}
+
+func Run() {
 	if _, err := tea.NewProgram(
-		m,
+		newModel(),
 		tea.WithMouseCellMotion(),
 	).Run(); err != nil {
 		log.Fatal(err)
