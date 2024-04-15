@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/isabelroses/izrss/lib"
 )
@@ -30,7 +31,7 @@ func (m model) Init() tea.Cmd { return nil }
 
 func (m model) View() string {
 	if !m.ready {
-		return "\n  Initializing..."
+		return "Initializing..."
 	}
 
 	return lib.MainStyle().Render(m.viewport.View())
@@ -46,24 +47,26 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		// dynaimcally update the viewport size
 		// somewhat abitary width and height to handle the borders, but they work
+		width := msg.Width - 2
+		height := msg.Height - 2
 		if !m.ready {
 			m.feeds = lib.GetAllContent()
 			m = loadHome(m)
-			m.viewport = viewport.New(msg.Width-2, msg.Height-2)
+			m.viewport = viewport.New(width, height)
 			m.ready = true
 		} else {
-			width := msg.Width - 2
-			height := msg.Height - 2
 			m.viewport.Width = width
 			m.viewport.Height = height
-			m.table.SetWidth(width)
-			m.table.SetHeight(height)
 		}
+		m.table.SetWidth(width)
+		m.table.SetHeight(height - strings.Count(m.help.View(m.keys), "\n") - 2)
 
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, m.keys.Help):
 			m.help.ShowAll = !m.help.ShowAll
+			// since the help text is dynamic, we need to update the table height
+			m.table.SetHeight(m.viewport.Height - strings.Count(m.help.View(m.keys), "\n") - 2)
 		case key.Matches(msg, m.keys.Quit):
 			if m.context == "content" {
 				m = loadHome(m)
@@ -97,9 +100,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.help, cmd = m.help.Update(msg)
 	cmds = append(cmds, cmd)
 
-	helpView := m.help.View(m.keys)
-	height := m.viewport.Height - strings.Count(helpView, "\n") - 21 // somewhat abitary number
-	m.viewport.SetContent(m.table.View() + strings.Repeat("\n", height) + helpView)
+	view := lipgloss.JoinVertical(lipgloss.Top,
+		m.table.View(),
+		m.help.View(m.keys),
+	)
+	m.viewport.SetContent(view)
 
 	m.viewport, cmd = m.viewport.Update(msg)
 	cmds = append(cmds, cmd)
@@ -115,21 +120,17 @@ func loadHome(m model) model {
 	}
 
 	rows := []table.Row{}
-
 	for i, Feeds := range m.feeds {
 		rows = append(rows, table.Row{strconv.Itoa(i), Feeds.Title})
 	}
 
-	t := table.New(
-		table.WithColumns(columns),
-		table.WithRows(rows),
-		table.WithFocused(true),
-	)
-
-	t.SetStyles(lib.TableStyle())
+	// NOTE: clear the rows first to prevent panic
+	m.table.SetRows([]table.Row{})
+	m.table.SetColumns(columns)
+	m.table.SetRows(rows)
+	m.table.SetCursor(0) // reset the selected row to 0
 
 	m.context = "home"
-	m.table = t
 
 	return m
 }
@@ -142,22 +143,18 @@ func loadContent(m model, feed lib.Feed) model {
 	}
 
 	rows := []table.Row{}
-
 	for i, post := range feed.Posts {
 		rows = append(rows, table.Row{strconv.Itoa(i), post.Title, post.Date})
 	}
 
-	t := table.New(
-		table.WithColumns(columns),
-		table.WithRows(rows),
-		table.WithFocused(true),
-	)
-
-	t.SetStyles(lib.TableStyle())
+	// NOTE: clear the rows first to prevent panic
+	m.table.SetRows([]table.Row{})
+	m.table.SetColumns(columns)
+	m.table.SetRows(rows)
+	m.table.SetCursor(0) // reset the selected row to 0
 
 	m.context = "content"
 	m.feed = feed
-	m.table = t
 
 	return m
 }
@@ -175,12 +172,15 @@ func loadReader(post lib.Post) {
 }
 
 func newModel() model {
+	t := table.New(table.WithFocused(true))
+	t.SetStyles(lib.TableStyle())
+
 	return model{
 		context:  "",
 		feeds:    lib.Feeds{},
 		feed:     lib.Feed{},
 		viewport: viewport.Model{},
-		table:    table.Model{},
+		table:    t,
 		ready:    false,
 		keys:     keys,
 		help:     help.New(),
@@ -190,7 +190,10 @@ func newModel() model {
 func Run() {
 	m := newModel()
 
-	if _, err := tea.NewProgram(m).Run(); err != nil {
+	if _, err := tea.NewProgram(
+		m,
+		tea.WithMouseCellMotion(),
+	).Run(); err != nil {
 		log.Fatal(err)
 		os.Exit(1)
 	}
