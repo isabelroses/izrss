@@ -20,13 +20,13 @@ func loadHome(m model) model {
 		rows = append(rows, table.Row{strconv.Itoa(i), Feeds.Title})
 	}
 
-	m = loadNewTable(m, columns, rows)
+	m = loadNewTable(m, columns, rows, false)
 	m.context = "home"
 
 	return m
 }
 
-func loadContent(m model, feed lib.Feed) model {
+func loadContent(m model, feed lib.Feed, fromReader bool) model {
 	columns := []table.Column{
 		{Title: "ID", Width: 2},
 		{Title: "Title", Width: 60},
@@ -38,14 +38,14 @@ func loadContent(m model, feed lib.Feed) model {
 		rows = append(rows, table.Row{strconv.Itoa(i), post.Title, post.Date})
 	}
 
-	m = loadNewTable(m, columns, rows)
+	m = loadNewTable(m, columns, rows, fromReader)
 	m.context = "content"
 	m.feed = feed
 
 	return m
 }
 
-func loadNewTable(m model, columns []table.Column, rows []table.Row) model {
+func loadNewTable(m model, columns []table.Column, rows []table.Row, fromReader bool) model {
 	t := &m.table
 
 	// NOTE: clear the rows first to prevent panic
@@ -55,7 +55,9 @@ func loadNewTable(m model, columns []table.Column, rows []table.Row) model {
 	t.SetRows(rows)
 
 	// reset the cursor and how far down the viewport is
-	t.SetCursor(0)
+	if fromReader {
+		t.SetCursor(0)
+	}
 	m.viewport.YPosition = 0
 
 	return m
