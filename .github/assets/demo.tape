@@ -15,11 +15,12 @@ Set TypingSpeed 1s
 Sleep 500ms
 Enter
 Sleep 500ms
+Type "?"
+Sleep 500ms
 Down
 Enter
 Sleep 500ms
 Down 4
-Sleep 1s
 Enter
 Sleep 1.5s
 Down 10
