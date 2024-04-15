@@ -42,8 +42,8 @@ func FetchURL(url string, preferCache bool) []byte {
 	return body
 }
 
-func GetContentForURL(url string) Feed {
-	feed := setupReader(url)
+func GetContentForURL(url string, preferCache bool) Feed {
+	feed := setupReader(url, preferCache)
 
 	if feed == nil {
 		return Feed{
@@ -70,7 +70,7 @@ func GetContentForURL(url string) Feed {
 }
 
 func GetPosts(url string) []Post {
-	feed := setupReader(url)
+	feed := setupReader(url, false)
 	posts := []Post{}
 
 	if feed == nil {
@@ -105,10 +105,10 @@ func createPost(item *gofeed.Item) Post {
 	return post
 }
 
-func setupReader(url string) *gofeed.Feed {
+func setupReader(url string, preferCache bool) *gofeed.Feed {
 	fp := gofeed.NewParser()
 
-	file := string(FetchURL(url, true))
+	file := string(FetchURL(url, preferCache))
 
 	if file == "" {
 		return nil
@@ -123,7 +123,7 @@ func setupReader(url string) *gofeed.Feed {
 }
 
 // go reotines am irite
-func GetAllContent() Feeds {
+func GetAllContent(preferCache bool) Feeds {
 	urls := ParseUrls()
 
 	// Create a wait group to wait for all goroutines to finish
@@ -135,7 +135,7 @@ func GetAllContent() Feeds {
 	// Loop through the URLs and start a goroutine for each
 	for _, url := range urls {
 		wg.Add(1)
-		go fetchContent(url, &wg, responses)
+		go fetchContent(url, preferCache, &wg, responses)
 	}
 
 	// Close the responses channel when all goroutines are done
@@ -152,12 +152,12 @@ func GetAllContent() Feeds {
 	return feeds
 }
 
-func fetchContent(url string, wg *sync.WaitGroup, ch chan<- Feed) {
+func fetchContent(url string, preferCache bool, wg *sync.WaitGroup, ch chan<- Feed) {
 	// Decrement the wait group counter when the function exits
 	defer wg.Done()
 
 	// Call the GetContentForURL function
-	posts := GetContentForURL(url)
+	posts := GetContentForURL(url, preferCache)
 
 	// Send the response through the channel
 	ch <- posts
