@@ -18,10 +18,10 @@ buildGoModule {
   ];
 
   meta = {
-    description = "A RSS feed reader";
+    description = "A RSS feed reader for the teminal";
     homepage = "https://github.com/isabelroses/izrss";
-    license = with lib.licenses; [gpl3];
+    license = lib.licenses.gpl3Only;
     maintainers = with lib.maintainers; [isabelroses];
-    platforms = lib.platforms.all;
+    mainPackage = "izrss";
   };
 }
