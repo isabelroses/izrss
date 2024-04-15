@@ -9,8 +9,6 @@ import (
 type keyMap struct {
 	Up      key.Binding
 	Down    key.Binding
-	Left    key.Binding
-	Right   key.Binding
 	Help    key.Binding
 	Quit    key.Binding
 	Open    key.Binding
