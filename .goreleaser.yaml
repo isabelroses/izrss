@@ -11,11 +11,14 @@ builds:
       - linux
       - windows
       - darwin
+    ldflags:
+      - -s -w -X main.Version={{ .Version }} -X main.builtBy=goreleaser
 
 archives:
   - format: binary
     name_template: >-
       {{ .ProjectName }}_
+      {{ .Version }}_
       {{- title .Os }}_
       {{- if eq .Arch "amd64" }}x86_64
       {{- else if eq .Arch "386" }}i386
@@ -40,6 +43,5 @@ changelog:
   filters:
     exclude:
       - typos
-
 # yaml-language-server: $schema=https://goreleaser.com/static/schema.json
 # vim: set ts=2 sw=2 tw=0 fo=cnqoj
