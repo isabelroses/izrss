@@ -40,11 +40,11 @@ var keys = keyMap{
 	),
 	Quit: key.NewBinding(
 		key.WithKeys("q", "esc", "ctrl+c"),
-		key.WithHelp("q", "quit"),
+		key.WithHelp("q/esc", "quit"),
 	),
 	Open: key.NewBinding(
-		key.WithKeys("enter"),
-		key.WithHelp("enter", "open"),
+		key.WithKeys("enter", "o"),
+		key.WithHelp("o/enter", "open"),
 	),
 	Refresh: key.NewBinding(
 		key.WithKeys("r"),

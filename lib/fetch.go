@@ -89,8 +89,10 @@ func createPost(item *gofeed.Item) Post {
 	content := ""
 	if item.Content != "" {
 		content = item.Content
-	} else {
+	} else if item.Description != "" {
 		content = item.Description
+	} else {
+		content = "This post does not contain any content.\nPress \"o\" to open the post in your prefered browser"
 	}
 
 	post := Post{
