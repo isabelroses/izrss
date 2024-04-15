@@ -4,8 +4,6 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 )
 
-// keyMap defines a set of keybindings. To work for help it must satisfy
-// key.Map. It could also very easily be a map[string]key.Binding.
 type keyMap struct {
 	Up      key.Binding
 	Down    key.Binding
@@ -22,7 +20,8 @@ func (k keyMap) ShortHelp() []key.Binding {
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down},
-		{k.Help, k.Quit, k.Refresh, k.Open},
+		{k.Help, k.Quit},
+		{k.Refresh, k.Open},
 	}
 }
 
