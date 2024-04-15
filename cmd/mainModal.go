@@ -4,7 +4,10 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -15,10 +18,12 @@ import (
 var feeds = lib.GetAllContent()
 
 type model struct {
-	context  string
-	feeds    lib.Feeds
+	help     help.Model
 	posts    lib.Posts
+	context  string
+	keys     keyMap
 	viewport viewport.Model
+	feeds    lib.Feeds
 	table    table.Model
 	ready    bool
 }
@@ -29,6 +34,7 @@ func (m model) View() string {
 	if !m.ready {
 		return "\n  Initializing..."
 	}
+
 	return lib.MainStyle().Render(m.viewport.View())
 }
 
@@ -56,21 +62,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "esc", "q", "ctrl+c":
+		switch {
+		case key.Matches(msg, m.keys.Help):
+			m.help.ShowAll = !m.help.ShowAll
+		case key.Matches(msg, m.keys.Quit):
 			if m.context == "content" {
 				m = loadHome(m)
 			} else {
 				return m, tea.Quit
 			}
-		case "r":
+		case key.Matches(msg, m.keys.Refresh):
 			if m.context == "home" {
 				id, _ := strconv.Atoi(m.table.SelectedRow()[0])
 				feed := &m.feeds[id]
 				lib.FetchURL(feed.URL, false)
 				feed.Posts = lib.GetPosts(feed.URL)
 			}
-		case "enter":
+		case key.Matches(msg, m.keys.Open):
 			if m.context == "content" {
 				id, _ := strconv.Atoi(m.table.SelectedRow()[0])
 				post := m.posts.Posts[id]
@@ -86,7 +94,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	m.table, cmd = m.table.Update(msg)
 	cmds = append(cmds, cmd)
-	m.viewport.SetContent(m.table.View())
+
+	m.help.Update(msg)
+	helpView := m.help.View(m.keys)
+	height := m.viewport.Height - strings.Count(helpView, "\n") - 21 // somewhat abitary number
+	m.viewport.SetContent(m.table.View() + strings.Repeat("\n", height) + helpView)
+
 	m.viewport, cmd = m.viewport.Update(msg)
 	cmds = append(cmds, cmd)
 
@@ -161,8 +174,21 @@ func loadReader(post lib.Post) {
 	}
 }
 
+func newModel() model {
+	return model{
+		context:  "home",
+		feeds:    feeds,
+		posts:    lib.Posts{},
+		viewport: viewport.Model{},
+		table:    table.Model{},
+		ready:    false,
+		keys:     keys,
+		help:     help.New(),
+	}
+}
+
 func Run() {
-	m := model{"home", feeds, lib.Posts{}, viewport.Model{}, table.Model{}, false}
+	m := newModel()
 	m = loadHome(m)
 
 	if _, err := tea.NewProgram(m).Run(); err != nil {
