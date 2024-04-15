@@ -1,11 +1,13 @@
 package cmd
 
 import (
+	"log"
 	"strconv"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
 	"github.com/isabelroses/izrss/lib"
 )
 
@@ -103,7 +105,10 @@ func (m model) handleKeys(msg tea.KeyMsg) (model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Open):
 		switch m.context {
 		case "reader":
-			lib.OpenURL(m.post.Link)
+			err := lib.OpenURL(m.post.Link)
+			if err != nil {
+				log.Panic(err)
+			}
 
 		case "content":
 			id, _ := strconv.Atoi(m.table.SelectedRow()[0])
