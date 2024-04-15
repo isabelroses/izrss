@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strings"
 	"sync"
 
 	"github.com/adrg/xdg"
@@ -41,14 +40,6 @@ func FetchURL(url string, preferCache bool) []byte {
 	}
 
 	return body
-}
-
-func URLToDir(url string) string {
-	url = strings.ReplaceAll(url, "https://", "")
-	url = strings.ReplaceAll(url, "http://", "")
-	url = strings.ReplaceAll(url, "/", "_")
-	url = strings.ReplaceAll(url, ".", "_")
-	return url
 }
 
 func GetContentForURL(url string) Feed {

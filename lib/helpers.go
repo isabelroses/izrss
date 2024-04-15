@@ -83,3 +83,13 @@ func ConvertDate(dateString string) string {
 
 	return date
 }
+
+func URLToDir(url string) string {
+	url = strings.ReplaceAll(url, "https://", "")
+	url = strings.ReplaceAll(url, "http://", "")
+	url = strings.ReplaceAll(url, "/", "_")
+	// replace all dots but the last one
+	dots := strings.Count(url, ".") - 1
+	url = strings.Replace(url, ".", "_", dots)
+	return url
+}
