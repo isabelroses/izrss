@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 
@@ -12,6 +13,12 @@ import (
 var Version = "unstable"
 
 func main() {
+	cli.AppHelpTemplate = fmt.Sprintf(`%s
+CUSTOMIZATION:
+    You can customise the colours using "GLAMOUR_STYLE" for a good example see https://github.com/catppuccin/glamour`,
+		cli.AppHelpTemplate,
+	)
+
 	app := &cli.App{
 		Name:    "izrss",
 		Version: Version,
