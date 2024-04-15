@@ -80,8 +80,11 @@ func GetContentForURL(url string) Feed {
 
 func GetPosts(url string) []Post {
 	feed := setupReader(url)
-
 	posts := []Post{}
+
+	if feed == nil {
+		return posts
+	}
 
 	for _, item := range feed.Items {
 		post := createPost(item)

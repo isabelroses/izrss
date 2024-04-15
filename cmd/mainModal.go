@@ -71,7 +71,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 		case key.Matches(msg, m.keys.Refresh):
-			// FIXME: if a feed fails to load and we use reload we get a memory address error
 			if m.context == "home" {
 				id, _ := strconv.Atoi(m.table.SelectedRow()[0])
 				feed := &m.feeds[id]
