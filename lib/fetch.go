@@ -57,15 +57,15 @@ func GetContentForURL(url string) Feed {
 	if feed == nil {
 		return Feed{
 			fmt.Sprintf("Error loading %s", url),
-			[]Post{},
 			url,
+			[]Post{},
 		}
 	}
 
 	feedRet := Feed{
 		feed.Title,
-		[]Post{},
 		url,
+		[]Post{},
 	}
 
 	// could be deduplicated but unsure what the best way to do that is

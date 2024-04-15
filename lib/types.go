@@ -9,8 +9,8 @@ type Post struct {
 
 type Feed struct {
 	Title string
-	Posts []Post
 	URL   string
+	Posts []Post
 }
 
 type Feeds []Feed
