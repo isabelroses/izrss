@@ -7,10 +7,10 @@ type Post struct {
 	Date    string
 }
 
-type Posts struct {
+type Feed struct {
 	Title string
 	Posts []Post
 	URL   string
 }
 
-type Feeds []Posts
+type Feeds []Feed

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/adrg/xdg"
 	"github.com/mmcdole/gofeed"
@@ -50,30 +51,18 @@ func URLToDir(url string) string {
 	return url
 }
 
-func GetAllContent() Feeds {
-	urls := ParseUrls()
-	feeds := Feeds{}
-
-	for _, url := range urls {
-		posts := GetContentForURL(url)
-		feeds = append(feeds, posts)
-	}
-
-	return feeds
-}
-
-func GetContentForURL(url string) Posts {
+func GetContentForURL(url string) Feed {
 	feed := setupReader(url)
 
 	if feed == nil {
-		return Posts{
+		return Feed{
 			fmt.Sprintf("Error loading %s", url),
 			[]Post{},
 			url,
 		}
 	}
 
-	postList := Posts{
+	feedRet := Feed{
 		feed.Title,
 		[]Post{},
 		url,
@@ -83,10 +72,10 @@ func GetContentForURL(url string) Posts {
 	for _, item := range feed.Items {
 		post := createPost(item)
 
-		postList.Posts = append(postList.Posts, post)
+		feedRet.Posts = append(feedRet.Posts, post)
 	}
 
-	return postList
+	return feedRet
 }
 
 func GetPosts(url string) []Post {
@@ -96,7 +85,6 @@ func GetPosts(url string) []Post {
 
 	for _, item := range feed.Items {
 		post := createPost(item)
-
 		posts = append(posts, post)
 	}
 
@@ -136,4 +124,45 @@ func setupReader(url string) *gofeed.Feed {
 	}
 
 	return feed
+}
+
+// go reotines am irite
+func GetAllContent() Feeds {
+	urls := ParseUrls()
+
+	// Create a wait group to wait for all goroutines to finish
+	var wg sync.WaitGroup
+
+	// Create a channel to receive responses
+	responses := make(chan Feed)
+
+	// Loop through the URLs and start a goroutine for each
+	for _, url := range urls {
+		wg.Add(1)
+		go fetchContent(url, &wg, responses)
+	}
+
+	// Close the responses channel when all goroutines are done
+	go func() {
+		wg.Wait()
+		close(responses)
+	}()
+
+	feeds := Feeds{}
+	for response := range responses {
+		feeds = append(feeds, response)
+	}
+
+	return feeds
+}
+
+func fetchContent(url string, wg *sync.WaitGroup, ch chan<- Feed) {
+	// Decrement the wait group counter when the function exits
+	defer wg.Done()
+
+	// Call the GetContentForURL function
+	posts := GetContentForURL(url)
+
+	// Send the response through the channel
+	ch <- posts
 }

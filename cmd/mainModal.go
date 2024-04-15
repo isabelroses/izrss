@@ -15,11 +15,9 @@ import (
 	"github.com/isabelroses/izrss/lib"
 )
 
-var feeds = lib.GetAllContent()
-
 type model struct {
 	help     help.Model
-	posts    lib.Posts
+	feed     lib.Feed
 	context  string
 	keys     keyMap
 	viewport viewport.Model
@@ -47,12 +45,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		// dynaimcally update the viewport size
+		// somewhat abitary width and height to handle the borders, but they work
 		if !m.ready {
-			m.viewport = viewport.New(msg.Width, msg.Height)
+			m.feeds = lib.GetAllContent()
+			m = loadHome(m)
+			m.viewport = viewport.New(msg.Width-2, msg.Height-2)
 			m.ready = true
-			return m, nil
 		} else {
-			// somewhat abitary values to handle the borders, but they work
 			width := msg.Width - 2
 			height := msg.Height - 2
 			m.viewport.Width = width
@@ -72,6 +71,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 		case key.Matches(msg, m.keys.Refresh):
+			// FIXME: if a feed fails to load and we use reload we get a memory address error
 			if m.context == "home" {
 				id, _ := strconv.Atoi(m.table.SelectedRow()[0])
 				feed := &m.feeds[id]
@@ -81,7 +81,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Open):
 			if m.context == "content" {
 				id, _ := strconv.Atoi(m.table.SelectedRow()[0])
-				post := m.posts.Posts[id]
+				post := m.feed.Posts[id]
 				loadReader(post)
 				// early return since we don't need to update the model
 				return m, nil
@@ -92,10 +92,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// update the table, help, and viewport
 	m.table, cmd = m.table.Update(msg)
 	cmds = append(cmds, cmd)
+	m.help, cmd = m.help.Update(msg)
+	cmds = append(cmds, cmd)
 
-	m.help.Update(msg)
 	helpView := m.help.View(m.keys)
 	height := m.viewport.Height - strings.Count(helpView, "\n") - 21 // somewhat abitary number
 	m.viewport.SetContent(m.table.View() + strings.Repeat("\n", height) + helpView)
@@ -115,7 +117,7 @@ func loadHome(m model) model {
 
 	rows := []table.Row{}
 
-	for i, Feeds := range feeds {
+	for i, Feeds := range m.feeds {
 		rows = append(rows, table.Row{strconv.Itoa(i), Feeds.Title})
 	}
 
@@ -129,12 +131,11 @@ func loadHome(m model) model {
 
 	m.context = "home"
 	m.table = t
-	m.ready = true
 
 	return m
 }
 
-func loadContent(m model, posts lib.Posts) model {
+func loadContent(m model, feed lib.Feed) model {
 	columns := []table.Column{
 		{Title: "ID", Width: 2},
 		{Title: "Title", Width: 60},
@@ -143,7 +144,7 @@ func loadContent(m model, posts lib.Posts) model {
 
 	rows := []table.Row{}
 
-	for i, post := range posts.Posts {
+	for i, post := range feed.Posts {
 		rows = append(rows, table.Row{strconv.Itoa(i), post.Title, post.Date})
 	}
 
@@ -156,7 +157,7 @@ func loadContent(m model, posts lib.Posts) model {
 	t.SetStyles(lib.TableStyle())
 
 	m.context = "content"
-	m.posts = posts
+	m.feed = feed
 	m.table = t
 
 	return m
@@ -176,9 +177,9 @@ func loadReader(post lib.Post) {
 
 func newModel() model {
 	return model{
-		context:  "home",
-		feeds:    feeds,
-		posts:    lib.Posts{},
+		context:  "",
+		feeds:    lib.Feeds{},
+		feed:     lib.Feed{},
 		viewport: viewport.Model{},
 		table:    table.Model{},
 		ready:    false,
@@ -189,7 +190,6 @@ func newModel() model {
 
 func Run() {
 	m := newModel()
-	m = loadHome(m)
 
 	if _, err := tea.NewProgram(m).Run(); err != nil {
 		log.Fatal(err)
