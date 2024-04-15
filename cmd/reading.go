@@ -11,9 +11,11 @@ import (
 func loadReader(m model, post lib.Post) model {
 	m.context = "reader"
 	m.post = post
+	m.viewport.YPosition = 0 // reset the viewport position
+
+	// render the post
 	content := lib.RenderMarkdown(post.Content)
 	m.viewport.SetContent(content)
-	m.viewport.YPosition = 0 // reset the viewport position
 
 	return m
 }
