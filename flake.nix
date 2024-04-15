@@ -13,7 +13,9 @@
     pkgsForEach = nixpkgs.legacyPackages;
   in {
     packages = forAllSystems (system: {
-      default = pkgsForEach.${system}.callPackage ./default.nix {};
+      default = pkgsForEach.${system}.callPackage ./default.nix {
+        version = self.shortRev or "unstable";
+      };
     });
 
     devShells = forAllSystems (system: {
