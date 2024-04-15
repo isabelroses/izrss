@@ -5,12 +5,13 @@ import (
 )
 
 type keyMap struct {
-	Up      key.Binding
-	Down    key.Binding
-	Help    key.Binding
-	Quit    key.Binding
-	Open    key.Binding
-	Refresh key.Binding
+	Up         key.Binding
+	Down       key.Binding
+	Help       key.Binding
+	Quit       key.Binding
+	Open       key.Binding
+	Refresh    key.Binding
+	RefreshAll key.Binding
 }
 
 func (k keyMap) ShortHelp() []key.Binding {
@@ -21,7 +22,8 @@ func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down},
 		{k.Help, k.Quit},
-		{k.Refresh, k.Open},
+		{k.Refresh, k.RefreshAll},
+		{k.Open},
 	}
 }
 
@@ -49,5 +51,9 @@ var keys = keyMap{
 	Refresh: key.NewBinding(
 		key.WithKeys("r"),
 		key.WithHelp("r", "refresh"),
+	),
+	RefreshAll: key.NewBinding(
+		key.WithKeys("R"),
+		key.WithHelp("R", "refresh all"),
 	),
 }
