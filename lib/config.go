@@ -29,9 +29,9 @@ func ParseUrls() []string {
 
 	filteredUrls := []string{}
 	for _, url := range urls {
-		trimmedUrl := strings.TrimSpace(url)
-		if trimmedUrl != "" {
-			filteredUrls = append(filteredUrls, trimmedUrl)
+		trimmedURL := strings.TrimSpace(url)
+		if trimmedURL != "" {
+			filteredUrls = append(filteredUrls, trimmedURL)
 		}
 	}
 
