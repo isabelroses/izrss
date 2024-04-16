@@ -7,7 +7,7 @@ buildGoModule {
   pname = "izrss";
   inherit version;
 
-  src = ./.;
+  src = ../.;
 
   vendorHash = "sha256-u50qWuZH2VjnHWjCMeEYFKsVxQarNbx7ixZ+aJ8xOFw=";
 
