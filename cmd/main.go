@@ -32,19 +32,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) handleWindowSize(msg tea.WindowSizeMsg) model {
-	width := msg.Width - 2
+	width := msg.Width - 4
 	height := msg.Height - 2
+	m.table.SetWidth(width)
+	m.table.SetHeight(height - lipgloss.Height(m.help.View(m.keys)) - 1)
 	if !m.ready {
 		m.feeds = lib.GetAllContent(true)
-		m = loadHome(m)
 		m.viewport = viewport.New(width, height)
+		m = loadHome(m)
 		m.ready = true
 	} else {
 		m.viewport.Width = width
 		m.viewport.Height = height
 	}
-	m.table.SetWidth(width)
-	m.table.SetHeight(height - lipgloss.Height(m.help.View(m.keys)) - 1)
 
 	return m
 }
@@ -73,25 +73,6 @@ func (m model) updateViewport(msg tea.Msg) (model, tea.Cmd) {
 	cmds = append(cmds, cmd)
 
 	return m, tea.Batch(cmds...)
-}
-
-func (m model) View() string {
-	out := ""
-
-	if !m.ready {
-		out = "Initializing..."
-	} else if m.context == "reader" {
-		out = lipgloss.JoinVertical(
-			lipgloss.Top,
-			m.headerView(),
-			m.viewport.View(),
-			m.footerView(),
-		)
-	} else {
-		out = lib.MainStyle().Render(m.viewport.View())
-	}
-
-	return out
 }
 
 func Run() {
