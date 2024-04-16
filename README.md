@@ -22,5 +22,79 @@ Then run `izrss` to read the feeds.
 
 ### Customization
 
-You can alter the colors by using the enviorment variables `GLAMOUR_STYLE`. 
+You can alter the colors by using the enviorment variables `GLAMOUR_STYLE`.
 For a good example see: [catppuccin/glamour](https://github.com/catppuccin/glamour)
+
+### Nix
+
+<details>
+
+<summary>
+
+#### Installation with flakes and home-manager
+
+</summary>
+
+```nix
+{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+
+    home-manager = {
+      url = "github:nix-community/home-manager";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    izrss.url = "github:isabelroses/izrss";
+  };
+
+  outputs = { self, nixpkgs, home-manager, izrss }: {
+    homeConfigurations."user@hostname" = home-manager.lib.homeManagerConfiguration {
+      modules = [
+        home-manager.homeManagerModules.default
+        {
+          programs.izrss = {
+            enable = true;
+            urls = [
+              "https://isabelroses.com/rss.xml"
+              "https://uncenter.dev/feed.xml"
+            ];
+          };
+        }
+      ];
+    };
+  }
+}
+```
+
+</details>
+
+<details>
+
+<summary>
+
+#### Installation with flakes
+
+</summary>
+
+```nix
+{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    izrss.url = "github:isabelroses/izrss";
+  };
+
+  outputs = { self, nixpkgs, izrss }: {
+    nixosConfigurations.example = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [{
+        environment.systemPackages = [
+          inputs.izrss.packages.${pkgs.system}.default
+        ];
+      }];
+    };
+  }
+}
+```
+
+</details>
