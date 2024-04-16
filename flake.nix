@@ -13,15 +13,15 @@
     pkgsForEach = nixpkgs.legacyPackages;
   in {
     packages = forAllSystems (system: {
-      default = pkgsForEach.${system}.callPackage ./default.nix {
+      default = pkgsForEach.${system}.callPackage ./nix/default.nix {
         version = self.shortRev or "unstable";
       };
     });
 
     devShells = forAllSystems (system: {
-      default = pkgsForEach.${system}.callPackage ./shell.nix {};
+      default = pkgsForEach.${system}.callPackage ./nix/shell.nix {};
     });
 
-    homeManagerModules.default = import ./hm-module.nix self;
+    homeManagerModules.default = import ./nix/hm-module.nix self;
   };
 }
