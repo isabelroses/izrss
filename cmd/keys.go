@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"log"
-	"strconv"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
@@ -74,9 +73,12 @@ func (m model) handleKeys(msg tea.KeyMsg) (model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Quit):
 		switch m.context {
 		case "reader":
-			m = loadContent(m, m.feed, true)
+			m.context = "content"
+			m.viewport.SetYOffset(0)
+			m.table.SetCursor(m.post.ID)
 		case "content":
 			m = loadHome(m)
+			m.table.SetCursor(m.feed.ID)
 		default:
 			return m, tea.Quit
 		}
@@ -84,7 +86,7 @@ func (m model) handleKeys(msg tea.KeyMsg) (model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Refresh):
 		switch m.context {
 		case "home":
-			id, _ := strconv.Atoi(m.table.SelectedRow()[0])
+			id := m.table.Cursor()
 			feed := &m.feeds[id]
 			lib.FetchURL(feed.URL, false)
 			feed.Posts = lib.GetPosts(feed.URL)
@@ -93,7 +95,7 @@ func (m model) handleKeys(msg tea.KeyMsg) (model, tea.Cmd) {
 		case "content":
 			feed := &m.feed
 			feed.Posts = lib.GetPosts(feed.URL)
-			m = loadContent(m, m.feed, false)
+			m = loadContent(m)
 		}
 
 	case key.Matches(msg, m.keys.RefreshAll):
@@ -111,13 +113,10 @@ func (m model) handleKeys(msg tea.KeyMsg) (model, tea.Cmd) {
 			}
 
 		case "content":
-			id, _ := strconv.Atoi(m.table.SelectedRow()[0])
-			post := m.feed.Posts[id]
-			m = loadReader(m, post)
+			m = loadReader(m)
 
 		default:
-			id, _ := strconv.Atoi(m.table.SelectedRow()[0])
-			m = loadContent(m, m.feeds[id], false)
+			m = loadContent(m)
 		}
 	}
 
