@@ -25,8 +25,8 @@ func MainStyle() lipgloss.Style {
 	return lipgloss.NewStyle().
 		BorderStyle(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("240")).
-		PaddingLeft(1).
-		PaddingRight(1)
+		Padding(0, 1).
+		Margin(0)
 }
 
 func ReaderStyle() lipgloss.Style {

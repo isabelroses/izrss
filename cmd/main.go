@@ -32,10 +32,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) handleWindowSize(msg tea.WindowSizeMsg) model {
-	width := msg.Width - 4
-	height := msg.Height - 2
+	width := msg.Width - 4   // account for padding and borders
+	height := msg.Height - 2 // account for borders
 	m.table.SetWidth(width)
-	m.table.SetHeight(height - lipgloss.Height(m.help.View(m.keys)) - 1)
+	m.table.SetHeight(height - lipgloss.Height(m.help.View(m.keys)) - 1) // account for bottom border only
 	if !m.ready {
 		m.feeds = lib.GetAllContent(true)
 		m.viewport = viewport.New(width, height)
