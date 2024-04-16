@@ -93,3 +93,10 @@ func URLToDir(url string) string {
 	url = strings.Replace(url, ".", "_", dots)
 	return url
 }
+
+func Max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
