@@ -117,6 +117,7 @@ func (m model) handleKeys(msg tea.KeyMsg) (model, tea.Cmd) {
 
 		default:
 			m = loadContent(m)
+			m.table.SetCursor(0)
 		}
 	}
 
