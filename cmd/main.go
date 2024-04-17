@@ -34,14 +34,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) handleWindowSize(msg tea.WindowSizeMsg) model {
 	framew, frameh := lib.MainStyle.GetFrameSize()
 
-	log.Println("framew", framew)
-	log.Println("frameh", frameh)
-
 	height := msg.Height - frameh
 	width := msg.Width - framew
 
 	m.table.SetWidth(width)
-	m.table.SetHeight(height - lipgloss.Height(m.help.View(m.keys)) - 1) // account for bottom border only
+	m.table.SetHeight(height - lipgloss.Height(m.help.View(m.keys)) - lib.MainStyle.GetBorderBottomSize())
 
 	if !m.ready {
 		m.feeds = lib.GetAllContent(true)

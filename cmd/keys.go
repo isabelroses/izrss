@@ -68,7 +68,7 @@ func (m model) handleKeys(msg tea.KeyMsg) (model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Help):
 		m.help.ShowAll = !m.help.ShowAll
-		m.table.SetHeight(m.viewport.Height - lipgloss.Height(m.help.View(m.keys)) - 1)
+		m.table.SetHeight(m.viewport.Height - lipgloss.Height(m.help.View(m.keys)) - lib.MainStyle.GetBorderBottomSize())
 
 	case key.Matches(msg, m.keys.Quit):
 		switch m.context {
