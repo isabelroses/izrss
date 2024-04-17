@@ -24,7 +24,11 @@ type model struct {
 	ready    bool
 }
 
-func (m model) Init() tea.Cmd { return nil }
+func (m model) Init() tea.Cmd {
+	return tea.Batch(
+		tea.SetWindowTitle("izrss"),
+	)
+}
 
 func NewModel() model {
 	t := table.New(table.WithFocused(true))
