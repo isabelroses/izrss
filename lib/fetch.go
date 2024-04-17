@@ -149,7 +149,7 @@ func GetAllContent(preferCache bool) Feeds {
 		feeds = append(feeds, response)
 	}
 
-	return feeds
+	return feeds.sort(urls)
 }
 
 func fetchContent(url string, preferCache bool, wg *sync.WaitGroup, ch chan<- Feed) {
