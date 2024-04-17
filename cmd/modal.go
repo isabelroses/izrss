@@ -6,6 +6,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/isabelroses/izrss/lib"
 )
@@ -29,6 +30,12 @@ func newModel() model {
 	t := table.New(table.WithFocused(true))
 	t.SetStyles(lib.TableStyle())
 
+	f := textinput.New()
+	f.Prompt = "Filter: "
+	f.PromptStyle = lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("229"))
+
 	return model{
 		context:  "",
 		feeds:    lib.Feeds{},
@@ -39,6 +46,6 @@ func newModel() model {
 		keys:     keys,
 		help:     help.New(),
 		post:     lib.Post{},
-		filter:   textinput.New(),
+		filter:   f,
 	}
 }
