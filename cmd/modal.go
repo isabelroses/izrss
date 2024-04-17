@@ -3,6 +3,7 @@ package cmd
 import (
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/table"
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -11,6 +12,7 @@ import (
 
 type model struct {
 	help     help.Model
+	filter   textinput.Model
 	post     lib.Post
 	context  string
 	viewport viewport.Model
@@ -37,5 +39,6 @@ func newModel() model {
 		keys:     keys,
 		help:     help.New(),
 		post:     lib.Post{},
+		filter:   textinput.New(),
 	}
 }

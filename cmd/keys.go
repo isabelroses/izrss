@@ -18,6 +18,7 @@ type keyMap struct {
 	Open       key.Binding
 	Refresh    key.Binding
 	RefreshAll key.Binding
+	Search     key.Binding
 }
 
 func (k keyMap) ShortHelp() []key.Binding {
@@ -29,7 +30,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 		{k.Up, k.Down},
 		{k.Help, k.Quit},
 		{k.Refresh, k.RefreshAll},
-		{k.Open},
+		{k.Open, k.Search},
 	}
 }
 
@@ -62,6 +63,10 @@ var keys = keyMap{
 		key.WithKeys("R"),
 		key.WithHelp("R", "refresh all"),
 	),
+	Search: key.NewBinding(
+		key.WithKeys("/"),
+		key.WithHelp("/", "search"),
+	),
 }
 
 func (m model) handleKeys(msg tea.KeyMsg) (model, tea.Cmd) {
@@ -79,12 +84,19 @@ func (m model) handleKeys(msg tea.KeyMsg) (model, tea.Cmd) {
 		case "content":
 			m = loadHome(m)
 			m.table.SetCursor(m.feed.ID)
+		case "search":
+			m = m.loadContent()
+			m.table.Focus()
+			m.filter.Blur()
 		default:
 			return m, tea.Quit
 		}
 
 	case key.Matches(msg, m.keys.Refresh):
 		switch m.context {
+		case "search":
+			return m, nil
+
 		case "home":
 			id := m.table.Cursor()
 			feed := &m.feeds[id]
@@ -115,9 +127,20 @@ func (m model) handleKeys(msg tea.KeyMsg) (model, tea.Cmd) {
 		case "content":
 			m = loadReader(m)
 
+		case "search":
+			// NOTE: do not load search values if input is "o"
+			if msg.String() != "o" {
+				m = m.loadSearchValues()
+			}
+
 		default:
 			m = loadContent(m)
 			m.table.SetCursor(0)
+		}
+
+	case key.Matches(msg, m.keys.Search):
+		if m.context != "search" {
+			m = m.loadSearch()
 		}
 	}
 

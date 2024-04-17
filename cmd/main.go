@@ -64,13 +64,24 @@ func (m model) updateViewport(msg tea.Msg) (model, tea.Cmd) {
 	m.table, cmd = m.table.Update(msg)
 	cmds = append(cmds, cmd)
 
-	if m.context != "reader" {
+	if m.context != "reader" && m.context != "search" {
 		view := lipgloss.JoinVertical(
 			lipgloss.Top,
 			m.table.View(),
 			m.help.View(m.keys),
 		)
 		m.viewport.SetContent(view)
+	} else if m.context == "search" {
+		view := lipgloss.JoinVertical(
+			lipgloss.Top,
+			m.filter.View(),
+			m.table.View(),
+			m.help.View(m.keys),
+		)
+
+		m.viewport.SetContent(view)
+		m.filter, cmd = m.filter.Update(msg)
+		return m, cmd
 	}
 
 	m.viewport, cmd = m.viewport.Update(msg)

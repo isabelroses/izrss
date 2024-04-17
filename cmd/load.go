@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/bubbles/table"
 
 	"github.com/isabelroses/izrss/lib"
@@ -45,7 +47,46 @@ func loadContent(m model) model {
 	return m
 }
 
-func loadNewTable(m model, columns []table.Column, rows []table.Row) model {
+func (m model) loadSearch() model {
+	m.context = "search"
+
+	m.table.Blur()
+
+	m.filter.Focus()
+	m.filter.SetValue("")
+
+	return m
+}
+
+func (m model) loadSearchValues() model {
+	search := m.filter.Value()
+
+	var filteredPosts []lib.Post
+	rows := []table.Row{}
+
+	for _, feed := range m.feeds {
+		for _, post := range feed.Posts {
+			if strings.Contains(strings.ToLower(post.Content), strings.ToLower(search)) {
+				filteredPosts = append(filteredPosts, post)
+				rows = append(rows, table.Row{post.Title, post.Date})
+			}
+		}
+	}
+
+	columns := []table.Column{
+		{Title: "Title", Width: m.table.Width() - 15},
+		{Title: "Date", Width: 13},
+	}
+
+	m = m.loadNewTable(columns, rows)
+	m.context = "content"
+	m.feed.Posts = filteredPosts
+	m.table.Focus()
+	m.filter.Blur()
+
+	return m
+}
+
 	t := &m.table
 
 	// NOTE: clear the rows first to prevent panic
