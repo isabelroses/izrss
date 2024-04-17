@@ -31,13 +31,13 @@ func (m model) loadContent() model {
 	feed.ID = id
 
 	columns := []table.Column{
-		{Title: "Title", Width: m.table.Width() - 15},
 		{Title: "Date", Width: 13},
+		{Title: "Title", Width: m.table.Width() - 15},
 	}
 
 	rows := []table.Row{}
 	for _, post := range feed.Posts {
-		rows = append(rows, table.Row{post.Title, post.Date})
+		rows = append(rows, table.Row{post.Date, post.Title})
 	}
 
 	m = m.loadNewTable(columns, rows)
@@ -68,14 +68,14 @@ func (m model) loadSearchValues() model {
 		for _, post := range feed.Posts {
 			if strings.Contains(strings.ToLower(post.Content), strings.ToLower(search)) {
 				filteredPosts = append(filteredPosts, post)
-				rows = append(rows, table.Row{post.Title, post.Date})
+				rows = append(rows, table.Row{post.Date, post.Title})
 			}
 		}
 	}
 
 	columns := []table.Column{
-		{Title: "Title", Width: m.table.Width() - 15},
 		{Title: "Date", Width: 13},
+		{Title: "Title", Width: m.table.Width() - 15},
 	}
 
 	m = m.loadNewTable(columns, rows)
@@ -83,6 +83,7 @@ func (m model) loadSearchValues() model {
 	m.feed.Posts = filteredPosts
 	m.table.Focus()
 	m.filter.Blur()
+	m.table.SetCursor(0)
 
 	return m
 }
