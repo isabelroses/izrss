@@ -72,6 +72,9 @@ func (m model) updateViewport(msg tea.Msg) (model, tea.Cmd) {
 		)
 		m.viewport.SetContent(view)
 	} else if m.context == "search" {
+		m.filter, cmd = m.filter.Update(msg)
+		cmds = append(cmds, cmd)
+
 		view := lipgloss.JoinVertical(
 			lipgloss.Top,
 			m.filter.View(),
@@ -80,8 +83,6 @@ func (m model) updateViewport(msg tea.Msg) (model, tea.Cmd) {
 		)
 
 		m.viewport.SetContent(view)
-		m.filter, cmd = m.filter.Update(msg)
-		return m, cmd
 	}
 
 	m.viewport, cmd = m.viewport.Update(msg)
@@ -94,6 +95,7 @@ func Run() {
 	if _, err := tea.NewProgram(
 		newModel(),
 		tea.WithMouseCellMotion(),
+		tea.WithAltScreen(),
 	).Run(); err != nil {
 		log.Fatal(err)
 		os.Exit(1)
