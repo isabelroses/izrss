@@ -5,6 +5,16 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+var (
+	MainStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder(), true).
+			BorderForeground(lipgloss.Color("240")).
+			Padding(0, 1).
+			Margin(0)
+
+	ReaderStyle = lipgloss.NewStyle()
+)
+
 func TableStyle() table.Styles {
 	s := table.DefaultStyles()
 	s.Header = s.Header.
@@ -19,16 +29,4 @@ func TableStyle() table.Styles {
 	s.Cell.Padding(0)
 
 	return s
-}
-
-func MainStyle() lipgloss.Style {
-	return lipgloss.NewStyle().
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("240")).
-		Padding(0, 1).
-		Margin(0)
-}
-
-func ReaderStyle() lipgloss.Style {
-	return lipgloss.NewStyle()
 }
