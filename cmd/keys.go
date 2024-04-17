@@ -82,7 +82,7 @@ func (m model) handleKeys(msg tea.KeyMsg) (model, tea.Cmd) {
 			m.viewport.SetYOffset(0)
 			m.table.SetCursor(m.post.ID)
 		case "content":
-			m = loadHome(m)
+			m = m.loadHome()
 			m.table.SetCursor(m.feed.ID)
 		case "search":
 			m = m.loadContent()
@@ -102,18 +102,18 @@ func (m model) handleKeys(msg tea.KeyMsg) (model, tea.Cmd) {
 			feed := &m.feeds[id]
 			lib.FetchURL(feed.URL, false)
 			feed.Posts = lib.GetPosts(feed.URL)
-			m = loadHome(m)
+			m = m.loadHome()
 
 		case "content":
 			feed := &m.feed
 			feed.Posts = lib.GetPosts(feed.URL)
-			m = loadContent(m)
+			m = m.loadContent()
 		}
 
 	case key.Matches(msg, m.keys.RefreshAll):
 		if m.context == "home" {
 			m.feeds = lib.GetAllContent(false)
-			m = loadHome(m)
+			m = m.loadHome()
 		}
 
 	case key.Matches(msg, m.keys.Open):
@@ -125,7 +125,7 @@ func (m model) handleKeys(msg tea.KeyMsg) (model, tea.Cmd) {
 			}
 
 		case "content":
-			m = loadReader(m)
+			m = m.loadReader()
 
 		case "search":
 			// NOTE: do not load search values if input is "o"
@@ -134,7 +134,7 @@ func (m model) handleKeys(msg tea.KeyMsg) (model, tea.Cmd) {
 			}
 
 		default:
-			m = loadContent(m)
+			m = m.loadContent()
 			m.table.SetCursor(0)
 		}
 

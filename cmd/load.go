@@ -9,7 +9,7 @@ import (
 )
 
 // load the home view, this conists of the list of feeds
-func loadHome(m model) model {
+func (m model) loadHome() model {
 	columns := []table.Column{
 		{Title: "Title", Width: m.table.Width()},
 	}
@@ -19,13 +19,13 @@ func loadHome(m model) model {
 		rows = append(rows, table.Row{Feeds.Title})
 	}
 
-	m = loadNewTable(m, columns, rows)
+	m = m.loadNewTable(columns, rows)
 	m.context = "home"
 
 	return m
 }
 
-func loadContent(m model) model {
+func (m model) loadContent() model {
 	id := m.table.Cursor()
 	feed := m.feeds[id]
 	feed.ID = id
@@ -40,7 +40,7 @@ func loadContent(m model) model {
 		rows = append(rows, table.Row{post.Title, post.Date})
 	}
 
-	m = loadNewTable(m, columns, rows)
+	m = m.loadNewTable(columns, rows)
 	m.context = "content"
 	m.feed = feed
 
@@ -87,6 +87,7 @@ func (m model) loadSearchValues() model {
 	return m
 }
 
+func (m model) loadNewTable(columns []table.Column, rows []table.Row) model {
 	t := &m.table
 
 	// NOTE: clear the rows first to prevent panic
@@ -101,7 +102,7 @@ func (m model) loadSearchValues() model {
 	return m
 }
 
-func loadReader(m model) model {
+func (m model) loadReader() model {
 	id := m.table.Cursor()
 	post := m.feed.Posts[id]
 	post.ID = id

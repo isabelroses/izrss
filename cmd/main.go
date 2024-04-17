@@ -43,7 +43,7 @@ func (m model) handleWindowSize(msg tea.WindowSizeMsg) model {
 	if !m.ready {
 		m.feeds = lib.GetAllContent(true)
 		m.viewport = viewport.New(width, height)
-		m = loadHome(m)
+		m = m.loadHome()
 		m.ready = true
 	} else {
 		m.viewport.Width = width
