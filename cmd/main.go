@@ -1,9 +1,6 @@
 package cmd
 
 import (
-	"log"
-	"os"
-
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -89,15 +86,4 @@ func (m model) updateViewport(msg tea.Msg) (model, tea.Cmd) {
 	cmds = append(cmds, cmd)
 
 	return m, tea.Batch(cmds...)
-}
-
-func Run() {
-	if _, err := tea.NewProgram(
-		newModel(),
-		tea.WithMouseCellMotion(),
-		tea.WithAltScreen(),
-	).Run(); err != nil {
-		log.Fatal(err)
-		os.Exit(1)
-	}
 }

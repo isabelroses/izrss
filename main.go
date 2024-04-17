@@ -5,12 +5,13 @@ import (
 	"log"
 	"os"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/urfave/cli/v2"
 
 	"github.com/isabelroses/izrss/cmd"
 )
 
-var Version = "unstable"
+const Version = "unstable"
 
 func main() {
 	cli.AppHelpTemplate = fmt.Sprintf(`%s
@@ -30,7 +31,11 @@ CUSTOMIZATION:
 
 		Action: func(c *cli.Context) error {
 			if c.NArg() == 0 {
-				cmd.Run()
+				p := tea.NewProgram(cmd.NewModel(), tea.WithAltScreen())
+				if _, err := p.Run(); err != nil {
+					log.Fatal(err)
+					os.Exit(1)
+				}
 			}
 
 			return nil
@@ -39,6 +44,5 @@ CUSTOMIZATION:
 
 	if err := app.Run(os.Args); err != nil {
 		log.Fatal(err)
-		os.Exit(1)
 	}
 }

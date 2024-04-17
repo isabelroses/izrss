@@ -26,7 +26,7 @@ type model struct {
 
 func (m model) Init() tea.Cmd { return nil }
 
-func newModel() model {
+func NewModel() model {
 	t := table.New(table.WithFocused(true))
 	t.SetStyles(lib.TableStyle())
 
