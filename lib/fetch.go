@@ -153,11 +153,11 @@ func GetAllContent(preferCache bool) Feeds {
 }
 
 func fetchContent(url string, preferCache bool, wg *sync.WaitGroup, ch chan<- Feed) {
-	// Decrement the wait group counter when the function exits
-	defer wg.Done()
-
 	// Call the GetContentForURL function
 	posts := GetContentForURL(url, preferCache)
+
+	// Decrement the wait group counter when the function exits
+	defer wg.Done()
 
 	// Send the response through the channel
 	ch <- posts
