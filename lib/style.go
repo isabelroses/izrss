@@ -18,8 +18,6 @@ var (
 func TableStyle() table.Styles {
 	s := table.DefaultStyles()
 	s.Header = s.Header.
-		BorderBottom(true).
-		BorderBottomForeground(lipgloss.Color("240")).
 		Bold(true).
 		Padding(0)
 	s.Selected = s.Selected.
