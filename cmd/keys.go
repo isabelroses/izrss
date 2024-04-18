@@ -19,6 +19,8 @@ type keyMap struct {
 	Refresh    key.Binding
 	RefreshAll key.Binding
 	Search     key.Binding
+	ToggleRead key.Binding
+	ReadAll    key.Binding
 }
 
 func (k keyMap) ShortHelp() []key.Binding {
@@ -31,6 +33,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 		{k.Help, k.Quit},
 		{k.Refresh, k.RefreshAll},
 		{k.Open, k.Search},
+		{k.ToggleRead, k.ReadAll},
 	}
 }
 
@@ -67,6 +70,14 @@ var keys = keyMap{
 		key.WithKeys("/"),
 		key.WithHelp("/", "search"),
 	),
+	ToggleRead: key.NewBinding(
+		key.WithKeys("x"),
+		key.WithHelp("x", "toggle read"),
+	),
+	ReadAll: key.NewBinding(
+		key.WithKeys("X"),
+		key.WithHelp("X", "toggle read"),
+	),
 }
 
 func (m model) handleKeys(msg tea.KeyMsg) (model, tea.Cmd) {
@@ -78,17 +89,17 @@ func (m model) handleKeys(msg tea.KeyMsg) (model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Quit):
 		switch m.context {
 		case "reader":
-			m.context = "content"
-			m.viewport.SetYOffset(0)
+			m = m.loadContent(m.feed.ID)
 			m.table.SetCursor(m.post.ID)
 		case "content":
 			m = m.loadHome()
 			m.table.SetCursor(m.feed.ID)
 		case "search":
-			m = m.loadContent()
+			m = m.loadContent(m.table.Cursor())
 			m.table.Focus()
 			m.filter.Blur()
 		default:
+			m.feeds.WriteTracking()
 			return m, tea.Quit
 		}
 
@@ -107,7 +118,7 @@ func (m model) handleKeys(msg tea.KeyMsg) (model, tea.Cmd) {
 		case "content":
 			feed := &m.feed
 			feed.Posts = lib.GetPosts(feed.URL)
-			m = m.loadContent()
+			m = m.loadContent(m.feed.ID)
 		}
 
 	case key.Matches(msg, m.keys.RefreshAll):
@@ -134,7 +145,7 @@ func (m model) handleKeys(msg tea.KeyMsg) (model, tea.Cmd) {
 			}
 
 		default:
-			m = m.loadContent()
+			m = m.loadContent(m.table.Cursor())
 			m.table.SetCursor(0)
 		}
 
@@ -142,6 +153,27 @@ func (m model) handleKeys(msg tea.KeyMsg) (model, tea.Cmd) {
 		if m.context != "search" {
 			m = m.loadSearch()
 		}
+
+	case key.Matches(msg, m.keys.ToggleRead):
+		switch m.context {
+		case "reader":
+			lib.ToggleRead(m.feeds, m.feed.ID, m.post.ID)
+		case "content":
+			lib.ToggleRead(m.feeds, m.feed.ID, m.table.Cursor())
+		}
+		m = m.loadContent(m.feed.ID)
+
+	case key.Matches(msg, m.keys.ReadAll):
+		switch m.context {
+		case "reader":
+			// if we are in the reader view, fall back to the normal mark all as read
+			lib.ToggleRead(m.feeds, m.feed.ID, m.post.ID)
+		case "content":
+			lib.ReadAll(m.feeds, m.feed.ID)
+		case "home":
+			lib.ReadAll(m.feeds, m.table.Cursor())
+		}
+		m = m.loadHome()
 	}
 
 	return m, nil

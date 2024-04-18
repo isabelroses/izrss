@@ -100,6 +100,7 @@ func createPost(item *gofeed.Item) Post {
 		Content: content,
 		Link:    item.Link,
 		Date:    ConvertDate(item.Published),
+		UUID:    item.GUID,
 	}
 
 	return post

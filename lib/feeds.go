@@ -3,18 +3,20 @@ package lib
 import "sort"
 
 type Post struct {
-	Title   string
-	Content string
-	Link    string
-	Date    string
-	ID      int
+	UUID    string `json:"uuid"`
+	Title   string `json:"-"`
+	Content string `json:"-"`
+	Link    string `json:"-"`
+	Date    string `json:"-"`
+	ID      int    `json:"-"`
+	Read    bool   `json:"read"`
 }
 
 type Feed struct {
-	Title string
-	URL   string
-	Posts []Post
-	ID    int
+	Title string `json:"-"`
+	URL   string `json:"URL"`
+	Posts []Post `json:"posts"`
+	ID    int    `json:"-"`
 }
 
 type Feeds []Feed
@@ -32,4 +34,14 @@ func (f Feeds) sort(urls []string) Feeds {
 	})
 
 	return f
+}
+
+func (f Feed) GetTotalUnreads() int {
+	total := 0
+	for _, post := range f.Posts {
+		if !post.Read {
+			total++
+		}
+	}
+	return total
 }
