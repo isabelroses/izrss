@@ -27,7 +27,7 @@ CUSTOMIZATION:
 			Name:  "Isabel Roses",
 			Email: "isabel@isabelroses.com",
 		}},
-		Usage: "Read your favorite news stories from the terminal",
+		Usage: "An RSS feed reader for the terminal.",
 
 		Action: func(c *cli.Context) error {
 			if c.NArg() == 0 {
