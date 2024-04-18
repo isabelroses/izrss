@@ -161,10 +161,11 @@ func (m model) handleKeys(msg tea.KeyMsg) (model, tea.Cmd) {
 		switch m.context {
 		case "reader":
 			lib.ToggleRead(m.feeds, m.feed.ID, m.post.ID)
+			m = m.loadContent(m.feed.ID)
 		case "content":
 			lib.ToggleRead(m.feeds, m.feed.ID, m.table.Cursor())
+			m = m.loadContent(m.feed.ID)
 		}
-		m = m.loadContent(m.feed.ID)
 
 	case key.Matches(msg, m.keys.ReadAll):
 		switch m.context {
@@ -173,10 +174,11 @@ func (m model) handleKeys(msg tea.KeyMsg) (model, tea.Cmd) {
 			lib.ToggleRead(m.feeds, m.feed.ID, m.post.ID)
 		case "content":
 			lib.ReadAll(m.feeds, m.feed.ID)
+			m = m.loadContent(m.table.Cursor())
 		case "home":
 			lib.ReadAll(m.feeds, m.table.Cursor())
+			m = m.loadHome()
 		}
-		m = m.loadHome()
 	}
 
 	return m, nil
