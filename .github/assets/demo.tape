@@ -17,11 +17,15 @@ Enter
 Sleep 500ms
 Type "?"
 Sleep 500ms
-Down
+Down 2
+Sleep 500ms
 Enter
 Sleep 500ms
 Down 4
+Type "x"
+Sleep 1s
 Enter
 Sleep 1.5s
 Down 10
+Type "q"
 Sleep 2s
