@@ -2,7 +2,7 @@ Output demo.gif
 
 Require echo
 
-Set Shell "bash"
+Set Shell "fish"
 Set Width 1920
 Set Height 1080
 Set CursorBlink false
@@ -17,11 +17,15 @@ Enter
 Sleep 500ms
 Type "?"
 Sleep 500ms
-Down
+Down 1
+Sleep 500ms
 Enter
 Sleep 500ms
 Down 4
+Type "x"
+Sleep 1s
 Enter
 Sleep 1.5s
-Down 10
-Sleep 2s
+Down 15
+Type "q"
+Sleep 5s

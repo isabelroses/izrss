@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"log"
+
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -40,7 +42,12 @@ func (m model) handleWindowSize(msg tea.WindowSizeMsg) model {
 	if !m.ready {
 		m.feeds = lib.GetAllContent(true)
 		m.viewport = viewport.New(width, height)
+		err := error(nil)
+		m.feeds, err = m.feeds.ReadTracking()
 		m = m.loadHome()
+		if err != nil {
+			log.Fatal(err)
+		}
 		m.ready = true
 	} else {
 		m.viewport.Width = width
@@ -80,6 +87,10 @@ func (m model) updateViewport(msg tea.Msg) (model, tea.Cmd) {
 		)
 
 		m.viewport.SetContent(view)
+	}
+
+	if m.context == "reader" && m.viewport.ScrollPercent() >= 0.8 {
+		lib.MarkRead(m.feeds, m.feed.ID, m.post.ID)
 	}
 
 	m.viewport, cmd = m.viewport.Update(msg)

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/table"
@@ -11,12 +12,14 @@ import (
 // load the home view, this conists of the list of feeds
 func (m model) loadHome() model {
 	columns := []table.Column{
-		{Title: "Title", Width: m.table.Width()},
+		{Title: "Unread", Width: 7},
+		{Title: "Title", Width: m.table.Width() - 7},
 	}
 
 	rows := []table.Row{}
-	for _, Feeds := range m.feeds {
-		rows = append(rows, table.Row{Feeds.Title})
+	for _, Feed := range m.feeds {
+		totalUnread := strconv.Itoa(Feed.GetTotalUnreads())
+		rows = append(rows, table.Row{totalUnread, Feed.Title})
 	}
 
 	m = m.loadNewTable(columns, rows)
@@ -25,19 +28,23 @@ func (m model) loadHome() model {
 	return m
 }
 
-func (m model) loadContent() model {
-	id := m.table.Cursor()
+func (m model) loadContent(id int) model {
 	feed := m.feeds[id]
 	feed.ID = id
 
 	columns := []table.Column{
-		{Title: "Date", Width: 13},
-		{Title: "Title", Width: m.table.Width() - 15},
+		{Title: "Date", Width: 11},
+		{Title: "Unread", Width: 7},
+		{Title: "Title", Width: m.table.Width() - 27},
 	}
 
 	rows := []table.Row{}
 	for _, post := range feed.Posts {
-		rows = append(rows, table.Row{post.Date, post.Title})
+		unread := "x"
+		if !post.Read {
+			unread = "✓"
+		}
+		rows = append(rows, table.Row{post.Date, unread, post.Title})
 	}
 
 	m = m.loadNewTable(columns, rows)
