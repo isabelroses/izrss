@@ -99,7 +99,10 @@ func (m model) handleKeys(msg tea.KeyMsg) (model, tea.Cmd) {
 			m.table.Focus()
 			m.filter.Blur()
 		default:
-			m.feeds.WriteTracking()
+			err := m.feeds.WriteTracking()
+			if err != nil {
+				log.Fatalf("Could not write tracking data: %s", err)
+			}
 			return m, tea.Quit
 		}
 

@@ -39,7 +39,10 @@ func (feeds Feeds) WriteTracking() error {
 func (feeds Feeds) ReadTracking() (Feeds, error) {
 	fileStr := getSateFile()
 	if _, err := os.Stat(fileStr); os.IsNotExist(err) {
-		feeds.WriteTracking()
+		err := feeds.WriteTracking()
+		if err != nil {
+			log.Fatalf("could not write tracking file: %v", err)
+		}
 	}
 
 	file, err := os.ReadFile(fileStr)
