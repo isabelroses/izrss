@@ -43,6 +43,14 @@ func NewModel() Model {
 		Bold(true).
 		Foreground(lipgloss.Color("229"))
 
+	h := help.New()
+	h.Styles.FullKey = lib.HelpStyle
+	h.Styles.FullDesc = lib.HelpStyle
+	h.Styles.FullSeparator = lib.HelpStyle
+	h.Styles.ShortKey = lib.HelpStyle
+	h.Styles.ShortDesc = lib.HelpStyle
+	h.Styles.ShortSeparator = lib.HelpStyle
+
 	return Model{
 		context:  "",
 		feeds:    lib.Feeds{},
@@ -51,7 +59,7 @@ func NewModel() Model {
 		table:    t,
 		ready:    false,
 		keys:     keys,
-		help:     help.New(),
+		help:     h,
 		post:     lib.Post{},
 		filter:   f,
 	}
