@@ -8,9 +8,9 @@ import (
 var (
 	// MainStyle is the main style for the application
 	MainStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#cdd6f4")).
+			Foreground(lipgloss.Color(UserConfig.Colors.Text)).
 			Border(lipgloss.RoundedBorder(), true).
-			BorderForeground(lipgloss.Color("#313244")).
+			BorderForeground(lipgloss.Color(UserConfig.Colors.Borders)).
 			Padding(0, 1).
 			Margin(0)
 
@@ -18,7 +18,7 @@ var (
 	ReaderStyle = lipgloss.NewStyle()
 
 	// HelpStyle is the style for the help keybinds menu
-	HelpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#a6adc8"))
+	HelpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(UserConfig.Colors.Subtext))
 )
 
 // TableStyle returns the style for the table
@@ -28,8 +28,8 @@ func TableStyle() table.Styles {
 		Bold(true).
 		Padding(0)
 	s.Selected = s.Selected.
-		Foreground(lipgloss.Color("#1e1e2e")).
-		Background(lipgloss.Color("#74c7ec")).
+		Foreground(lipgloss.Color(UserConfig.Colors.Inverttext)).
+		Background(lipgloss.Color(UserConfig.Colors.Accent)).
 		Bold(false)
 	s.Cell.Padding(0)
 
