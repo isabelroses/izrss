@@ -2,6 +2,7 @@ package lib
 
 import "sort"
 
+// Post represents a single post in a feed
 type Post struct {
 	UUID    string `json:"uuid"`
 	Title   string `json:"-"`
@@ -12,6 +13,7 @@ type Post struct {
 	Read    bool   `json:"read"`
 }
 
+// Feed represents a single feed
 type Feed struct {
 	Title string `json:"-"`
 	URL   string `json:"URL"`
@@ -19,6 +21,7 @@ type Feed struct {
 	ID    int    `json:"-"`
 }
 
+// Feeds represents a collection of feeds
 type Feeds []Feed
 
 func (f Feeds) sort(urls []string) Feeds {
@@ -36,6 +39,7 @@ func (f Feeds) sort(urls []string) Feeds {
 	return f
 }
 
+// GetTotalUnreads returns the total number of unread posts in a feed
 func (f Feed) GetTotalUnreads() int {
 	total := 0
 	for _, post := range f.Posts {

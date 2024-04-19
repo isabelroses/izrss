@@ -11,7 +11,8 @@ import (
 	"github.com/isabelroses/izrss/lib"
 )
 
-type model struct {
+// Model is the main model for the application
+type Model struct {
 	help     help.Model
 	filter   textinput.Model
 	post     lib.Post
@@ -24,13 +25,15 @@ type model struct {
 	ready    bool
 }
 
-func (m model) Init() tea.Cmd {
+// Init sets the initial state of the model
+func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		tea.SetWindowTitle("izrss"),
 	)
 }
 
-func NewModel() model {
+// NewModel creates a new model with sensible defaults
+func NewModel() Model {
 	t := table.New(table.WithFocused(true))
 	t.SetStyles(lib.TableStyle())
 
@@ -40,7 +43,7 @@ func NewModel() model {
 		Bold(true).
 		Foreground(lipgloss.Color("229"))
 
-	return model{
+	return Model{
 		context:  "",
 		feeds:    lib.Feeds{},
 		feed:     lib.Feed{},

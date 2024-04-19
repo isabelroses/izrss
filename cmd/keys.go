@@ -1,3 +1,4 @@
+// Package cmd contains all the command functions
 package cmd
 
 import (
@@ -80,7 +81,7 @@ var keys = keyMap{
 	),
 }
 
-func (m model) handleKeys(msg tea.KeyMsg) (model, tea.Cmd) {
+func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Help):
 		m.help.ShowAll = !m.help.ShowAll

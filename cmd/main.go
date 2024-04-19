@@ -10,7 +10,8 @@ import (
 	"github.com/isabelroses/izrss/lib"
 )
 
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+// Update will regnerate the model on each run
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var (
 		cmd  tea.Cmd
 		cmds []tea.Cmd
@@ -30,7 +31,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-func (m model) handleWindowSize(msg tea.WindowSizeMsg) model {
+func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
 	framew, frameh := lib.MainStyle.GetFrameSize()
 
 	height := msg.Height - frameh
@@ -57,7 +58,7 @@ func (m model) handleWindowSize(msg tea.WindowSizeMsg) model {
 	return m
 }
 
-func (m model) updateViewport(msg tea.Msg) (model, tea.Cmd) {
+func (m Model) updateViewport(msg tea.Msg) (Model, tea.Cmd) {
 	var (
 		cmd  tea.Cmd
 		cmds []tea.Cmd

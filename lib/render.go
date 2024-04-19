@@ -19,6 +19,7 @@ var (
 	htom = tomd.NewConverter("", true, nil)
 )
 
+// RenderMarkdown renders markdown content to a string
 func RenderMarkdown(content string) string {
 	fromMd, err := htom.ConvertString(content)
 	if err != nil {

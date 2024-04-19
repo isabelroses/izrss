@@ -10,7 +10,7 @@ import (
 )
 
 // load the home view, this conists of the list of feeds
-func (m model) loadHome() model {
+func (m Model) loadHome() Model {
 	columns := []table.Column{
 		{Title: "Unread", Width: 7},
 		{Title: "Title", Width: m.table.Width() - 7},
@@ -28,7 +28,7 @@ func (m model) loadHome() model {
 	return m
 }
 
-func (m model) loadContent(id int) model {
+func (m Model) loadContent(id int) Model {
 	feed := m.feeds[id]
 	feed.ID = id
 
@@ -54,7 +54,7 @@ func (m model) loadContent(id int) model {
 	return m
 }
 
-func (m model) loadSearch() model {
+func (m Model) loadSearch() Model {
 	m.context = "search"
 
 	m.table.Blur()
@@ -65,7 +65,7 @@ func (m model) loadSearch() model {
 	return m
 }
 
-func (m model) loadSearchValues() model {
+func (m Model) loadSearchValues() Model {
 	search := m.filter.Value()
 
 	var filteredPosts []lib.Post
@@ -95,7 +95,7 @@ func (m model) loadSearchValues() model {
 	return m
 }
 
-func (m model) loadNewTable(columns []table.Column, rows []table.Row) model {
+func (m Model) loadNewTable(columns []table.Column, rows []table.Row) Model {
 	t := &m.table
 
 	// NOTE: clear the rows first to prevent panic
@@ -110,7 +110,7 @@ func (m model) loadNewTable(columns []table.Column, rows []table.Row) model {
 	return m
 }
 
-func (m model) loadReader() model {
+func (m Model) loadReader() Model {
 	id := m.table.Cursor()
 	post := m.feed.Posts[id]
 	post.ID = id

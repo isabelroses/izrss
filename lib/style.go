@@ -6,15 +6,18 @@ import (
 )
 
 var (
+	// MainStyle is the main style for the application
 	MainStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder(), true).
 			BorderForeground(lipgloss.Color("240")).
 			Padding(0, 1).
 			Margin(0)
 
+	// ReaderStyle is the style for the reader
 	ReaderStyle = lipgloss.NewStyle()
 )
 
+// TableStyle returns the style for the table
 func TableStyle() table.Styles {
 	s := table.DefaultStyles()
 	s.Header = s.Header.

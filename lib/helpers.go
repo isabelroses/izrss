@@ -8,6 +8,7 @@ import (
 	"time"
 )
 
+// OpenURL opens the specified URL in the default browser of the user.
 // https://stackoverflow.com/questions/39320371/how-start-web-server-to-open-page-in-browser-in-golang
 // openURL opens the specified URL in the default browser of the user.
 func OpenURL(url string) error {
@@ -46,6 +47,7 @@ func isWSL() bool {
 	return strings.Contains(strings.ToLower(string(releaseData)), "microsoft")
 }
 
+// ConvertDate converts a date string to the format "dd/mm/yyyy"
 func ConvertDate(dateString string) string {
 	layoutList := []string{
 		"Mon, 02 Jan 2006 15:04:05 -0700",
@@ -84,6 +86,8 @@ func ConvertDate(dateString string) string {
 	return date
 }
 
+// URLToDir converts a URL to a directory name
+// https://isabelroses.com/feed.xml -> isabelroses_com_feed.xml
 func URLToDir(url string) string {
 	url = strings.ReplaceAll(url, "https://", "")
 	url = strings.ReplaceAll(url, "http://", "")
@@ -94,6 +98,7 @@ func URLToDir(url string) string {
 	return url
 }
 
+// Max returns the maximum of two integers
 func Max(a, b int) int {
 	if a > b {
 		return a

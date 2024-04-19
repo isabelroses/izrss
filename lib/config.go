@@ -1,3 +1,4 @@
+// Package lib common libary functtions
 package lib
 
 import (
@@ -8,6 +9,7 @@ import (
 	"github.com/adrg/xdg"
 )
 
+// ParseUrls reads the URLs from the config file and returns them as a slice
 func ParseUrls() []string {
 	urlsFile, err := xdg.ConfigFile("izrss/urls")
 	if err != nil {

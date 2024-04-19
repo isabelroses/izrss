@@ -8,12 +8,14 @@ import (
 	"github.com/adrg/xdg"
 )
 
+// ToggleRead toggles the read status of a post
 func ToggleRead(feeds Feeds, feedID int, postID int) Feeds {
 	postr := &feeds[feedID].Posts[postID]
 	postr.Read = !postr.Read
 	return feeds
 }
 
+// ReadAll marks all posts in a feed as read
 func ReadAll(feeds Feeds, feedID int) Feeds {
 	for i := range feeds[feedID].Posts {
 		feeds[feedID].Posts[i].Read = true
@@ -21,12 +23,14 @@ func ReadAll(feeds Feeds, feedID int) Feeds {
 	return feeds
 }
 
+// MarkRead marks a post as read
 func MarkRead(feeds Feeds, feedID int, postID int) Feeds {
 	postr := &feeds[feedID].Posts[postID]
 	postr.Read = true
 	return feeds
 }
 
+// WriteTracking saves the tracking state to a JSON file
 func (feeds Feeds) WriteTracking() error {
 	json, err := json.Marshal(feeds)
 	if err != nil {
@@ -35,7 +39,7 @@ func (feeds Feeds) WriteTracking() error {
 	return os.WriteFile(getSateFile(), json, 0644)
 }
 
-// Read from JSON file
+// ReadTracking reads the tracking state from a JSON file
 func (feeds Feeds) ReadTracking() (Feeds, error) {
 	fileStr := getSateFile()
 	if _, err := os.Stat(fileStr); os.IsNotExist(err) {

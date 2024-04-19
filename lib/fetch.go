@@ -12,6 +12,7 @@ import (
 	"github.com/mmcdole/gofeed"
 )
 
+// FetchURL fetches the content of a URL and returns it as a byte slice
 func FetchURL(url string, preferCache bool) []byte {
 	fileStr := "izrss/" + URLToDir(url)
 	file, err := xdg.CacheFile(fileStr)
@@ -42,6 +43,7 @@ func FetchURL(url string, preferCache bool) []byte {
 	return body
 }
 
+// GetContentForURL fetches the content of a URL and returns it as a Feed
 func GetContentForURL(url string, preferCache bool) Feed {
 	feed := setupReader(url, preferCache)
 
@@ -69,6 +71,7 @@ func GetContentForURL(url string, preferCache bool) Feed {
 	return feedRet
 }
 
+// GetPosts fetches the content of a URL and returns it as a slice of Posts
 func GetPosts(url string) []Post {
 	feed := setupReader(url, false)
 	posts := []Post{}
@@ -123,7 +126,7 @@ func setupReader(url string, preferCache bool) *gofeed.Feed {
 	return feed
 }
 
-// go reotines am irite
+// GetAllContent fetches the content of all URLs and returns it as a slice of Feeds
 func GetAllContent(preferCache bool) Feeds {
 	urls := ParseUrls()
 
