@@ -17,8 +17,6 @@ Enter
 Sleep 500ms
 Type "?"
 Sleep 500ms
-Down 1
-Sleep 500ms
 Enter
 Sleep 500ms
 Down 4
