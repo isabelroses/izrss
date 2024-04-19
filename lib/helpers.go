@@ -1,7 +1,6 @@
 package lib
 
 import (
-	"log"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -78,10 +77,10 @@ func ConvertDate(dateString string) string {
 	}
 
 	if err != nil {
-		log.Fatalf("could not parse date: %v", err)
+		return dateString
 	}
 
-	date := parsedDate.Format("02/01/2006")
+	date := parsedDate.Format(UserConfig.DateFormat)
 
 	return date
 }
