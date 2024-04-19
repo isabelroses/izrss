@@ -60,6 +60,7 @@ func LoadConfig() {
 
 // UserConfig is the global user configuration
 var UserConfig = config{
+	DateFormat: "%d/%m/%Y",
 	Colors: colors{
 		Text:       "#cdd6f4",
 		Inverttext: "#1e1e2e",
@@ -71,7 +72,8 @@ var UserConfig = config{
 
 // Config is the struct that holds the configuration
 type config struct {
-	Colors colors `toml:"colors"`
+	DateFormat string `toml:"dateformat"`
+	Colors     colors `toml:"colors"`
 }
 
 type colors struct {

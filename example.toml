@@ -1,3 +1,4 @@
+dateformat = "02/01/2006"
 [colors]
 text = "#cdd6f4"
 inverttext = "#1e1e2e"
