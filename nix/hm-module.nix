@@ -3,9 +3,10 @@ self: {
   lib,
   pkgs,
   ...
-}:
-with lib; {
-  meta.maintainers = [maintainers.isabelroses];
+}: let
+  inherit (lib) mkIf types mkOption mkEnableOption concatStringsSep;
+in {
+  meta.maintainers = [lib.maintainers.isabelroses];
 
   options.programs.izrss = {
     enable = mkEnableOption "A fast and once simple cli todo tool";
