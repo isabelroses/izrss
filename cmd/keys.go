@@ -76,7 +76,7 @@ var keys = keyMap{
 	),
 	ReadAll: key.NewBinding(
 		key.WithKeys("X"),
-		key.WithHelp("X", "toggle read"),
+		key.WithHelp("X", "mark all as read"),
 	),
 }
 
