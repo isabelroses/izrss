@@ -1,4 +1,9 @@
+# this should follow the Go reference time format
+# see <https://go.dev/src/time/format.go> for more information
 dateformat = "02/01/2006"
+
+# these values can be any format that lipgloss supports
+# see <https://github.com/charmbracelet/lipgloss#colors>
 [colors]
 text = "#cdd6f4"
 inverttext = "#1e1e2e"
