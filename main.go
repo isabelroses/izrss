@@ -11,7 +11,7 @@ import (
 	"github.com/isabelroses/izrss/cmd"
 )
 
-const Version = "unstable"
+const version = "unstable"
 
 func main() {
 	cli.AppHelpTemplate = fmt.Sprintf(`%s
@@ -22,7 +22,7 @@ CUSTOMIZATION:
 
 	app := &cli.App{
 		Name:    "izrss",
-		Version: Version,
+		Version: version,
 		Authors: []*cli.Author{{
 			Name:  "Isabel Roses",
 			Email: "isabel@isabelroses.com",
@@ -34,7 +34,6 @@ CUSTOMIZATION:
 				p := tea.NewProgram(cmd.NewModel(), tea.WithAltScreen())
 				if _, err := p.Run(); err != nil {
 					log.Fatal(err)
-					os.Exit(1)
 				}
 			}
 

@@ -14,7 +14,7 @@ buildGoModule {
   ldflags = [
     "-s"
     "-w"
-    "-X main.Version=${version}"
+    "-X main.version=${version}"
   ];
 
   meta = {
