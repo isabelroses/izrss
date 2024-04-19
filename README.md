@@ -22,7 +22,7 @@ Then run `izrss` to read the feeds.
 
 ### Customization
 
-The main bulk of customization is done via the `~/.config/izrss/config.toml` file. You can find an example file here [config.toml](./config.toml).
+The main bulk of customization is done via the `~/.config/izrss/config.toml` file. You can find an example file here [config.toml](./example.toml).
 
 The rest of the config is done via using the enviorment variables `GLAMOUR_STYLE`.
 For a good example see: [catppuccin/glamour](https://github.com/catppuccin/glamour)
