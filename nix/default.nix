@@ -18,7 +18,7 @@ buildGoModule {
   ];
 
   meta = {
-    description = "A RSS feed reader for the teminal";
+    description = "A RSS feed reader for the terminal";
     homepage = "https://github.com/isabelroses/izrss";
     license = lib.licenses.gpl3Only;
     maintainers = with lib.maintainers; [isabelroses];

@@ -19,7 +19,7 @@ func main() {
 CUSTOMIZATION:
     The main bulk of customization is done via the "~/.config/izrss/config.toml" file. You can find an example file on the github page.
 
-    The rest of the config is done via using the enviorment variables "GLAMOUR_STYLE".
+    The rest of the config is done via using the environment variables "GLAMOUR_STYLE".
     For a good example see: [catppuccin/glamour](https://github.com/catppuccin/glamour)
     You can customise the colours using "GLAMOUR_STYLE" for a good example see https://github.com/catppuccin/glamour`,
 		cli.AppHelpTemplate,

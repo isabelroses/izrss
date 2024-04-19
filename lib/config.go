@@ -1,4 +1,4 @@
-// Package lib common libary functtions
+// Package lib common library functions
 package lib
 
 import (
@@ -45,7 +45,7 @@ func ParseUrls() []string {
 	return filteredUrls
 }
 
-// LoadConfig loads the users configuration file and applys it to the config struct
+// LoadConfig loads the users configuration file and applies it to the config struct
 func LoadConfig() {
 	configFile := getConfigFile("config.toml")
 	configRaw, err := os.ReadFile(configFile)
