@@ -108,25 +108,40 @@ func (m model) handleKeys(msg tea.KeyMsg) (model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.Refresh):
 		switch m.context {
-		case "search":
-			return m, nil
-
 		case "home":
 			id := m.table.Cursor()
 			feed := &m.feeds[id]
 			lib.FetchURL(feed.URL, false)
 			feed.Posts = lib.GetPosts(feed.URL)
+			err := error(nil)
+			m.feeds, err = m.feeds.ReadTracking()
+			if err != nil {
+				log.Fatal(err)
+			}
 			m = m.loadHome()
 
 		case "content":
 			feed := &m.feed
 			feed.Posts = lib.GetPosts(feed.URL)
+			err := error(nil)
+			m.feeds, err = m.feeds.ReadTracking()
+			if err != nil {
+				log.Fatal(err)
+			}
 			m = m.loadContent(m.feed.ID)
+
+		default:
+			return m, nil
 		}
 
 	case key.Matches(msg, m.keys.RefreshAll):
 		if m.context == "home" {
 			m.feeds = lib.GetAllContent(false)
+			err := error(nil)
+			m.feeds, err = m.feeds.ReadTracking()
+			if err != nil {
+				log.Fatal(err)
+			}
 			m = m.loadHome()
 		}
 
