@@ -60,7 +60,7 @@ func LoadConfig() {
 
 // UserConfig is the global user configuration
 var UserConfig = config{
-	DateFormat: "%d/%m/%Y",
+	DateFormat: "02/01/2006",
 	Colors: colors{
 		Text:       "#cdd6f4",
 		Inverttext: "#1e1e2e",
