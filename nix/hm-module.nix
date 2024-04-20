@@ -4,7 +4,7 @@ self: {
   pkgs,
   ...
 }: let
-  inherit (lib) mkIf types mkOption mkEnableOption concatStringsSep;
+  inherit (lib) mkIf types mkOption mkEnableOption mkPackageOption concatStringsSep;
 
   mkColorOption = name: color:
     mkOption {
@@ -18,6 +18,8 @@ in {
 
   options.programs.izrss = {
     enable = mkEnableOption "A fast and once simple cli todo tool";
+
+    package = mkPackageOption self.packages.${pkgs.stdenv.hostPlatform.system} "izrss" {};
 
     urls = mkOption {
       type = with types; listOf str;
@@ -50,7 +52,7 @@ in {
     cfg = config.programs.izrss;
   in
     mkIf cfg.enable {
-      home.packages = [self.packages.${pkgs.stdenv.hostPlatform.system}.default];
+      home.packages = [cfg.package];
 
       xdg.configFile = {
         "izrss/urls" = mkIf (cfg.urls != []) {text = concatStringsSep "\n" cfg.urls;};

@@ -12,10 +12,12 @@
     forAllSystems = nixpkgs.lib.genAttrs systems;
     pkgsForEach = nixpkgs.legacyPackages;
   in {
-    packages = forAllSystems (system: {
-      default = pkgsForEach.${system}.callPackage ./nix/default.nix {
+    packages = forAllSystems (system: rec {
+      izrss = pkgsForEach.${system}.callPackage ./nix/default.nix {
         version = self.shortRev or "unstable";
       };
+
+      default = izrss;
     });
 
     devShells = forAllSystems (system: {
