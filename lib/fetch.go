@@ -134,7 +134,7 @@ func GetAllContent(preferCache bool) Feeds {
 	var wg sync.WaitGroup
 
 	// Create a channel to receive responses
-	responses := make(chan Feed)
+	responses := make(chan Feed, len(urls))
 
 	// Loop through the URLs and start a goroutine for each
 	for _, url := range urls {
