@@ -4,13 +4,14 @@ import "sort"
 
 // Post represents a single post in a feed
 type Post struct {
-	UUID    string `json:"uuid"`
-	Title   string `json:"-"`
-	Content string `json:"-"`
-	Link    string `json:"-"`
-	Date    string `json:"-"`
-	ID      int    `json:"-"`
-	Read    bool   `json:"read"`
+	UUID       string `json:"uuid"`
+	Title      string `json:"-"`
+	Expiration string `json:"-"`
+	Content    string `json:"-"`
+	Link       string `json:"-"`
+	Date       string `json:"-"`
+	ID         int    `json:"-"`
+	Read       bool   `json:"read"`
 }
 
 // Feed represents a single feed
