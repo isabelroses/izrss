@@ -5,6 +5,14 @@ self: {
   ...
 }: let
   inherit (lib) mkIf types mkOption mkEnableOption concatStringsSep;
+
+  mkColorOption = name: color:
+    mkOption {
+      type = types.str;
+      example = color;
+      default = "";
+      description = "${name} color";
+    };
 in {
   meta.maintainers = [lib.maintainers.isabelroses];
 
@@ -29,40 +37,11 @@ in {
       };
 
       colors = {
-        text = mkOption {
-          type = types.str;
-          example = "#cdd6f4";
-          default = "";
-          description = "Text color";
-        };
-
-        subtext = mkOption {
-          type = types.str;
-          example = "#a6adc8";
-          default = "";
-          description = "Subtext color";
-        };
-
-        inverttext = mkOption {
-          type = types.str;
-          example = "#1e1e2e";
-          default = "";
-          description = "Inverted text color";
-        };
-
-        accent = mkOption {
-          type = types.str;
-          example = "#74c7ec";
-          default = "";
-          description = "Accent color";
-        };
-
-        borders = mkOption {
-          type = types.str;
-          example = "#313244";
-          default = "";
-          description = "Borders color";
-        };
+        text = mkColorOption "Text" "#cdd6f4";
+        subtext = mkColorOption "Subtext" "#a6adc8";
+        inverttext = mkColorOption "Invert text" "#1e1e2e";
+        accent = mkColorOption "Accent" "#74c7ec";
+        borders = mkColorOption "Borders" "#313244";
       };
     };
   };
