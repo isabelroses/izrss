@@ -1,12 +1,15 @@
 package lib
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/adrg/xdg"
 	"github.com/mmcdole/gofeed"
@@ -45,9 +48,16 @@ func FetchURL(url string, preferCache bool) []byte {
 
 // GetContentForURL fetches the content of a URL and returns it as a Feed
 func GetContentForURL(url string, preferCache bool) Feed {
-	feed := setupReader(url, preferCache)
+	if preferCache {
+		if cachedFeed, found := cache.Get(url); found {
+			return cachedFeed
+		}
+	}
 
-	if feed == nil {
+	fp := gofeed.NewParser()
+	feedFile := FetchURL(url, preferCache)
+
+	if feedFile == nil {
 		return Feed{
 			Title: fmt.Sprintf("Error loading %s", url),
 			URL:   url,
@@ -55,20 +65,26 @@ func GetContentForURL(url string, preferCache bool) Feed {
 		}
 	}
 
-	feedRet := Feed{
-		Title: feed.Title,
-		URL:   url,
-		Posts: []Post{},
+	feed, err := fp.ParseString(string(feedFile))
+	if err != nil {
+		log.Fatalf("could not parse feed: %v", err)
 	}
 
-	// could be deduplicated but unsure what the best way to do that is
+	newFeed := Feed{
+		Title:       feed.Title,
+		URL:         url,
+		Posts:       []Post{},
+		LastUpdated: time.Now(),
+	}
+
 	for _, item := range feed.Items {
 		post := createPost(item)
-
-		feedRet.Posts = append(feedRet.Posts, post)
+		newFeed.Posts = append(newFeed.Posts, post)
 	}
 
-	return feedRet
+	cache.Set(url, newFeed, 24*time.Hour)
+
+	return newFeed
 }
 
 // GetPosts fetches the content of a URL and returns it as a slice of Posts
@@ -130,6 +146,8 @@ func setupReader(url string, preferCache bool) *gofeed.Feed {
 func GetAllContent(preferCache bool) Feeds {
 	urls := ParseUrls()
 
+	cache := NewCache()
+
 	// Create a wait group to wait for all goroutines to finish
 	var wg sync.WaitGroup
 
@@ -165,4 +183,106 @@ func fetchContent(url string, preferCache bool, wg *sync.WaitGroup, ch chan<- Fe
 
 	// Send the response through the channel
 	ch <- posts
+}
+
+// CacheEntry represents a cached item with its expiration time
+type CacheEntry struct {
+	Expiration time.Time
+	Value      Post
+}
+
+// Cache represents a cache with a map to store cached items
+type Cache struct {
+	data map[string]CacheEntry
+	dir  string
+	mu   sync.RWMutex
+}
+
+// NewCache creates a new instance of Cache
+func NewCache() *Cache {
+	cacheDir := "cache" // Default cache directory
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		panic(fmt.Sprintf("failed to create cache directory: %v", err))
+	}
+	return &Cache{
+		data: make(map[string]CacheEntry),
+		dir:  cacheDir,
+	}
+}
+
+// Get retrieves a value from the cache by key
+func (c *Cache) Get(key string) (Post, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	entry, found := c.data[key]
+	if !found {
+		return Post{}, false
+	}
+
+	// Check if the entry has expired
+	if time.Now().After(entry.Expiration) {
+		// If expired, delete the entry from the cache
+		c.mu.Lock()
+		delete(c.data, key)
+		c.mu.Unlock()
+		return Post{}, false
+	}
+
+	return entry.Value, true
+}
+
+// Set adds or updates a value in the cache with a specified expiration time
+func (c *Cache) Set(key string, value Post, expiration time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.data[key] = CacheEntry{
+		Value:      value,
+		Expiration: time.Now().Add(expiration),
+	}
+
+	// Save the cache entry to a file
+	err := c.saveToFile(key, value)
+	if err != nil {
+		panic(err)
+	}
+}
+
+// saveToFile saves a cache entry to a file in the cache directory
+func (c *Cache) saveToFile(key string, value Post) error {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+
+	filename := filepath.Join(c.dir, key+".json")
+	return os.WriteFile(filename, data, 0644)
+}
+
+// LoadCache loads cache entries from files in the cache directory
+func (c *Cache) LoadCache() error {
+	files, err := os.ReadDir(c.dir)
+	if err != nil {
+		return err
+	}
+
+	for _, file := range files {
+		if !file.IsDir() {
+			filename := filepath.Join(c.dir, file.Name())
+			data, err := os.ReadFile(filename)
+			if err != nil {
+				return err
+			}
+
+			var post Post
+			if err := json.Unmarshal(data, &post); err != nil {
+				return err
+			}
+
+			c.Set(post.UUID, post, time.Until(post.Expiration))
+		}
+	}
+
+	return nil
 }
