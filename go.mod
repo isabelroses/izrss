@@ -6,7 +6,7 @@ require (
 	github.com/JohannesKaufmann/html-to-markdown v1.5.0
 	github.com/adrg/xdg v0.4.0
 	github.com/charmbracelet/bubbles v0.18.0
-	github.com/charmbracelet/bubbletea v0.25.0
+	github.com/charmbracelet/bubbletea v0.26.1
 	github.com/charmbracelet/lipgloss v0.10.0
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/pelletier/go-toml/v2 v2.2.1
@@ -21,6 +21,7 @@ require (
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.4 // indirect
 	github.com/dlclark/regexp2 v1.11.0 // indirect
+	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.26 // indirect
@@ -38,7 +39,6 @@ require (
 require (
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/charmbracelet/glamour v0.7.0
-	github.com/containerd/console v1.0.4 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-localereader v0.0.1 // indirect
