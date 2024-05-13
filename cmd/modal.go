@@ -14,13 +14,14 @@ import (
 // Model is the main model for the application
 type Model struct {
 	help     help.Model
+	context  string
+	urls     string
+	keys     keyMap
+	viewport viewport.Model
+	feeds    lib.Feeds
 	filter   textinput.Model
 	post     lib.Post
-	context  string
-	viewport viewport.Model
-	keys     keyMap
 	feed     lib.Feed
-	feeds    lib.Feeds
 	table    table.Model
 	ready    bool
 }
@@ -33,7 +34,7 @@ func (m Model) Init() tea.Cmd {
 }
 
 // NewModel creates a new model with sensible defaults
-func NewModel() Model {
+func NewModel(urls string) Model {
 	t := table.New(table.WithFocused(true))
 	t.SetStyles(lib.TableStyle())
 
@@ -62,5 +63,6 @@ func NewModel() Model {
 		help:     h,
 		post:     lib.Post{},
 		filter:   f,
+		urls:     urls,
 	}
 }

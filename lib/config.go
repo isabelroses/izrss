@@ -19,8 +19,10 @@ func getConfigFile(file string) string {
 }
 
 // ParseUrls reads the URLs from the config file and returns them as a slice
-func ParseUrls() []string {
-	urlsFile := getConfigFile("urls")
+func ParseUrls(urlsFile string) []string {
+	if urlsFile == "" {
+		urlsFile = getConfigFile("urls")
+	}
 
 	urlsRaw, err := os.ReadFile(urlsFile)
 	if err != nil {

@@ -34,12 +34,18 @@ CUSTOMIZATION:
 		}},
 		Usage: "An RSS feed reader for the terminal.",
 
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:  "urls",
+				Value: "",
+				Usage: "the path to your urls file",
+			},
+		},
+
 		Action: func(c *cli.Context) error {
-			if c.NArg() == 0 {
-				p := tea.NewProgram(cmd.NewModel(), tea.WithAltScreen())
-				if _, err := p.Run(); err != nil {
-					log.Fatal(err)
-				}
+			p := tea.NewProgram(cmd.NewModel(c.String("urls")), tea.WithAltScreen())
+			if _, err := p.Run(); err != nil {
+				log.Fatal(err)
 			}
 
 			return nil
