@@ -12,7 +12,7 @@ import (
 	"github.com/isabelroses/izrss/cmd"
 )
 
-const version = "unstable"
+var version = "unstable"
 
 func main() {
 	cli.AppHelpTemplate = fmt.Sprintf(`%s
