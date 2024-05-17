@@ -61,7 +61,9 @@ in
 
       xdg.configFile = {
         "izrss/urls" = mkIf (cfg.urls != [ ]) { text = concatStringsSep "\n" cfg.urls; };
-        "izrss/config.toml".source = mkIf (cfg.settings != { }) settingsFormat.generate "izrss-config.toml" cfg.settings;
+        "izrss/config.toml" = mkIf (cfg.settings != { }) {
+          source = (settingsFormat.generate "izrss-config.toml" cfg.settings);
+        };
       };
 
       assertions = [
