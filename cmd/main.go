@@ -46,10 +46,10 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
 
 		err := error(nil)
 		m.feeds, err = m.feeds.ReadTracking()
-		m = m.loadHome()
 		if err != nil {
 			log.Fatalf("could not read tracking file: %v", err)
 		}
+		m = m.loadHome()
 
 		m.ready = true
 	} else {
