@@ -41,6 +41,7 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
 	m.table.SetHeight(height - lipgloss.Height(m.help.View(m.keys)) - lib.MainStyle.GetBorderBottomSize())
 
 	if !m.ready {
+		lib.LoadConfig(m.config)
 		m.feeds = lib.GetAllContent(m.urls, true)
 		m.viewport = viewport.New(width, height)
 

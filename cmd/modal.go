@@ -16,6 +16,7 @@ type Model struct {
 	help     help.Model
 	context  string
 	urls     string
+	config   string
 	keys     keyMap
 	viewport viewport.Model
 	feeds    lib.Feeds
@@ -34,7 +35,7 @@ func (m Model) Init() tea.Cmd {
 }
 
 // NewModel creates a new model with sensible defaults
-func NewModel(urls string) Model {
+func NewModel(urls string, config string) Model {
 	t := table.New(table.WithFocused(true))
 	t.SetStyles(lib.TableStyle())
 
@@ -64,5 +65,6 @@ func NewModel(urls string) Model {
 		post:     lib.Post{},
 		filter:   f,
 		urls:     urls,
+		config:   config,
 	}
 }

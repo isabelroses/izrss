@@ -48,9 +48,11 @@ func ParseUrls(urlsFile string) []string {
 }
 
 // LoadConfig loads the users configuration file and applies it to the config struct
-func LoadConfig() {
-	configFile := getConfigFile("config.toml")
-	configRaw, err := os.ReadFile(configFile)
+func LoadConfig(config string) {
+	if config == "" {
+		config = getConfigFile("config.toml")
+	}
+	configRaw, err := os.ReadFile(config)
 	if err != nil {
 		log.Fatalf("could not read file: %v", err)
 	}
