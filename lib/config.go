@@ -52,10 +52,8 @@ func LoadConfig(config string) {
 	if config == "" {
 		config = getConfigFile("config.toml")
 	}
-	configRaw, err := os.ReadFile(config)
-	if err != nil {
-		log.Fatalf("could not read file: %v", err)
-	}
+	// ignore error since we can just use the default config
+	configRaw, _ := os.ReadFile(config)
 
 	if err := toml.Unmarshal(configRaw, &UserConfig); err != nil {
 		log.Fatalf("could not unmarshal config: %v", err)
