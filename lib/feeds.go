@@ -49,3 +49,27 @@ func (f Feed) GetTotalUnreads() int {
 	}
 	return total
 }
+
+func mergeFeeds(feeds1, feeds2 Feeds) Feeds {
+	// Create a map to hold posts from feeds1 by their UUID for quick lookup
+	postMap := make(map[string]*Post)
+
+	// Iterate through feeds1 and map their posts by UUID
+	for i := range feeds1 {
+		for j := range feeds1[i].Posts {
+			postMap[feeds1[i].Posts[j].UUID] = &feeds1[i].Posts[j]
+		}
+	}
+
+	// Iterate through feeds2 and merge their posts into feeds1 based on UUID
+	for i := range feeds2 {
+		for j := range feeds2[i].Posts {
+			if post1, exists := postMap[feeds2[i].Posts[j].UUID]; exists {
+				// Update the existing post in feeds1 with the one from feeds2
+				post1.Read = feeds2[i].Posts[j].Read
+			}
+		}
+	}
+
+	return feeds1
+}
