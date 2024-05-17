@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"log"
 	"strconv"
 	"strings"
 
@@ -25,12 +24,6 @@ func (m Model) loadHome() Model {
 
 	m.context = "home"
 	m = m.loadNewTable(columns, rows)
-
-	err := error(nil)
-	m.feeds, err = m.feeds.ReadTracking()
-	if err != nil {
-		log.Fatalf("could not read tracking file: %v", err)
-	}
 
 	return m
 }

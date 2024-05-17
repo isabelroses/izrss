@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"log"
+
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -41,7 +43,14 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
 	if !m.ready {
 		m.feeds = lib.GetAllContent(m.urls, true)
 		m.viewport = viewport.New(width, height)
+
+		err := error(nil)
+		m.feeds, err = m.feeds.ReadTracking()
 		m = m.loadHome()
+		if err != nil {
+			log.Fatalf("could not read tracking file: %v", err)
+		}
+
 		m.ready = true
 	} else {
 		m.viewport.Width = width
