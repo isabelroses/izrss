@@ -35,14 +35,15 @@ in
       inherit (settingsFormat) type;
       default = { };
       example = lib.literalExpression ''
-        dateformat = "02/01/2006"
+        dateformat = "02/01/2006";
 
-        [colors]
-        text = "#cdd6f4"
-        inverttext = "#1e1e2e"
-        subtext = "#a6adc8"
-        accent = "#74c7ec"
-        borders = "#313244"
+        colors = {
+          text = "#cdd6f4";
+          inverttext = "#1e1e2e";
+          subtext = "#a6adc8";
+          accent = "#74c7ec";
+          borders = "#313244";
+        };
       '';
       description = ''
         Configuration written to {file}`$XDG_CONFIG_HOME/izrss/config.toml`.
