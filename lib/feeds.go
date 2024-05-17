@@ -50,6 +50,9 @@ func (f Feed) GetTotalUnreads() int {
 	return total
 }
 
+// silly leah thinks this is chatgpt-ed but NO. I wrote this myself. I'm just that good.
+// also a bit of nix inspired me to write this `foldl recursiveUpdate { } importedLibs`
+// okay maybe it was beacuse of the comments not actually the code, kinda fair.
 func mergeFeeds(feeds1, feeds2 Feeds) Feeds {
 	// Create a map to hold posts from feeds1 by their UUID for quick lookup
 	postMap := make(map[string]*Post)
