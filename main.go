@@ -10,6 +10,7 @@ import (
 	"github.com/urfave/cli/v2"
 
 	"github.com/isabelroses/izrss/cmd"
+	"github.com/isabelroses/izrss/lib"
 )
 
 var version = "unstable"
@@ -48,7 +49,8 @@ CUSTOMIZATION:
 		},
 
 		Action: func(c *cli.Context) error {
-			p := tea.NewProgram(cmd.NewModel(c.String("urls"), c.String("config")), tea.WithAltScreen())
+			lib.LoadConfig(c.String("config"))
+			p := tea.NewProgram(cmd.NewModel(c.String("urls")), tea.WithAltScreen())
 			if _, err := p.Run(); err != nil {
 				log.Fatal(err)
 			}
