@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -19,7 +20,8 @@ func (m Model) loadHome() Model {
 	rows := []table.Row{}
 	for _, Feed := range m.feeds {
 		totalUnread := strconv.Itoa(Feed.GetTotalUnreads())
-		rows = append(rows, table.Row{totalUnread, Feed.Title})
+		fraction := fmt.Sprintf("%s/%d", totalUnread, len(Feed.Posts))
+		rows = append(rows, table.Row{fraction, Feed.Title})
 	}
 
 	m.context = "home"
