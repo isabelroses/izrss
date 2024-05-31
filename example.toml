@@ -2,6 +2,10 @@
 # see <https://go.dev/src/time/format.go> for more information
 dateformat = "2006/01/02"
 
+# this value should be a float between 0 and 1, this tracks how much
+# of the screen should be scrolled when the article is marked as read
+read_threshold = 0.8
+
 # these values can be any format that lipgloss supports
 # see <https://github.com/charmbracelet/lipgloss#colors>
 [colors]

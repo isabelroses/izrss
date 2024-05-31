@@ -62,7 +62,8 @@ func LoadConfig(config string) {
 
 // UserConfig is the global user configuration
 var UserConfig = config{
-	DateFormat: "02/01/2006",
+	DateFormat:    "02/01/2006",
+	ReadThreshold: 0.8,
 	Colors: colors{
 		Text:       "#cdd6f4",
 		Inverttext: "#1e1e2e",
@@ -74,8 +75,9 @@ var UserConfig = config{
 
 // Config is the struct that holds the configuration
 type config struct {
-	DateFormat string `toml:"dateformat"`
-	Colors     colors `toml:"colors"`
+	Colors        colors  `toml:"colors"`
+	DateFormat    string  `toml:"dateformat"`
+	ReadThreshold float64 `toml:"read_threshold"`
 }
 
 type colors struct {

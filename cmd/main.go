@@ -92,7 +92,7 @@ func (m Model) updateViewport(msg tea.Msg) (Model, tea.Cmd) {
 		m.viewport.SetContent(view)
 	}
 
-	if m.context == "reader" && m.viewport.ScrollPercent() >= 0.8 {
+	if m.context == "reader" && m.viewport.ScrollPercent() >= lib.UserConfig.ReadThreshold {
 		lib.MarkRead(m.feeds, m.feed.ID, m.post.ID)
 	}
 
