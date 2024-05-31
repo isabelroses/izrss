@@ -8,11 +8,9 @@ self:
 let
   inherit (lib)
     mkIf
-    types
     mkOption
     mkEnableOption
     mkPackageOption
-    concatStringsSep
     ;
 
   settingsFormat = pkgs.formats.toml { };
@@ -25,11 +23,7 @@ in
 
     package = mkPackageOption self.packages.${pkgs.stdenv.hostPlatform.system} "izrss" { };
 
-    urls = mkOption {
-      type = with types; listOf str;
-      example = [ "http://example.com" ];
-      description = "Feed URLs.";
-    };
+    urls = builtins.throw "This has been deprecated, please use the settings option instead";
 
     settings = mkOption {
       inherit (settingsFormat) type;
