@@ -14,6 +14,7 @@ import (
 type keyMap struct {
 	Up         key.Binding
 	Down       key.Binding
+	Back       key.Binding
 	Help       key.Binding
 	Quit       key.Binding
 	Open       key.Binding
@@ -31,10 +32,11 @@ func (k keyMap) ShortHelp() []key.Binding {
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down},
-		{k.Help, k.Quit},
+		{k.Back, k.Open},
+		{k.Search},
 		{k.Refresh, k.RefreshAll},
-		{k.Open, k.Search},
 		{k.ToggleRead, k.ReadAll},
+		{k.Help, k.Quit},
 	}
 }
 
@@ -47,6 +49,14 @@ var keys = keyMap{
 		key.WithKeys("down", "j"),
 		key.WithHelp("↓/j", "move down"),
 	),
+	Back: key.NewBinding(
+		key.WithKeys("left", "h", "shift+tab"),
+		key.WithHelp("←/h", "back"),
+	),
+	Open: key.NewBinding(
+		key.WithKeys("enter", "o", "right", "l", "tab"),
+		key.WithHelp("o/enter", "open"),
+	),
 	Help: key.NewBinding(
 		key.WithKeys("?"),
 		key.WithHelp("?", "toggle help"),
@@ -54,10 +64,6 @@ var keys = keyMap{
 	Quit: key.NewBinding(
 		key.WithKeys("q", "esc", "ctrl+c"),
 		key.WithHelp("q/esc", "quit"),
-	),
-	Open: key.NewBinding(
-		key.WithKeys("enter", "o"),
-		key.WithHelp("o/enter", "open"),
 	),
 	Refresh: key.NewBinding(
 		key.WithKeys("r"),
@@ -88,24 +94,11 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 		m.table.SetHeight(m.viewport.Height - lipgloss.Height(m.help.View(m.keys)) - lib.MainStyle.GetBorderBottomSize())
 
 	case key.Matches(msg, m.keys.Quit):
-		switch m.context {
-		case "reader":
-			m = m.loadContent(m.feed.ID)
-			m.table.SetCursor(m.post.ID)
-		case "content":
-			m = m.loadHome()
-			m.table.SetCursor(m.feed.ID)
-		case "search":
-			m = m.loadContent(m.table.Cursor())
-			m.table.Focus()
-			m.filter.Blur()
-		default:
-			err := m.feeds.WriteTracking()
-			if err != nil {
-				log.Fatalf("Could not write tracking data: %s", err)
-			}
-			return m, tea.Quit
+		err := m.feeds.WriteTracking()
+		if err != nil {
+			log.Fatalf("Could not write tracking data: %s", err)
 		}
+		return m, tea.Quit
 
 	case key.Matches(msg, m.keys.Refresh):
 		switch m.context {
@@ -144,6 +137,20 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 				log.Fatal(err)
 			}
 			m = m.loadHome()
+		}
+
+	case key.Matches(msg, m.keys.Back):
+		switch m.context {
+		case "reader":
+			m = m.loadContent(m.feed.ID)
+			m.table.SetCursor(m.post.ID)
+		case "content":
+			m = m.loadHome()
+			m.table.SetCursor(m.feed.ID)
+		case "search":
+			m = m.loadContent(m.table.Cursor())
+			m.table.Focus()
+			m.filter.Blur()
 		}
 
 	case key.Matches(msg, m.keys.Open):
