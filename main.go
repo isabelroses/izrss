@@ -37,11 +37,6 @@ CUSTOMIZATION:
 
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				Name:  "urls",
-				Value: "",
-				Usage: "the path to your urls file",
-			},
-			&cli.StringFlag{
 				Name:  "config",
 				Value: "",
 				Usage: "the path to your config file",
@@ -50,7 +45,7 @@ CUSTOMIZATION:
 
 		Action: func(c *cli.Context) error {
 			lib.LoadConfig(c.String("config"))
-			p := tea.NewProgram(cmd.NewModel(c.String("urls")), tea.WithAltScreen())
+			p := tea.NewProgram(cmd.NewModel(), tea.WithAltScreen())
 			if _, err := p.Run(); err != nil {
 				log.Fatal(err)
 			}

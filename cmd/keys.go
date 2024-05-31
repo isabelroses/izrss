@@ -130,7 +130,7 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.RefreshAll):
 		if m.context == "home" {
-			m.feeds = lib.GetAllContent(m.urls, false)
+			m.feeds = lib.GetAllContent(lib.UserConfig.Urls, false)
 			err := error(nil)
 			m.feeds, err = m.feeds.ReadTracking()
 			if err != nil {

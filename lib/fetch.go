@@ -127,9 +127,7 @@ func setupReader(url string, preferCache bool) *gofeed.Feed {
 }
 
 // GetAllContent fetches the content of all URLs and returns it as a slice of Feeds
-func GetAllContent(urlsFile string, preferCache bool) Feeds {
-	urls := ParseUrls(urlsFile)
-
+func GetAllContent(urls []string, preferCache bool) Feeds {
 	// Create a wait group to wait for all goroutines to finish
 	var wg sync.WaitGroup
 

@@ -44,6 +44,10 @@ in
           accent = "#74c7ec";
           borders = "#313244";
         };
+
+        urls = [
+          "http://example.com"
+        ];
       '';
       description = ''
         Configuration written to {file}`$XDG_CONFIG_HOME/izrss/config.toml`.
@@ -60,18 +64,8 @@ in
     mkIf cfg.enable {
       home.packages = [ cfg.package ];
 
-      xdg.configFile = {
-        "izrss/urls" = mkIf (cfg.urls != [ ]) { text = concatStringsSep "\n" cfg.urls; };
-        "izrss/config.toml" = mkIf (cfg.settings != { }) {
-          source = (settingsFormat.generate "izrss-config.toml" cfg.settings);
-        };
+      xdg.configFile."izrss/config.toml" = mkIf (cfg.settings != { }) {
+        source = (settingsFormat.generate "izrss-config.toml" cfg.settings);
       };
-
-      assertions = [
-        {
-          assertion = config.xdg.enable;
-          message = "Option xdg.enable must be enabled for the configuration to be written to the filesystem.";
-        }
-      ];
     };
 }

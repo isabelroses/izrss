@@ -15,7 +15,6 @@ import (
 type Model struct {
 	help     help.Model
 	context  string
-	urls     string
 	keys     keyMap
 	viewport viewport.Model
 	feeds    lib.Feeds
@@ -34,7 +33,7 @@ func (m Model) Init() tea.Cmd {
 }
 
 // NewModel creates a new model with sensible defaults
-func NewModel(urls string) Model {
+func NewModel() Model {
 	t := table.New(table.WithFocused(true))
 	t.SetStyles(lib.TableStyle())
 
@@ -63,6 +62,5 @@ func NewModel(urls string) Model {
 		help:     h,
 		post:     lib.Post{},
 		filter:   f,
-		urls:     urls,
 	}
 }

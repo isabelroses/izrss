@@ -8,24 +8,14 @@
 
 ![demo](./.github/assets/demo.gif)
 
-### Usage
-
-
-Ensure you have a `~/.config/izrss/urls` file, or your systems eqivelent, with the following structure:
-
-```txt
-https://isabelroses.com/rss.xml
-https://uncenter.dev/feed.xml
-```
-
-Then run `izrss` to read the feeds.
-
-### Customization
+### Usage & Customization
 
 The main bulk of customization is done via the `~/.config/izrss/config.toml` file. You can find an example file here [config.toml](./example.toml).
 
 The rest of the config is done via using the environment variables `GLAMOUR_STYLE`.
 For a good example see: [catppuccin/glamour](https://github.com/catppuccin/glamour)
+
+Then run `izrss` to read the feeds.
 
 ### Nix
 

@@ -14,3 +14,9 @@ inverttext = "#1e1e2e"
 subtext = "#a6adc8"
 accent = "#74c7ec"
 borders = "#313244"
+
+# a list of urls to fetch rss feeds from
+urls = [
+    "https://example.com/rss.xml",
+    "https://example.com/rss2.xml",
+]

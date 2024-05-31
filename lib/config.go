@@ -4,7 +4,6 @@ package lib
 import (
 	"log"
 	"os"
-	"strings"
 
 	"github.com/adrg/xdg"
 	"github.com/pelletier/go-toml/v2"
@@ -16,35 +15,6 @@ func getConfigFile(file string) string {
 		log.Fatalf("could not find config file: %v", err)
 	}
 	return configFile
-}
-
-// ParseUrls reads the URLs from the config file and returns them as a slice
-func ParseUrls(urlsFile string) []string {
-	if urlsFile == "" {
-		urlsFile = getConfigFile("urls")
-	}
-
-	urlsRaw, err := os.ReadFile(urlsFile)
-	if err != nil {
-		log.Fatalf("could not read file: %v", err)
-		return nil
-	}
-
-	// Convert byte slice to string
-	rawString := string(urlsRaw)
-
-	// Split string into individual URLs based on newline character
-	urls := strings.Split(rawString, "\n")
-
-	filteredUrls := []string{}
-	for _, url := range urls {
-		trimmedURL := strings.TrimSpace(url)
-		if trimmedURL != "" {
-			filteredUrls = append(filteredUrls, trimmedURL)
-		}
-	}
-
-	return filteredUrls
 }
 
 // LoadConfig loads the users configuration file and applies it to the config struct
@@ -64,6 +34,7 @@ func LoadConfig(config string) {
 var UserConfig = config{
 	DateFormat:    "02/01/2006",
 	ReadThreshold: 0.8,
+	Urls:          []string{},
 	Colors: colors{
 		Text:       "#cdd6f4",
 		Inverttext: "#1e1e2e",
@@ -75,9 +46,10 @@ var UserConfig = config{
 
 // Config is the struct that holds the configuration
 type config struct {
-	Colors        colors  `toml:"colors"`
-	DateFormat    string  `toml:"dateformat"`
-	ReadThreshold float64 `toml:"read_threshold"`
+	Colors        colors   `toml:"colors"`
+	DateFormat    string   `toml:"dateformat"`
+	Urls          []string `toml:"urls"`
+	ReadThreshold float64  `toml:"read_threshold"`
 }
 
 type colors struct {
