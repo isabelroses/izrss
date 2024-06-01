@@ -23,8 +23,6 @@ in
 
     package = mkPackageOption self.packages.${pkgs.stdenv.hostPlatform.system} "izrss" { };
 
-    urls = builtins.throw "This has been deprecated, please use the settings option instead";
-
     settings = mkOption {
       inherit (settingsFormat) type;
       default = { };
@@ -50,6 +48,14 @@ in
       '';
     };
   };
+
+  imports = [
+    (lib.mkRemovedOptionModule [
+      "programs"
+      "izrss"
+      "urls"
+    ] "Please use `programs.izrss.settings.urls` instead.")
+  ];
 
   config =
     let
