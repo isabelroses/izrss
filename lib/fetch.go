@@ -131,7 +131,10 @@ func setupReader(url string, preferCache bool) *gofeed.Feed {
 // GetAllContent fetches the content of all URLs and returns it as a slice of Feeds
 func GetAllContent(urls []string, preferCache bool) Feeds {
 	if !preferCache {
-		WriteCacheTime()
+		err := WriteCacheTime()
+		if err != nil {
+			log.Fatalf("could not check cache: %v", err)
+		}
 	}
 
 	// Create a wait group to wait for all goroutines to finish
