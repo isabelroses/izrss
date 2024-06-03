@@ -1,12 +1,14 @@
 package lib
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/adrg/xdg"
 	"github.com/mmcdole/gofeed"
@@ -128,6 +130,10 @@ func setupReader(url string, preferCache bool) *gofeed.Feed {
 
 // GetAllContent fetches the content of all URLs and returns it as a slice of Feeds
 func GetAllContent(urls []string, preferCache bool) Feeds {
+	if !preferCache {
+		WriteCacheTime()
+	}
+
 	// Create a wait group to wait for all goroutines to finish
 	var wg sync.WaitGroup
 
@@ -163,4 +169,39 @@ func fetchContent(url string, preferCache bool, wg *sync.WaitGroup, ch chan<- Fe
 
 	// Send the response through the channel
 	ch <- posts
+}
+
+func CheckCache() bool {
+	fileStr := getStateFile("fetch.json")
+	if _, err := os.Stat(fileStr); os.IsNotExist(err) {
+		err := WriteCacheTime()
+		if err != nil {
+			log.Fatalf("could not write tracking file: %v", err)
+		}
+	}
+
+	file, err := os.ReadFile(fileStr)
+	if err != nil {
+		log.Fatalf("could not read tracking file: %v", err)
+	}
+
+	last := &time.Time{}
+	err = json.Unmarshal(file, last)
+	if err != nil {
+		log.Fatalf("could not unmarshal tracking file: %v", err)
+	}
+
+	if time.Since(*last) > 24*time.Hour {
+		return false
+	}
+
+	return true
+}
+
+func WriteCacheTime() error {
+	json, err := json.Marshal(time.Now())
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(getStateFile("fetch.json"), json, 0644)
 }

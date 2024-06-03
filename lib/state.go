@@ -36,12 +36,12 @@ func (feeds Feeds) WriteTracking() error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(getStateFile(), json, 0644)
+	return os.WriteFile(getStateFile("tracking.json"), json, 0644)
 }
 
 // ReadTracking reads the tracking state from a JSON file
 func (feeds Feeds) ReadTracking() (Feeds, error) {
-	fileStr := getStateFile()
+	fileStr := getStateFile("tracking.json")
 	if _, err := os.Stat(fileStr); os.IsNotExist(err) {
 		err := feeds.WriteTracking()
 		if err != nil {
@@ -65,8 +65,8 @@ func (feeds Feeds) ReadTracking() (Feeds, error) {
 	return mergedFeed, nil
 }
 
-func getStateFile() string {
-	stateFile, err := xdg.StateFile("izrss/tracking.json")
+func getStateFile(file string) string {
+	stateFile, err := xdg.StateFile("izrss/" + file)
 	if err != nil {
 		log.Fatalf("could not find state file: %v", err)
 	}
