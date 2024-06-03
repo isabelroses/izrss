@@ -207,7 +207,7 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 			lib.ToggleRead(m.feeds, m.feed.ID, m.post.ID)
 		case "content":
 			lib.ReadAll(m.feeds, m.feed.ID)
-			m = m.loadContent(m.table.Cursor())
+			m = m.loadContent(m.feed.ID)
 		case "home":
 			lib.ReadAll(m.feeds, m.table.Cursor())
 			m = m.loadHome()
