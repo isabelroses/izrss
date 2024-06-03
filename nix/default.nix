@@ -7,8 +7,18 @@ buildGoModule {
   pname = "izrss";
   inherit version;
 
-  src = ../.;
-
+  src = lib.fileset.toSource {
+    root = ../.;
+    fileset = lib.fileset.intersection (lib.fileset.fromSource (lib.sources.cleanSource ../.)) (
+      lib.fileset.unions [
+        ../go.mod
+        ../go.sum
+        ../main.go
+        ../lib
+        ../cmd
+      ]
+    );
+  };
   vendorHash = "sha256-/TRCD6akZV2qDqJz62p7UzFIGuTAKLnUtYqqvdw3rCI=";
 
   ldflags = [
