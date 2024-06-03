@@ -13,8 +13,8 @@ import (
 // load the home view, this conists of the list of feeds
 func (m Model) loadHome() Model {
 	columns := []table.Column{
-		{Title: "Unread", Width: 7},
-		{Title: "Title", Width: m.table.Width() - 7},
+		{Title: "Unread", Width: 10},
+		{Title: "Title", Width: m.table.Width() - 10},
 	}
 
 	rows := []table.Row{}
@@ -35,9 +35,9 @@ func (m Model) loadContent(id int) Model {
 	feed.ID = id
 
 	columns := []table.Column{
-		{Title: "Date", Width: 11},
-		{Title: "Unread", Width: 7},
-		{Title: "Title", Width: m.table.Width() - 27},
+		{Title: "Date", Width: 15},
+		{Title: "Unread", Width: 10},
+		{Title: "Title", Width: m.table.Width() - 25},
 	}
 
 	rows := []table.Row{}
@@ -83,7 +83,7 @@ func (m Model) loadSearchValues() Model {
 	}
 
 	columns := []table.Column{
-		{Title: "Date", Width: 13},
+		{Title: "Date", Width: 15},
 		{Title: "Title", Width: m.table.Width() - 15},
 	}
 
