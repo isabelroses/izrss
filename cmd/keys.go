@@ -88,6 +88,22 @@ var keys = keyMap{
 }
 
 func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
+	if m.context == "search" {
+		switch msg.String() {
+		case "enter":
+			m = m.loadSearchValues()
+
+		case "ctrl+c":
+		case "esc":
+		case "/":
+			m = m.loadContent(m.table.Cursor())
+			m.table.Focus()
+			m.filter.Blur()
+		}
+
+		return m, nil
+	}
+
 	switch {
 	case key.Matches(msg, m.keys.Help):
 		m.help.ShowAll = !m.help.ShowAll
@@ -147,10 +163,6 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 		case "content":
 			m = m.loadHome()
 			m.table.SetCursor(m.feed.ID)
-		case "search":
-			m = m.loadContent(m.table.Cursor())
-			m.table.Focus()
-			m.filter.Blur()
 		}
 
 	case key.Matches(msg, m.keys.Open):
@@ -163,12 +175,6 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 
 		case "content":
 			m = m.loadReader()
-
-		case "search":
-			// NOTE: do not load search values if input is "o"
-			if msg.String() != "o" {
-				m = m.loadSearchValues()
-			}
 
 		default:
 			m = m.loadContent(m.table.Cursor())
