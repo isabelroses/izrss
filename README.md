@@ -17,13 +17,13 @@ For a good example see: [catppuccin/glamour](https://github.com/catppuccin/glamo
 
 Then run `izrss` to read the feeds.
 
-### Nix
+### Installation
 
 <details>
 
 <summary>
 
-#### Installation with flakes and home-manager
+#### With Nix flakes and home-manager
 
 </summary>
 
@@ -44,10 +44,11 @@ Then run `izrss` to read the feeds.
     homeConfigurations."user@hostname" = home-manager.lib.homeManagerConfiguration {
       modules = [
         home-manager.homeManagerModules.default
+        izrss.homeManagerModules.default
         {
           programs.izrss = {
             enable = true;
-            urls = [
+            settings.urls = [
               "https://isabelroses.com/rss.xml"
               "https://uncenter.dev/feed.xml"
             ];
@@ -65,7 +66,7 @@ Then run `izrss` to read the feeds.
 
 <summary>
 
-#### Installation with flakes
+#### With Nix flakes
 
 </summary>
 
