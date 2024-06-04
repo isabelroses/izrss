@@ -5,6 +5,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/isabelroses/izrss/lib"
@@ -49,6 +50,12 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
 		if err != nil {
 			log.Fatalf("could not read tracking file: %v", err)
 		}
+
+		m.glam, _ = glamour.NewTermRenderer(
+			glamour.WithEnvironmentConfig(),
+			glamour.WithWordWrap(width),
+		)
+
 		m = m.loadHome()
 
 		m.ready = true
