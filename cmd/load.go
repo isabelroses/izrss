@@ -106,24 +106,5 @@ func (m Model) loadNewTable(columns []table.Column, rows []table.Row) Model {
 	t.SetColumns(columns)
 	t.SetRows(rows)
 
-	// reset the cursor and how far down the viewport is
-	m.viewport.SetYOffset(0)
-
-	return m
-}
-
-func (m Model) loadReader() Model {
-	id := m.table.Cursor()
-	post := m.feed.Posts[id]
-	post.ID = id
-
-	m.context = "reader"
-	m.post = post
-	m.viewport.YPosition = 0 // reset the viewport position
-
-	// render the post
-	content := lib.RenderMarkdown(post.Content)
-	m.viewport.SetContent(content)
-
 	return m
 }

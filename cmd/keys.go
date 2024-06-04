@@ -164,6 +164,7 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m = m.loadHome()
 			m.table.SetCursor(m.feed.ID)
 		}
+		m.viewport.SetYOffset(0)
 
 	case key.Matches(msg, m.keys.Open):
 		switch m.context {
@@ -179,6 +180,7 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 		default:
 			m = m.loadContent(m.table.Cursor())
 			m.table.SetCursor(0)
+			m.viewport.SetYOffset(0)
 		}
 
 	case key.Matches(msg, m.keys.Search):

@@ -6,6 +6,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/isabelroses/izrss/lib"
@@ -23,6 +24,7 @@ type Model struct {
 	feed     lib.Feed
 	table    table.Model
 	ready    bool
+	glam     *glamour.TermRenderer
 }
 
 // Init sets the initial state of the model
