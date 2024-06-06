@@ -32,9 +32,12 @@ func LoadConfig(config string) {
 
 // UserConfig is the global user configuration
 var UserConfig = config{
-	DateFormat:    "02/01/2006",
-	ReadThreshold: 0.8,
-	Urls:          []string{},
+	DateFormat: "02/01/2006",
+	Urls:       []string{},
+	Reader: reader{
+		Size:          "recomended",
+		ReadThreshold: 0.8,
+	},
 	Colors: colors{
 		Text:       "#cdd6f4",
 		Inverttext: "#1e1e2e",
@@ -47,9 +50,9 @@ var UserConfig = config{
 // Config is the struct that holds the configuration
 type config struct {
 	Colors        colors   `toml:"colors"`
+	Reader        reader   `toml:"reader"`
 	DateFormat    string   `toml:"dateformat"`
 	Urls          []string `toml:"urls"`
-	ReadThreshold float64  `toml:"read_threshold"`
 }
 
 type colors struct {
@@ -58,4 +61,9 @@ type colors struct {
 	Subtext    string `toml:"subtext"`
 	Accent     string `toml:"accent"`
 	Borders    string `toml:"borders"`
+}
+
+type reader struct {
+	Size          string  `toml:"size"`
+	ReadThreshold float64 `toml:"read_threshold"`
 }
