@@ -50,11 +50,35 @@ in
   };
 
   imports = [
-    (lib.mkRemovedOptionModule [
-      "programs"
-      "izrss"
-      "urls"
-    ] "Please use `programs.izrss.settings.urls` instead.")
+    (lib.mkRenamedOptionModule
+      [
+        "programs"
+        "izrss"
+        "urls"
+      ]
+      [
+        "programs"
+        "izrss"
+        "settings"
+        "urls"
+      ]
+    )
+
+    (lib.mkRenamedOptionModule
+      [
+        "programs"
+        "izrss"
+        "settings"
+        "readthreshold"
+      ]
+      [
+        "programs"
+        "izrss"
+        "settings"
+        "reader"
+        "read_threshold"
+      ]
+    )
   ];
 
   config =
