@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"log"
+	"strconv"
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -51,9 +52,24 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
 			log.Fatalf("could not read tracking file: %v", err)
 		}
 
+		var glamWidth glamour.TermRendererOption
+		switch lib.UserConfig.Reader.Size {
+		case "full", "fullscreen":
+			glamWidth = glamour.WithWordWrap(width)
+		case "most":
+			glamWidth = glamour.WithWordWrap(int(float64(width) * 0.75))
+		case "recomended":
+			glamWidth = glamour.WithWordWrap(80)
+		default:
+			w, err := strconv.Atoi(lib.UserConfig.Reader.Size)
+			if err != nil {
+				log.Fatalf("could not convert reader size to int: %v", err)
+			}
+			glamWidth = glamour.WithWordWrap(w)
+		}
 		m.glam, _ = glamour.NewTermRenderer(
 			glamour.WithEnvironmentConfig(),
-			glamour.WithWordWrap(width),
+			glamWidth,
 		)
 
 		m = m.loadHome()
@@ -99,7 +115,7 @@ func (m Model) updateViewport(msg tea.Msg) (Model, tea.Cmd) {
 		m.viewport.SetContent(view)
 	}
 
-	if m.context == "reader" && m.viewport.ScrollPercent() >= lib.UserConfig.ReadThreshold {
+	if m.context == "reader" && m.viewport.ScrollPercent() >= lib.UserConfig.Reader.ReadThreshold {
 		lib.MarkRead(m.feeds, m.feed.ID, m.post.ID)
 	}
 
