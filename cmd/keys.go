@@ -87,6 +87,7 @@ var keys = keyMap{
 	),
 }
 
+// TODO: refator this so its per page and not global
 func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 	if m.context == "search" {
 		switch msg.String() {
