@@ -1,3 +1,6 @@
+# all examples in this file differ from the default settings
+# to show how this file may be changed for a better user experince
+
 # this should follow the Go reference time format
 # see <https://go.dev/src/time/format.go> for more information
 dateformat = "2006/01/02"
@@ -12,19 +15,19 @@ urls = [
 [reader]
 # this value should be a float between 0 and 1, this tracks how much
 # of the screen should be scrolled when the article is marked as read
-read_threshold = 0.8
+read_threshold = 0.75
 
 # this value can be "most", "recommended" or "full" and controls the
 # width of the article should be displayed to the users screen
 # this value can also be a number contained by "", however this is not
 # recommended as it will not be responsive to screen sizes
-size = "recommended"
+size = "full"
 
 # these values can be any format that lipgloss supports
 # see <https://github.com/charmbracelet/lipgloss#colors>
 [colors]
-text = "#cdd6f4"
-inverttext = "#1e1e2e"
-subtext = "#a6adc8"
-accent = "#74c7ec"
-borders = "#313244"
+text = "#D6CBB4"
+inverttext = "#252B2E"
+subtext = "#6E8585"
+accent = "#B2C98F"
+borders = "#46545B"
