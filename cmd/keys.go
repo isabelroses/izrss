@@ -93,9 +93,7 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 		case "enter":
 			m = m.loadSearchValues()
 
-		case "ctrl+c":
-		case "esc":
-		case "/":
+		case "ctrl+c", "esc", "/":
 			m = m.loadContent(m.table.Cursor())
 			m.table.Focus()
 			m.filter.Blur()
