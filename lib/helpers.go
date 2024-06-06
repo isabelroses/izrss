@@ -9,7 +9,6 @@ import (
 
 // OpenURL opens the specified URL in the default browser of the user.
 // https://stackoverflow.com/questions/39320371/how-start-web-server-to-open-page-in-browser-in-golang
-// openURL opens the specified URL in the default browser of the user.
 func OpenURL(url string) error {
 	var cmd string
 	var args []string
@@ -46,7 +45,7 @@ func isWSL() bool {
 	return strings.Contains(strings.ToLower(string(releaseData)), "microsoft")
 }
 
-// ConvertDate converts a date string to the format "dd/mm/yyyy"
+// ConvertDate converts a date string to the user's preferred date format
 func ConvertDate(dateString string) string {
 	layoutList := []string{
 		"Mon, 02 Jan 2006 15:04:05 -0700",
