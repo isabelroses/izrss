@@ -63,22 +63,6 @@ in
         "urls"
       ]
     )
-
-    (lib.mkRenamedOptionModule
-      [
-        "programs"
-        "izrss"
-        "settings"
-        "readthreshold"
-      ]
-      [
-        "programs"
-        "izrss"
-        "settings"
-        "reader"
-        "read_threshold"
-      ]
-    )
   ];
 
   config =
