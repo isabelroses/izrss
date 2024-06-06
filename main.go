@@ -21,8 +21,7 @@ CUSTOMIZATION:
     The main bulk of customization is done via the "~/.config/izrss/config.toml" file. You can find an example file on the github page.
 
     The rest of the config is done via using the environment variables "GLAMOUR_STYLE".
-    For a good example see: [catppuccin/glamour](https://github.com/catppuccin/glamour)
-    You can customise the colours using "GLAMOUR_STYLE" for a good example see https://github.com/catppuccin/glamour`,
+    For a good example see: <https://github.com/catppuccin/glamour>`,
 		cli.AppHelpTemplate,
 	)
 
@@ -45,6 +44,13 @@ CUSTOMIZATION:
 
 		Action: func(c *cli.Context) error {
 			lib.LoadConfig(c.String("config"))
+
+			if len(lib.UserConfig.Urls) == 0 {
+				fmt.Println("No urls were found in config file, please add some and try again")
+				fmt.Println("You can find an example config file on the github page")
+				os.Exit(1)
+			}
+
 			p := tea.NewProgram(cmd.NewModel(), tea.WithAltScreen())
 			if _, err := p.Run(); err != nil {
 				log.Fatal(err)
