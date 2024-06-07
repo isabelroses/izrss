@@ -19,8 +19,8 @@ read_threshold = 0.75
 
 # this value can be "most", "recommended" or "full" and controls the
 # width of the article should be displayed to the users screen
-# this value can also be a number contained by "", however this is not
-# recommended as it will not be responsive to screen sizes
+# this value can also be an int, however this is not recommended as
+# it will not be responsive to screen sizes
 size = "full"
 
 # these values can be any format that lipgloss supports

@@ -49,10 +49,10 @@ var UserConfig = config{
 
 // Config is the struct that holds the configuration
 type config struct {
-	Colors        colors   `toml:"colors"`
-	Reader        reader   `toml:"reader"`
-	DateFormat    string   `toml:"dateformat"`
-	Urls          []string `toml:"urls"`
+	Colors     colors   `toml:"colors"`
+	Reader     reader   `toml:"reader"`
+	DateFormat string   `toml:"dateformat"`
+	Urls       []string `toml:"urls"`
 }
 
 type colors struct {
@@ -64,6 +64,6 @@ type colors struct {
 }
 
 type reader struct {
-	Size          string  `toml:"size"`
-	ReadThreshold float64 `toml:"read_threshold"`
+	Size          interface{} `toml:"size"`
+	ReadThreshold float64     `toml:"read_threshold"`
 }

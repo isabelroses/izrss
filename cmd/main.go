@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"log"
-	"strconv"
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -53,19 +52,22 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
 		}
 
 		var glamWidth glamour.TermRendererOption
-		switch lib.UserConfig.Reader.Size {
-		case "full", "fullscreen":
-			glamWidth = glamour.WithWordWrap(width)
-		case "most":
-			glamWidth = glamour.WithWordWrap(int(float64(width) * 0.75))
-		case "recomended":
-			glamWidth = glamour.WithWordWrap(80)
-		default:
-			w, err := strconv.Atoi(lib.UserConfig.Reader.Size)
-			if err != nil {
-				log.Fatalf("could not convert reader size to int: %v", err)
+		switch lib.UserConfig.Reader.Size.(type) {
+		case string:
+			switch lib.UserConfig.Reader.Size {
+			case "full", "fullscreen":
+				glamWidth = glamour.WithWordWrap(width)
+			case "most":
+				glamWidth = glamour.WithWordWrap(int(float64(width) * 0.75))
+			case "recomended":
+				glamWidth = glamour.WithWordWrap(80)
 			}
+
+		case int64:
+			w := int(lib.UserConfig.Reader.Size.(int64))
 			glamWidth = glamour.WithWordWrap(w)
+		default:
+			log.Fatalf("invalid reader size: %v", lib.UserConfig.Reader.Size)
 		}
 		m.glam, _ = glamour.NewTermRenderer(
 			glamour.WithEnvironmentConfig(),
