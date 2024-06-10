@@ -29,6 +29,8 @@ type Model struct {
 
 // Init sets the initial state of the model
 func (m Model) Init() tea.Cmd {
+	lib.SetupLogger()
+
 	return tea.Batch(
 		tea.SetWindowTitle("izrss"),
 	)
