@@ -122,7 +122,7 @@ func setupReader(url string, preferCache bool) *gofeed.Feed {
 
 	feed, err := fp.ParseString(file)
 	if err != nil {
-		log.Fatalf("could not parse feed: %v", err)
+		log.Printf("could not parse feed: %v", url)
 	}
 
 	return feed
