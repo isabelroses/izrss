@@ -36,17 +36,17 @@ func (m Model) loadContent(id int) Model {
 
 	columns := []table.Column{
 		{Title: "Date", Width: 15},
-		{Title: "Unread", Width: 10},
+		{Title: "Read", Width: 10},
 		{Title: "Title", Width: m.table.Width() - 25},
 	}
 
 	rows := []table.Row{}
 	for _, post := range feed.Posts {
-		unread := "x"
-		if !post.Read {
-			unread = "✓"
+		read := "x"
+		if post.Read {
+			read = "✓"
 		}
-		rows = append(rows, table.Row{post.Date, unread, post.Title})
+		rows = append(rows, table.Row{post.Date, read, post.Title})
 	}
 
 	m = m.loadNewTable(columns, rows)
