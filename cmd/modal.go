@@ -15,16 +15,12 @@ import (
 // Model is the main model for the application
 type Model struct {
 	help     help.Model
-	context  string
-	keys     keyMap
+	glam     *glamour.TermRenderer
+	context  context
 	viewport viewport.Model
-	feeds    lib.Feeds
 	filter   textinput.Model
-	post     lib.Post
-	feed     lib.Feed
 	table    table.Model
 	ready    bool
-	glam     *glamour.TermRenderer
 }
 
 // Init sets the initial state of the model
@@ -56,15 +52,11 @@ func NewModel() Model {
 	h.Styles.ShortSeparator = lib.HelpStyle
 
 	return Model{
-		context:  "",
-		feeds:    lib.Feeds{},
-		feed:     lib.Feed{},
+		context:  context{},
 		viewport: viewport.Model{},
 		table:    t,
 		ready:    false,
-		keys:     keys,
 		help:     h,
-		post:     lib.Post{},
 		filter:   f,
 	}
 }

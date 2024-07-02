@@ -103,3 +103,10 @@ func Max(a, b int) int {
 	}
 	return b
 }
+
+func ReadSymbol(read bool) string {
+	if read {
+		return " "
+	}
+	return "•"
+}

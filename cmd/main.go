@@ -39,14 +39,14 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
 	width := msg.Width - framew
 
 	m.table.SetWidth(width)
-	m.table.SetHeight(height - lipgloss.Height(m.help.View(m.keys)) - lib.MainStyle.GetBorderBottomSize())
+	m.table.SetHeight(height - lipgloss.Height(m.help.View(m.context.keys)) - lib.MainStyle.GetBorderBottomSize())
 
 	if !m.ready {
-		m.feeds = lib.GetAllContent(lib.UserConfig.Urls, lib.CheckCache())
+		m.context.feeds = lib.GetAllContent(lib.UserConfig.Urls, lib.CheckCache())
 		m.viewport = viewport.New(width, height)
 
 		err := error(nil)
-		m.feeds, err = m.feeds.ReadTracking()
+		m.context.feeds, err = m.context.feeds.ReadTracking()
 		if err != nil {
 			log.Fatalf("could not read tracking file: %v", err)
 		}
@@ -74,7 +74,11 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
 			glamWidth,
 		)
 
-		m = m.loadHome()
+		if lib.UserConfig.Home == "mixed" {
+			m = m.loadMixed()
+		} else {
+			m = m.loadHome()
+		}
 
 		m.ready = true
 	} else {
@@ -96,14 +100,14 @@ func (m Model) updateViewport(msg tea.Msg) (Model, tea.Cmd) {
 	m.table, cmd = m.table.Update(msg)
 	cmds = append(cmds, cmd)
 
-	if m.context != "reader" && m.context != "search" {
+	if m.context.curr != "reader" && m.context.curr != "search" {
 		view := lipgloss.JoinVertical(
 			lipgloss.Top,
 			m.table.View(),
-			m.help.View(m.keys),
+			m.help.View(m.context.keys),
 		)
 		m.viewport.SetContent(view)
-	} else if m.context == "search" {
+	} else if m.context.curr == "search" {
 		m.filter, cmd = m.filter.Update(msg)
 		cmds = append(cmds, cmd)
 
@@ -111,14 +115,14 @@ func (m Model) updateViewport(msg tea.Msg) (Model, tea.Cmd) {
 			lipgloss.Top,
 			m.filter.View(),
 			m.table.View(),
-			m.help.View(m.keys),
+			m.help.View(m.context.keys),
 		)
 
 		m.viewport.SetContent(view)
 	}
 
-	if m.context == "reader" && m.viewport.ScrollPercent() >= lib.UserConfig.Reader.ReadThreshold {
-		lib.MarkRead(m.feeds, m.feed.ID, m.post.ID)
+	if m.context.curr == "reader" && m.viewport.ScrollPercent() >= lib.UserConfig.Reader.ReadThreshold {
+		lib.MarkRead(m.context.feeds, m.context.feed.ID, m.context.post.ID)
 	}
 
 	m.viewport, cmd = m.viewport.Update(msg)

@@ -9,7 +9,7 @@ import (
 )
 
 func (m Model) headerView() string {
-	title := lib.ReaderStyle.Render(m.post.Title)
+	title := lib.ReaderStyle.Render(m.context.post.Title)
 	line := strings.Repeat("─", lib.Max(0, m.viewport.Width-lipgloss.Width(title)))
 	return lipgloss.JoinHorizontal(lipgloss.Center, title, line)
 }
@@ -26,7 +26,7 @@ func (m Model) View() string {
 
 	if !m.ready {
 		out = "Initializing..."
-	} else if m.context == "reader" {
+	} else if m.context.curr == "reader" {
 		out = lipgloss.JoinVertical(
 			lipgloss.Top,
 			m.headerView(),
