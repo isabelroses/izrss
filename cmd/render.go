@@ -10,11 +10,11 @@ var htom = tomd.NewConverter("", true, nil)
 
 func (m Model) loadReader() Model {
 	id := m.table.Cursor()
-	post := m.feed.Posts[id]
+	post := m.context.feed.Posts[id]
 	post.ID = id
 
-	m.context = "reader"
-	m.post = post
+	m.swapPage("reader")
+	m.context.post = post
 	m.viewport.YPosition = 0 // reset the viewport position
 
 	// render the post
