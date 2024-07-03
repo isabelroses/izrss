@@ -8,7 +8,7 @@ import (
 
 var htom = tomd.NewConverter("", true, nil)
 
-func (m Model) loadReader() Model {
+func (m *Model) loadReader() {
 	id := m.table.Cursor()
 	post := m.context.feed.Posts[id]
 	post.ID = id
@@ -28,6 +28,4 @@ func (m Model) loadReader() Model {
 		log.Fatalf("could not render markdown: %v", err)
 	}
 	m.viewport.SetContent(out)
-
-	return m
 }

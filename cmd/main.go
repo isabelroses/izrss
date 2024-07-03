@@ -75,9 +75,9 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
 		)
 
 		if lib.UserConfig.Home == "mixed" {
-			m = m.loadMixed()
+			m.loadMixed()
 		} else {
-			m = m.loadHome()
+			m.loadHome()
 		}
 
 		m.ready = true

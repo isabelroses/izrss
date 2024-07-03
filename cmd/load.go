@@ -11,7 +11,7 @@ import (
 )
 
 // load the home view, this conists of the list of feeds
-func (m Model) loadHome() Model {
+func (m *Model) loadHome() {
 	columns := []table.Column{
 		{Title: "Unread", Width: 10},
 		{Title: "Title", Width: m.table.Width() - 10},
@@ -25,12 +25,10 @@ func (m Model) loadHome() Model {
 	}
 
 	m.swapPage("home")
-	m = m.loadNewTable(columns, rows)
-
-	return m
+	m.loadNewTable(columns, rows)
 }
 
-func (m Model) loadMixed() Model {
+func (m *Model) loadMixed() {
 	columns := []table.Column{
 		{Title: "Date", Width: 15},
 		{Title: "Read", Width: 10},
@@ -50,13 +48,11 @@ func (m Model) loadMixed() Model {
 
 	m.context.feed.Posts = posts
 
-	m = m.loadNewTable(columns, rows)
+	m.loadNewTable(columns, rows)
 	m.swapPage("mixed")
-
-	return m
 }
 
-func (m Model) loadContent(id int) Model {
+func (m *Model) loadContent(id int) {
 	feed := m.context.feeds[id]
 	feed.ID = id
 
@@ -72,25 +68,21 @@ func (m Model) loadContent(id int) Model {
 		rows = append(rows, table.Row{readsym, post.Date, post.Title})
 	}
 
-	m = m.loadNewTable(columns, rows)
+	m.loadNewTable(columns, rows)
 	m.swapPage("content")
 	m.context.feed = feed
-
-	return m
 }
 
-func (m Model) loadSearch() Model {
+func (m *Model) loadSearch() {
 	m.swapPage("search")
 
 	m.table.Blur()
 
 	m.filter.Focus()
 	m.filter.SetValue("")
-
-	return m
 }
 
-func (m Model) loadSearchValues() Model {
+func (m Model) loadSearchValues() {
 	search := m.filter.Value()
 
 	var filteredPosts []lib.Post
@@ -110,17 +102,15 @@ func (m Model) loadSearchValues() Model {
 		{Title: "Title", Width: m.table.Width() - 15},
 	}
 
-	m = m.loadNewTable(columns, rows)
+	m.loadNewTable(columns, rows)
 	m.swapPage("content")
 	m.context.feed.Posts = filteredPosts
 	m.table.Focus()
 	m.filter.Blur()
 	m.table.SetCursor(0)
-
-	return m
 }
 
-func (m Model) loadNewTable(columns []table.Column, rows []table.Row) Model {
+func (m *Model) loadNewTable(columns []table.Column, rows []table.Row) {
 	t := &m.table
 
 	// NOTE: clear the rows first to prevent panic
@@ -128,6 +118,4 @@ func (m Model) loadNewTable(columns []table.Column, rows []table.Row) Model {
 
 	t.SetColumns(columns)
 	t.SetRows(rows)
-
-	return m
 }
