@@ -24,7 +24,7 @@ func (m Model) loadHome() Model {
 		rows = append(rows, table.Row{fraction, Feed.Title})
 	}
 
-	m.context.curr = "home"
+	m.swapPage("home")
 	m = m.loadNewTable(columns, rows)
 
 	return m
@@ -61,7 +61,7 @@ func (m Model) loadContent(id int) Model {
 	feed.ID = id
 
 	columns := []table.Column{
-		{Title: "", Width: 10},
+		{Title: "", Width: 2},
 		{Title: "Date", Width: 15},
 		{Title: "Title", Width: m.table.Width() - 25},
 	}

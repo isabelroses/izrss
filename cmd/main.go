@@ -39,7 +39,7 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
 	width := msg.Width - framew
 
 	m.table.SetWidth(width)
-	m.table.SetHeight(height - lipgloss.Height(m.help.View(m.context.keys)) - lib.MainStyle.GetBorderBottomSize())
+	m.table.SetHeight(height - lipgloss.Height(m.help.View(m.keys, m)) - lib.MainStyle.GetBorderBottomSize())
 
 	if !m.ready {
 		m.context.feeds = lib.GetAllContent(lib.UserConfig.Urls, lib.CheckCache())
@@ -104,7 +104,7 @@ func (m Model) updateViewport(msg tea.Msg) (Model, tea.Cmd) {
 		view := lipgloss.JoinVertical(
 			lipgloss.Top,
 			m.table.View(),
-			m.help.View(m.context.keys),
+			m.help.View(m.keys, m),
 		)
 		m.viewport.SetContent(view)
 	} else if m.context.curr == "search" {
@@ -115,7 +115,7 @@ func (m Model) updateViewport(msg tea.Msg) (Model, tea.Cmd) {
 			lipgloss.Top,
 			m.filter.View(),
 			m.table.View(),
-			m.help.View(m.context.keys),
+			m.help.View(m.keys, m),
 		)
 
 		m.viewport.SetContent(view)
