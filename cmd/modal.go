@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -14,7 +13,8 @@ import (
 
 // Model is the main model for the application
 type Model struct {
-	help     help.Model
+	help     KeyModel
+	keys     keyMap
 	glam     *glamour.TermRenderer
 	context  context
 	viewport viewport.Model
@@ -43,7 +43,7 @@ func NewModel() Model {
 		Bold(true).
 		Foreground(lipgloss.Color("229"))
 
-	h := help.New()
+	h := NewHelp()
 	h.Styles.FullKey = lib.HelpStyle
 	h.Styles.FullDesc = lib.HelpStyle
 	h.Styles.FullSeparator = lib.HelpStyle
@@ -57,6 +57,7 @@ func NewModel() Model {
 		table:    t,
 		ready:    false,
 		help:     h,
+		keys:     keys,
 		filter:   f,
 	}
 }
