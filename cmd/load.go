@@ -59,7 +59,7 @@ func (m *Model) loadContent(id int) {
 	columns := []table.Column{
 		{Title: "", Width: 2},
 		{Title: "Date", Width: 15},
-		{Title: "Title", Width: m.table.Width() - 25},
+		{Title: "Title", Width: m.table.Width() - 17},
 	}
 
 	rows := []table.Row{}
