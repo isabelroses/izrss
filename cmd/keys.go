@@ -180,8 +180,6 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.loadContent(m.table.Cursor())
 			m.table.Focus()
 			m.filter.Blur()
-
-			return m, nil
 		}
 	}
 
