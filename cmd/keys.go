@@ -70,7 +70,7 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "home":
 		switch {
 		case key.Matches(msg, m.keys.Open):
-			m = m.loadContent(m.table.Cursor())
+			m.loadContent(m.table.Cursor())
 			m.table.SetCursor(0)
 			m.viewport.SetYOffset(0)
 
@@ -84,7 +84,7 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 			if err != nil {
 				log.Fatal(err)
 			}
-			m = m.loadHome()
+			m.loadHome()
 
 		case key.Matches(msg, m.keys.RefreshAll):
 			m.context.feeds = lib.GetAllContent(lib.UserConfig.Urls, false)
@@ -93,11 +93,11 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 			if err != nil {
 				log.Fatal(err)
 			}
-			m = m.loadHome()
+			m.loadHome()
 
 		case key.Matches(msg, m.keys.ReadAll):
 			lib.ReadAll(m.context.feeds, m.table.Cursor())
-			m = m.loadHome()
+			m.loadHome()
 			err := m.context.feeds.WriteTracking()
 			if err != nil {
 				log.Fatalf("Could not write tracking data: %s", err)
@@ -114,19 +114,19 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 			if err != nil {
 				log.Fatal(err)
 			}
-			m = m.loadContent(m.context.feed.ID)
+			m.loadContent(m.context.feed.ID)
 
 		case key.Matches(msg, m.keys.Back):
-			m = m.loadHome()
+			m.loadHome()
 			m.table.SetCursor(m.context.feed.ID)
 			m.viewport.SetYOffset(0)
 
 		case key.Matches(msg, m.keys.Open):
-			m = m.loadReader()
+			m.loadReader()
 
 		case key.Matches(msg, m.keys.ToggleRead):
 			lib.ToggleRead(m.context.feeds, m.context.feed.ID, m.table.Cursor())
-			m = m.loadContent(m.context.feed.ID)
+			m.loadContent(m.context.feed.ID)
 			err := m.context.feeds.WriteTracking()
 			if err != nil {
 				log.Fatalf("Could not write tracking data: %s", err)
@@ -134,7 +134,7 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 
 		case key.Matches(msg, m.keys.ReadAll):
 			lib.ReadAll(m.context.feeds, m.context.feed.ID)
-			m = m.loadContent(m.context.feed.ID)
+			m.loadContent(m.context.feed.ID)
 			err := m.context.feeds.WriteTracking()
 			if err != nil {
 				log.Fatalf("Could not write tracking data: %s", err)
@@ -144,7 +144,7 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "reader":
 		switch {
 		case key.Matches(msg, m.keys.Back):
-			m = m.loadContent(m.context.feed.ID)
+			m.loadContent(m.context.feed.ID)
 			m.table.SetCursor(m.context.post.ID)
 			m.viewport.SetYOffset(0)
 
@@ -156,7 +156,7 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 
 		case key.Matches(msg, m.keys.ToggleRead):
 			lib.ToggleRead(m.context.feeds, m.context.feed.ID, m.context.post.ID)
-			m = m.loadContent(m.context.feed.ID)
+			m.loadContent(m.context.feed.ID)
 			err := m.context.feeds.WriteTracking()
 			if err != nil {
 				log.Fatalf("Could not write tracking data: %s", err)
@@ -174,10 +174,10 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "search":
 		switch msg.String() {
 		case "enter":
-			m = m.loadSearchValues()
+			m.loadSearchValues()
 
 		case "ctrl+c", "esc", "/":
-			m = m.loadContent(m.table.Cursor())
+			m.loadContent(m.table.Cursor())
 			m.table.Focus()
 			m.filter.Blur()
 
@@ -189,7 +189,7 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Search):
 		if m.context.curr != "search" {
-			m = m.loadSearch()
+			m.loadSearch()
 		}
 
 	case key.Matches(msg, m.keys.Help):
