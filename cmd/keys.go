@@ -25,8 +25,16 @@ type keyMap struct {
 	ReadAll    key.Binding
 }
 
-func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Help, k.Quit}
+func (k keyMap) ShortHelp(m Model) []key.Binding {
+	var help []key.Binding
+
+	if m.context.curr == "reader" {
+		help = []key.Binding{k.Open, k.ToggleRead, k.Quit}
+	} else {
+		help = []key.Binding{k.Help, k.Quit}
+	}
+
+	return help
 }
 
 func (k keyMap) FullHelp(m Model) [][]key.Binding {
@@ -52,12 +60,7 @@ func (k keyMap) FullHelp(m Model) [][]key.Binding {
 			{k.Help, k.Quit},
 		}
 	case "reader":
-		help = [][]key.Binding{
-			{k.Up, k.Down},
-			{k.Back, k.Open},
-			{k.ToggleRead},
-			{k.Help, k.Quit},
-		}
+		help = [][]key.Binding{{k.Open}, {k.ToggleRead}, {k.Quit}}
 	}
 
 	return help
