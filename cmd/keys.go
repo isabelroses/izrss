@@ -45,9 +45,8 @@ func (k keyMap) FullHelp(m Model) [][]key.Binding {
 		help = [][]key.Binding{
 			{k.Up, k.Down},
 			{k.Back, k.Open},
-			{k.Search},
+			{k.Search, k.ReadAll},
 			{k.Refresh, k.RefreshAll},
-			{k.ReadAll},
 			{k.Help, k.Quit},
 		}
 	case "content":
@@ -57,6 +56,14 @@ func (k keyMap) FullHelp(m Model) [][]key.Binding {
 			{k.Search},
 			{k.Refresh, k.RefreshAll},
 			{k.ToggleRead, k.ReadAll},
+			{k.Help, k.Quit},
+		}
+	case "mixed":
+		help = [][]key.Binding{
+			{k.Up, k.Down},
+			{k.Back, k.Open},
+			{k.Search, k.ToggleRead},
+			// {k.Refresh, k.RefreshAll},
 			{k.Help, k.Quit},
 		}
 	case "reader":
@@ -144,10 +151,36 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 			}
 		}
 
+	case "mixed":
+		switch {
+		case key.Matches(msg, m.keys.Open):
+			m.loadReader()
+
+		case key.Matches(msg, m.keys.ToggleRead):
+			lib.ToggleRead(m.context.feeds, m.context.feed.ID, m.table.Cursor())
+			m.loadMixed()
+			err := m.context.feeds.WriteTracking()
+			if err != nil {
+				log.Fatalf("Could not write tracking data: %s", err)
+			}
+
+		case key.Matches(msg, m.keys.ReadAll):
+			lib.ReadAll(m.context.feeds, m.context.feed.ID)
+			m.loadMixed()
+			err := m.context.feeds.WriteTracking()
+			if err != nil {
+				log.Fatalf("Could not write tracking data: %s", err)
+			}
+		}
+
 	case "reader":
 		switch {
 		case key.Matches(msg, m.keys.Back):
-			m.loadContent(m.context.feed.ID)
+			if m.context.prev == "mixed" {
+				m.loadMixed()
+			} else {
+				m.loadContent(m.context.feed.ID)
+			}
 			m.table.SetCursor(m.context.post.ID)
 			m.viewport.SetYOffset(0)
 
@@ -160,14 +193,6 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.ToggleRead):
 			lib.ToggleRead(m.context.feeds, m.context.feed.ID, m.context.post.ID)
 			m.loadContent(m.context.feed.ID)
-			err := m.context.feeds.WriteTracking()
-			if err != nil {
-				log.Fatalf("Could not write tracking data: %s", err)
-			}
-
-		case key.Matches(msg, m.keys.ReadAll):
-			// if we are in the reader view, fall back to the normal mark all as read
-			lib.ToggleRead(m.context.feeds, m.context.feed.ID, m.context.post.ID)
 			err := m.context.feeds.WriteTracking()
 			if err != nil {
 				log.Fatalf("Could not write tracking data: %s", err)
