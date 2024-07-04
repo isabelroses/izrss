@@ -27,5 +27,7 @@ func (m *Model) loadReader() {
 	if err != nil {
 		log.Fatalf("could not render markdown: %v", err)
 	}
+
 	m.viewport.SetContent(out)
+	m.viewport.Height = m.viewport.Height - 2
 }

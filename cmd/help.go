@@ -22,7 +22,7 @@ type KeyMap interface {
 	// ShortHelp returns a slice of bindings to be displayed in the short
 	// version of the help. The help bubble will render help in the order in
 	// which the help items are returned here.
-	ShortHelp() []key.Binding
+	ShortHelp(m Model) []key.Binding
 
 	// FullHelp returns an extended group of help items, grouped by columns.
 	// The help bubble will render the help in the order in which the help
@@ -44,7 +44,7 @@ type KeyModel struct {
 func NewHelp() KeyModel {
 	return KeyModel{
 		ShortSeparator: " • ",
-		FullSeparator:  "    ",
+		FullSeparator:  " • ",
 		Ellipsis:       "…",
 		Style:          lib.HelpStyle,
 	}
@@ -60,7 +60,7 @@ func (km KeyModel) View(k KeyMap, m Model) string {
 	if km.ShowAll {
 		return km.FullHelpView(k.FullHelp(m))
 	}
-	return km.ShortHelpView(k.ShortHelp())
+	return km.ShortHelpView(k.ShortHelp(m))
 }
 
 // ShortHelpView renders a single line help view from a slice of keybindings.
