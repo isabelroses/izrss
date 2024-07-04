@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/isabelroses/izrss/lib"
 )
 
 // KeyMap is a map of keybindings used to generate help. Since it's an
@@ -29,24 +30,9 @@ type KeyMap interface {
 	FullHelp(m Model) [][]key.Binding
 }
 
-// Styles is a set of available style definitions for the Help bubble.
-type Styles struct {
-	Ellipsis lipgloss.Style
-
-	// Styling for the short help
-	ShortKey       lipgloss.Style
-	ShortDesc      lipgloss.Style
-	ShortSeparator lipgloss.Style
-
-	// Styling for the full help
-	FullKey       lipgloss.Style
-	FullDesc      lipgloss.Style
-	FullSeparator lipgloss.Style
-}
-
 // KeyModel contains the state of the help view.
 type KeyModel struct {
-	Styles         Styles
+	Style          lipgloss.Style
 	ShortSeparator string
 	FullSeparator  string
 	Ellipsis       string
@@ -56,34 +42,11 @@ type KeyModel struct {
 
 // New creates a new help view with some useful defaults.
 func NewHelp() KeyModel {
-	keyStyle := lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{
-		Light: "#909090",
-		Dark:  "#626262",
-	})
-
-	descStyle := lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{
-		Light: "#B2B2B2",
-		Dark:  "#4A4A4A",
-	})
-
-	sepStyle := lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{
-		Light: "#DDDADA",
-		Dark:  "#3C3C3C",
-	})
-
 	return KeyModel{
 		ShortSeparator: " • ",
 		FullSeparator:  "    ",
 		Ellipsis:       "…",
-		Styles: Styles{
-			ShortKey:       keyStyle,
-			ShortDesc:      descStyle,
-			ShortSeparator: sepStyle,
-			Ellipsis:       sepStyle,
-			FullKey:        keyStyle,
-			FullDesc:       descStyle,
-			FullSeparator:  sepStyle,
-		},
+		Style:          lib.HelpStyle,
 	}
 }
 
@@ -110,7 +73,7 @@ func (m KeyModel) ShortHelpView(bindings []key.Binding) string {
 
 	var b strings.Builder
 	var totalWidth int
-	separator := m.Styles.ShortSeparator.Inline(true).Render(m.ShortSeparator)
+	separator := m.Style.Inline(true).Render(m.ShortSeparator)
 
 	for i, kb := range bindings {
 		if !kb.Enabled() {
@@ -123,8 +86,8 @@ func (m KeyModel) ShortHelpView(bindings []key.Binding) string {
 		}
 
 		str := sep +
-			m.Styles.ShortKey.Inline(true).Render(kb.Help().Key) + " " +
-			m.Styles.ShortDesc.Inline(true).Render(kb.Help().Desc)
+			m.Style.Inline(true).Render(kb.Help().Key) + " " +
+			m.Style.Inline(true).Render(kb.Help().Desc)
 
 		w := lipgloss.Width(str)
 
@@ -132,7 +95,7 @@ func (m KeyModel) ShortHelpView(bindings []key.Binding) string {
 		// drawing.
 		if m.Width > 0 && totalWidth+w > m.Width {
 			// Although if there's room for an ellipsis, print that.
-			tail := " " + m.Styles.Ellipsis.Inline(true).Render(m.Ellipsis)
+			tail := " " + m.Style.Inline(true).Render(m.Ellipsis)
 			tailWidth := lipgloss.Width(tail)
 
 			if totalWidth+tailWidth < m.Width {
@@ -163,7 +126,7 @@ func (m KeyModel) FullHelpView(groups [][]key.Binding) string {
 		out []string
 
 		totalWidth int
-		sep        = m.Styles.FullSeparator.Render(m.FullSeparator)
+		sep        = m.Style.Render(m.FullSeparator)
 		sepWidth   = lipgloss.Width(sep)
 	)
 
@@ -188,9 +151,9 @@ func (m KeyModel) FullHelpView(groups [][]key.Binding) string {
 		}
 
 		col := lipgloss.JoinHorizontal(lipgloss.Top,
-			m.Styles.FullKey.Render(strings.Join(keys, "\n")),
-			m.Styles.FullKey.Render(" "),
-			m.Styles.FullDesc.Render(strings.Join(descriptions, "\n")),
+			m.Style.Render(strings.Join(keys, "\n")),
+			m.Style.Render(" "),
+			m.Style.Render(strings.Join(descriptions, "\n")),
 		)
 
 		// Column
