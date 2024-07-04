@@ -30,9 +30,9 @@ func (m *Model) loadHome() {
 
 func (m *Model) loadMixed() {
 	columns := []table.Column{
+		{Title: "", Width: 2},
 		{Title: "Date", Width: 15},
-		{Title: "Read", Width: 10},
-		{Title: "Title", Width: m.table.Width() - 25},
+		{Title: "Title", Width: m.table.Width() - 17},
 	}
 
 	posts := []lib.Post{}
@@ -43,7 +43,7 @@ func (m *Model) loadMixed() {
 	rows := []table.Row{}
 	for _, post := range posts {
 		read := lib.ReadSymbol(post.Read)
-		rows = append(rows, table.Row{post.Date, read, post.Title})
+		rows = append(rows, table.Row{read, post.Date, post.Title})
 	}
 
 	m.context.feed.Posts = posts
