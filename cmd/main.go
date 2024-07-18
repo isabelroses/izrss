@@ -39,7 +39,7 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
 	width := msg.Width - framew
 
 	m.table.SetWidth(width)
-	m.table.SetHeight(height - lipgloss.Height(m.help.View(m.keys, m)) - lib.MainStyle.GetBorderBottomSize())
+	m.table.SetHeight(height - lipgloss.Height(m.help.View(m.keys, m)))
 
 	if !m.ready {
 		m.context.feeds = lib.GetAllContent(lib.UserConfig.Urls, lib.CheckCache())
