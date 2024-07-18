@@ -67,7 +67,7 @@ func (k keyMap) FullHelp(m Model) [][]key.Binding {
 			{k.Help, k.Quit},
 		}
 	case "reader":
-		help = [][]key.Binding{{k.Open}, {k.ToggleRead}, {k.Quit}}
+		help = [][]key.Binding{}
 	}
 
 	return help
@@ -220,7 +220,7 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.Help):
 		m.help.ShowAll = !m.help.ShowAll
-		m.table.SetHeight(m.viewport.Height - lipgloss.Height(m.help.View(m.keys, m)) - lib.MainStyle.GetBorderBottomSize())
+		m.table.SetHeight(m.viewport.Height - lipgloss.Height(m.help.View(m.keys, m)))
 
 	case key.Matches(msg, m.keys.Quit):
 		err := m.context.feeds.WriteTracking()
