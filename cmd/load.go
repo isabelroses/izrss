@@ -11,69 +11,84 @@ import (
 )
 
 // load the home view, this conists of the list of feeds
-func (m Model) loadHome() Model {
+func (m *Model) loadHome() {
 	columns := []table.Column{
 		{Title: "Unread", Width: 10},
 		{Title: "Title", Width: m.table.Width() - 10},
 	}
 
 	rows := []table.Row{}
-	for _, Feed := range m.feeds {
+	for _, Feed := range m.context.feeds {
 		totalUnread := strconv.Itoa(Feed.GetTotalUnreads())
 		fraction := fmt.Sprintf("%s/%d", totalUnread, len(Feed.Posts))
 		rows = append(rows, table.Row{fraction, Feed.Title})
 	}
 
-	m.context = "home"
-	m = m.loadNewTable(columns, rows)
-
-	return m
+	m.swapPage("home")
+	m.loadNewTable(columns, rows)
 }
 
-func (m Model) loadContent(id int) Model {
-	feed := m.feeds[id]
+func (m *Model) loadMixed() {
+	columns := []table.Column{
+		{Title: "", Width: 2},
+		{Title: "Date", Width: 15},
+		{Title: "Title", Width: m.table.Width() - 17},
+	}
+
+	posts := []lib.Post{}
+	for _, feed := range m.context.feeds {
+		posts = append(posts, feed.Posts...)
+	}
+
+	rows := []table.Row{}
+	for _, post := range posts {
+		read := lib.ReadSymbol(post.Read)
+		rows = append(rows, table.Row{read, post.Date, post.Title})
+	}
+
+	m.context.feed.Posts = posts
+
+	m.loadNewTable(columns, rows)
+	m.swapPage("mixed")
+}
+
+func (m *Model) loadContent(id int) {
+	feed := m.context.feeds[id]
 	feed.ID = id
 
 	columns := []table.Column{
+		{Title: "", Width: 2},
 		{Title: "Date", Width: 15},
-		{Title: "Read", Width: 10},
-		{Title: "Title", Width: m.table.Width() - 25},
+		{Title: "Title", Width: m.table.Width() - 17},
 	}
 
 	rows := []table.Row{}
 	for _, post := range feed.Posts {
-		read := "x"
-		if post.Read {
-			read = "✓"
-		}
-		rows = append(rows, table.Row{post.Date, read, post.Title})
+		readsym := lib.ReadSymbol(post.Read)
+		rows = append(rows, table.Row{readsym, post.Date, post.Title})
 	}
 
-	m = m.loadNewTable(columns, rows)
-	m.context = "content"
-	m.feed = feed
-
-	return m
+	m.loadNewTable(columns, rows)
+	m.swapPage("content")
+	m.context.feed = feed
 }
 
-func (m Model) loadSearch() Model {
-	m.context = "search"
+func (m *Model) loadSearch() {
+	m.swapPage("search")
 
 	m.table.Blur()
 
 	m.filter.Focus()
 	m.filter.SetValue("")
-
-	return m
 }
 
-func (m Model) loadSearchValues() Model {
+func (m Model) loadSearchValues() {
 	search := m.filter.Value()
 
 	var filteredPosts []lib.Post
 	rows := []table.Row{}
 
-	for _, feed := range m.feeds {
+	for _, feed := range m.context.feeds {
 		for _, post := range feed.Posts {
 			if strings.Contains(strings.ToLower(post.Content), strings.ToLower(search)) {
 				filteredPosts = append(filteredPosts, post)
@@ -87,17 +102,15 @@ func (m Model) loadSearchValues() Model {
 		{Title: "Title", Width: m.table.Width() - 15},
 	}
 
-	m = m.loadNewTable(columns, rows)
-	m.context = "content"
-	m.feed.Posts = filteredPosts
+	m.loadNewTable(columns, rows)
+	m.swapPage("content")
+	m.context.feed.Posts = filteredPosts
 	m.table.Focus()
 	m.filter.Blur()
 	m.table.SetCursor(0)
-
-	return m
 }
 
-func (m Model) loadNewTable(columns []table.Column, rows []table.Row) Model {
+func (m *Model) loadNewTable(columns []table.Column, rows []table.Row) {
 	t := &m.table
 
 	// NOTE: clear the rows first to prevent panic
@@ -105,6 +118,4 @@ func (m Model) loadNewTable(columns []table.Column, rows []table.Row) Model {
 
 	t.SetColumns(columns)
 	t.SetRows(rows)
-
-	return m
 }

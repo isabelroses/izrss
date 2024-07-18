@@ -8,13 +8,13 @@ import (
 
 var htom = tomd.NewConverter("", true, nil)
 
-func (m Model) loadReader() Model {
+func (m *Model) loadReader() {
 	id := m.table.Cursor()
-	post := m.feed.Posts[id]
+	post := m.context.feed.Posts[id]
 	post.ID = id
 
-	m.context = "reader"
-	m.post = post
+	m.swapPage("reader")
+	m.context.post = post
 	m.viewport.YPosition = 0 // reset the viewport position
 
 	// render the post
@@ -27,7 +27,7 @@ func (m Model) loadReader() Model {
 	if err != nil {
 		log.Fatalf("could not render markdown: %v", err)
 	}
-	m.viewport.SetContent(out)
 
-	return m
+	m.viewport.SetContent(out)
+	m.viewport.Height = m.viewport.Height - 2
 }

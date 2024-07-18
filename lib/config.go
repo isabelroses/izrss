@@ -32,6 +32,7 @@ func LoadConfig(config string) {
 
 // UserConfig is the global user configuration
 var UserConfig = config{
+	Home:       "home",
 	DateFormat: "02/01/2006",
 	Urls:       []string{},
 	Reader: reader{
@@ -49,6 +50,7 @@ var UserConfig = config{
 
 // Config is the struct that holds the configuration
 type config struct {
+	Home       string   `toml:"home"`
 	Colors     colors   `toml:"colors"`
 	Reader     reader   `toml:"reader"`
 	DateFormat string   `toml:"dateformat"`

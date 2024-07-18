@@ -96,10 +96,9 @@ func URLToDir(url string) string {
 	return url
 }
 
-// Max returns the maximum of two integers
-func Max(a, b int) int {
-	if a > b {
-		return a
+func ReadSymbol(read bool) string {
+	if read {
+		return ""
 	}
-	return b
+	return "•"
 }

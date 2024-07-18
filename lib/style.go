@@ -14,9 +14,6 @@ var (
 			Padding(0, 1).
 			Margin(0)
 
-	// ReaderStyle is the style for the reader
-	ReaderStyle = lipgloss.NewStyle()
-
 	// HelpStyle is the style for the help keybinds menu
 	HelpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(UserConfig.Colors.Subtext))
 )

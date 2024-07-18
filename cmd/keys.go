@@ -25,19 +25,212 @@ type keyMap struct {
 	ReadAll    key.Binding
 }
 
-func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Help, k.Quit}
+func (k keyMap) ShortHelp(m Model) []key.Binding {
+	var help []key.Binding
+
+	if m.context.curr == "reader" {
+		help = []key.Binding{k.Open, k.ToggleRead, k.Quit}
+	} else {
+		help = []key.Binding{k.Help, k.Quit}
+	}
+
+	return help
 }
 
-func (k keyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{
-		{k.Up, k.Down},
-		{k.Back, k.Open},
-		{k.Search},
-		{k.Refresh, k.RefreshAll},
-		{k.ToggleRead, k.ReadAll},
-		{k.Help, k.Quit},
+func (k keyMap) FullHelp(m Model) [][]key.Binding {
+	var help [][]key.Binding
+
+	switch m.context.curr {
+	case "home":
+		help = [][]key.Binding{
+			{k.Up, k.Down},
+			{k.Back, k.Open},
+			{k.Search, k.ReadAll},
+			{k.Refresh, k.RefreshAll},
+			{k.Help, k.Quit},
+		}
+	case "content":
+		help = [][]key.Binding{
+			{k.Up, k.Down},
+			{k.Back, k.Open},
+			{k.Search},
+			{k.Refresh, k.RefreshAll},
+			{k.ToggleRead, k.ReadAll},
+			{k.Help, k.Quit},
+		}
+	case "mixed":
+		help = [][]key.Binding{
+			{k.Up, k.Down},
+			{k.Back, k.Open},
+			{k.Search, k.ToggleRead},
+			// {k.Refresh, k.RefreshAll},
+			{k.Help, k.Quit},
+		}
+	case "reader":
+		help = [][]key.Binding{}
 	}
+
+	return help
+}
+
+// TODO: refator this so its per page and not global
+func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
+	// handle page specific keys
+	switch m.context.curr {
+	case "home":
+		switch {
+		case key.Matches(msg, m.keys.Open):
+			m.loadContent(m.table.Cursor())
+			m.table.SetCursor(0)
+			m.viewport.SetYOffset(0)
+
+		case key.Matches(msg, m.keys.Refresh):
+			id := m.table.Cursor()
+			feed := &m.context.feeds[id]
+			lib.FetchURL(feed.URL, false)
+			feed.Posts = lib.GetPosts(feed.URL)
+			err := error(nil)
+			m.context.feeds, err = m.context.feeds.ReadTracking()
+			if err != nil {
+				log.Fatal(err)
+			}
+			m.loadHome()
+
+		case key.Matches(msg, m.keys.RefreshAll):
+			m.context.feeds = lib.GetAllContent(lib.UserConfig.Urls, false)
+			err := error(nil)
+			m.context.feeds, err = m.context.feeds.ReadTracking()
+			if err != nil {
+				log.Fatal(err)
+			}
+			m.loadHome()
+
+		case key.Matches(msg, m.keys.ReadAll):
+			lib.ReadAll(m.context.feeds, m.table.Cursor())
+			m.loadHome()
+			err := m.context.feeds.WriteTracking()
+			if err != nil {
+				log.Fatalf("Could not write tracking data: %s", err)
+			}
+		}
+
+	case "content":
+		switch {
+		case key.Matches(msg, m.keys.Refresh):
+			feed := &m.context.feed
+			feed.Posts = lib.GetPosts(feed.URL)
+			err := error(nil)
+			m.context.feeds, err = m.context.feeds.ReadTracking()
+			if err != nil {
+				log.Fatal(err)
+			}
+			m.loadContent(m.context.feed.ID)
+
+		case key.Matches(msg, m.keys.Back):
+			m.loadHome()
+			m.table.SetCursor(m.context.feed.ID)
+			m.viewport.SetYOffset(0)
+
+		case key.Matches(msg, m.keys.Open):
+			m.loadReader()
+
+		case key.Matches(msg, m.keys.ToggleRead):
+			lib.ToggleRead(m.context.feeds, m.context.feed.ID, m.table.Cursor())
+			m.loadContent(m.context.feed.ID)
+			err := m.context.feeds.WriteTracking()
+			if err != nil {
+				log.Fatalf("Could not write tracking data: %s", err)
+			}
+
+		case key.Matches(msg, m.keys.ReadAll):
+			lib.ReadAll(m.context.feeds, m.context.feed.ID)
+			m.loadContent(m.context.feed.ID)
+			err := m.context.feeds.WriteTracking()
+			if err != nil {
+				log.Fatalf("Could not write tracking data: %s", err)
+			}
+		}
+
+	case "mixed":
+		switch {
+		case key.Matches(msg, m.keys.Open):
+			m.loadReader()
+
+		case key.Matches(msg, m.keys.ToggleRead):
+			lib.ToggleRead(m.context.feeds, m.context.feed.ID, m.table.Cursor())
+			m.loadMixed()
+			err := m.context.feeds.WriteTracking()
+			if err != nil {
+				log.Fatalf("Could not write tracking data: %s", err)
+			}
+
+		case key.Matches(msg, m.keys.ReadAll):
+			lib.ReadAll(m.context.feeds, m.context.feed.ID)
+			m.loadMixed()
+			err := m.context.feeds.WriteTracking()
+			if err != nil {
+				log.Fatalf("Could not write tracking data: %s", err)
+			}
+		}
+
+	case "reader":
+		switch {
+		case key.Matches(msg, m.keys.Back):
+			if m.context.prev == "mixed" {
+				m.loadMixed()
+			} else {
+				m.loadContent(m.context.feed.ID)
+			}
+			m.table.SetCursor(m.context.post.ID)
+			m.viewport.SetYOffset(0)
+
+		case key.Matches(msg, m.keys.Open):
+			err := lib.OpenURL(m.context.post.Link)
+			if err != nil {
+				log.Panic(err)
+			}
+
+		case key.Matches(msg, m.keys.ToggleRead):
+			lib.ToggleRead(m.context.feeds, m.context.feed.ID, m.context.post.ID)
+			m.loadContent(m.context.feed.ID)
+			err := m.context.feeds.WriteTracking()
+			if err != nil {
+				log.Fatalf("Could not write tracking data: %s", err)
+			}
+		}
+
+	case "search":
+		switch msg.String() {
+		case "enter":
+			m.loadSearchValues()
+
+		case "ctrl+c", "esc", "/":
+			m.loadContent(m.table.Cursor())
+			m.table.Focus()
+			m.filter.Blur()
+		}
+	}
+
+	// handle global keys
+	switch {
+	case key.Matches(msg, m.keys.Search):
+		if m.context.curr != "search" {
+			m.loadSearch()
+		}
+
+	case key.Matches(msg, m.keys.Help):
+		m.help.ShowAll = !m.help.ShowAll
+		m.table.SetHeight(m.viewport.Height - lipgloss.Height(m.help.View(m.keys, m)))
+
+	case key.Matches(msg, m.keys.Quit):
+		err := m.context.feeds.WriteTracking()
+		if err != nil {
+			log.Fatalf("Could not write tracking data: %s", err)
+		}
+		return m, tea.Quit
+	}
+
+	return m, nil
 }
 
 var keys = keyMap{
@@ -85,140 +278,4 @@ var keys = keyMap{
 		key.WithKeys("X"),
 		key.WithHelp("X", "mark all as read"),
 	),
-}
-
-// TODO: refator this so its per page and not global
-func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
-	if m.context == "search" {
-		switch msg.String() {
-		case "enter":
-			m = m.loadSearchValues()
-
-		case "ctrl+c", "esc", "/":
-			m = m.loadContent(m.table.Cursor())
-			m.table.Focus()
-			m.filter.Blur()
-		}
-
-		return m, nil
-	}
-
-	switch {
-	case key.Matches(msg, m.keys.Help):
-		m.help.ShowAll = !m.help.ShowAll
-		m.table.SetHeight(m.viewport.Height - lipgloss.Height(m.help.View(m.keys)) - lib.MainStyle.GetBorderBottomSize())
-
-	case key.Matches(msg, m.keys.Quit):
-		err := m.feeds.WriteTracking()
-		if err != nil {
-			log.Fatalf("Could not write tracking data: %s", err)
-		}
-		return m, tea.Quit
-
-	case key.Matches(msg, m.keys.Refresh):
-		switch m.context {
-		case "home":
-			id := m.table.Cursor()
-			feed := &m.feeds[id]
-			lib.FetchURL(feed.URL, false)
-			feed.Posts = lib.GetPosts(feed.URL)
-			err := error(nil)
-			m.feeds, err = m.feeds.ReadTracking()
-			if err != nil {
-				log.Fatal(err)
-			}
-			m = m.loadHome()
-
-		case "content":
-			feed := &m.feed
-			feed.Posts = lib.GetPosts(feed.URL)
-			err := error(nil)
-			m.feeds, err = m.feeds.ReadTracking()
-			if err != nil {
-				log.Fatal(err)
-			}
-			m = m.loadContent(m.feed.ID)
-
-		default:
-			return m, nil
-		}
-
-	case key.Matches(msg, m.keys.RefreshAll):
-		if m.context == "home" {
-			m.feeds = lib.GetAllContent(lib.UserConfig.Urls, false)
-			err := error(nil)
-			m.feeds, err = m.feeds.ReadTracking()
-			if err != nil {
-				log.Fatal(err)
-			}
-			m = m.loadHome()
-		}
-
-	case key.Matches(msg, m.keys.Back):
-		switch m.context {
-		case "reader":
-			m = m.loadContent(m.feed.ID)
-			m.table.SetCursor(m.post.ID)
-		case "content":
-			m = m.loadHome()
-			m.table.SetCursor(m.feed.ID)
-		}
-		m.viewport.SetYOffset(0)
-
-	case key.Matches(msg, m.keys.Open):
-		switch m.context {
-		case "reader":
-			err := lib.OpenURL(m.post.Link)
-			if err != nil {
-				log.Panic(err)
-			}
-
-		case "content":
-			m = m.loadReader()
-
-		default:
-			m = m.loadContent(m.table.Cursor())
-			m.table.SetCursor(0)
-			m.viewport.SetYOffset(0)
-		}
-
-	case key.Matches(msg, m.keys.Search):
-		if m.context != "search" {
-			m = m.loadSearch()
-		}
-
-	case key.Matches(msg, m.keys.ToggleRead):
-		switch m.context {
-		case "reader":
-			lib.ToggleRead(m.feeds, m.feed.ID, m.post.ID)
-			m = m.loadContent(m.feed.ID)
-		case "content":
-			lib.ToggleRead(m.feeds, m.feed.ID, m.table.Cursor())
-			m = m.loadContent(m.feed.ID)
-		}
-		err := m.feeds.WriteTracking()
-		if err != nil {
-			log.Fatalf("Could not write tracking data: %s", err)
-		}
-
-	case key.Matches(msg, m.keys.ReadAll):
-		switch m.context {
-		case "reader":
-			// if we are in the reader view, fall back to the normal mark all as read
-			lib.ToggleRead(m.feeds, m.feed.ID, m.post.ID)
-		case "content":
-			lib.ReadAll(m.feeds, m.feed.ID)
-			m = m.loadContent(m.feed.ID)
-		case "home":
-			lib.ReadAll(m.feeds, m.table.Cursor())
-			m = m.loadHome()
-		}
-
-		err := m.feeds.WriteTracking()
-		if err != nil {
-			log.Fatalf("Could not write tracking data: %s", err)
-		}
-	}
-
-	return m, nil
 }
