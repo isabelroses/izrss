@@ -10,7 +10,7 @@ require (
 	github.com/charmbracelet/lipgloss v0.11.0
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/pelletier/go-toml/v2 v2.2.2
-	github.com/urfave/cli/v2 v2.27.2
+	github.com/urfave/cli/v2 v2.27.3
 )
 
 require (
