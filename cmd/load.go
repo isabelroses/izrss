@@ -46,10 +46,10 @@ func (m *Model) loadMixed() {
 		log.Printf("Failed to sort %s", err)
 	}
 
-	rows := []table.Row{}
-	for _, post := range posts {
+	rows := make([]table.Row, len(posts))
+	for i, post := range posts {
 		read := lib.ReadSymbol(post.Read)
-		rows = append(rows, table.Row{read, post.Date, post.Title})
+		rows[i] = table.Row{read, post.Date, post.Title}
 	}
 
 	m.context.feed = lib.Feed{Title: "Mixed", Posts: posts, ID: 0, URL: ""}
