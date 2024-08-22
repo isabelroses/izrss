@@ -139,7 +139,8 @@ func (m Model) updateViewport(msg tea.Msg) (Model, tea.Cmd) {
 		m.viewport.SetContent(view)
 	}
 
-	if m.context.curr == "reader" && m.viewport.ScrollPercent() >= lib.UserConfig.Reader.ReadThreshold {
+	// HACK: if the previous was mixed we never marked the post as read
+	if m.context.curr == "reader" && m.context.prev == "mixed" && m.viewport.ScrollPercent() >= lib.UserConfig.Reader.ReadThreshold {
 		lib.MarkRead(m.context.feeds, m.context.feed.ID, m.context.post.ID)
 	}
 
