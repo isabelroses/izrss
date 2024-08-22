@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 
@@ -40,13 +41,18 @@ func (m *Model) loadMixed() {
 		posts = append(posts, feed.Posts...)
 	}
 
+	err := lib.SortPosts(posts)
+	if err != nil {
+		log.Printf("Failed to sort %s", err)
+	}
+
 	rows := []table.Row{}
 	for _, post := range posts {
 		read := lib.ReadSymbol(post.Read)
 		rows = append(rows, table.Row{read, post.Date, post.Title})
 	}
 
-	m.context.feed.Posts = posts
+	m.context.feed = lib.Feed{Title: "Mixed", Posts: posts, ID: 0, URL: ""}
 
 	m.loadNewTable(columns, rows)
 	m.swapPage("mixed")

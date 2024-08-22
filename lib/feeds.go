@@ -1,6 +1,9 @@
 package lib
 
-import "sort"
+import (
+	"sort"
+	"time"
+)
 
 // Post represents a single post in a feed
 type Post struct {
@@ -74,4 +77,24 @@ func mergeFeeds(feeds1, feeds2 Feeds) Feeds {
 	}
 
 	return feeds1
+}
+
+// SortPostsByDate sorts an array of Post structs by the Date field.
+func SortPosts(posts []Post) error {
+	dateFormat := UserConfig.DateFormat
+
+	sort.Slice(posts, func(i, j int) bool {
+		// Parse the dates for the current comparison
+		dateI, errI := time.Parse(dateFormat, posts[i].Date)
+		dateJ, errJ := time.Parse(dateFormat, posts[j].Date)
+
+		if errI != nil || errJ != nil {
+			return false
+		}
+
+		// Compare the parsed dates
+		return dateI.After(dateJ)
+	})
+
+	return nil
 }
