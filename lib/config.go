@@ -38,6 +38,7 @@ var UserConfig = config{
 	Reader: reader{
 		Size:          "recomended",
 		ReadThreshold: 0.8,
+		Theme:         "dark",
 	},
 	Colors: colors{
 		Text:       "#cdd6f4",
@@ -67,5 +68,6 @@ type colors struct {
 
 type reader struct {
 	Size          interface{} `toml:"size"`
+	Theme         string      `toml:"theme"`
 	ReadThreshold float64     `toml:"read_threshold"`
 }
