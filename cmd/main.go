@@ -75,8 +75,18 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
 			default:
 				log.Fatalf("invalid reader size: %v", lib.UserConfig.Reader.Size)
 			}
+
+			var glamTheme glamour.TermRendererOption
+			if lib.UserConfig.Reader.Theme == "environment" {
+				glamTheme = glamour.WithEnvironmentConfig()
+			} else if lib.UserConfig.Reader.Theme != "" {
+				glamTheme = glamour.WithStylePath(lib.UserConfig.Reader.Theme)
+			} else {
+				glamTheme = glamour.WithAutoStyle()
+			}
+
 			m.glam, _ = glamour.NewTermRenderer(
-				glamour.WithEnvironmentConfig(),
+				glamTheme,
 				glamWidth,
 			)
 		}()
