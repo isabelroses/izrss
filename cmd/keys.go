@@ -14,6 +14,8 @@ import (
 type keyMap struct {
 	Up         key.Binding
 	Down       key.Binding
+	JumpUp     key.Binding
+	JumpDown   key.Binding
 	Back       key.Binding
 	Help       key.Binding
 	Quit       key.Binding
@@ -44,6 +46,7 @@ func (k keyMap) FullHelp(m Model) [][]key.Binding {
 	case "home":
 		help = [][]key.Binding{
 			{k.Up, k.Down},
+			{k.JumpUp, k.JumpDown},
 			{k.Back, k.Open},
 			{k.Search, k.ReadAll},
 			{k.Refresh, k.RefreshAll},
@@ -52,6 +55,7 @@ func (k keyMap) FullHelp(m Model) [][]key.Binding {
 	case "content":
 		help = [][]key.Binding{
 			{k.Up, k.Down},
+			{k.JumpUp, k.JumpDown},
 			{k.Back, k.Open},
 			{k.Search},
 			{k.Refresh, k.RefreshAll},
@@ -61,6 +65,7 @@ func (k keyMap) FullHelp(m Model) [][]key.Binding {
 	case "mixed":
 		help = [][]key.Binding{
 			{k.Up, k.Down},
+			{k.JumpUp, k.JumpDown},
 			{k.Back, k.Open},
 			{k.Search, k.ToggleRead},
 			// {k.Refresh, k.RefreshAll},
@@ -213,6 +218,11 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 
 	// handle global keys
 	switch {
+	case key.Matches(msg, m.keys.JumpUp):
+		m.table.MoveUp(5)
+	case key.Matches(msg, m.keys.JumpDown):
+		m.table.MoveDown(5)
+
 	case key.Matches(msg, m.keys.Search):
 		if m.context.curr != "search" {
 			m.loadSearch()
@@ -241,6 +251,14 @@ var keys = keyMap{
 	Down: key.NewBinding(
 		key.WithKeys("down", "j"),
 		key.WithHelp("↓/j", "move down"),
+	),
+	JumpUp: key.NewBinding(
+		key.WithKeys("shift+up", "K"),
+		key.WithHelp("↑/k", "jump move up"),
+	),
+	JumpDown: key.NewBinding(
+		key.WithKeys("shift+down", "J"),
+		key.WithHelp("↓/j", "jump move down"),
 	),
 	Back: key.NewBinding(
 		key.WithKeys("left", "h", "shift+tab"),
