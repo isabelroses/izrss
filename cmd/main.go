@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"log"
+	"sync"
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -51,28 +52,34 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
 			log.Fatalf("could not read tracking file: %v", err)
 		}
 
-		var glamWidth glamour.TermRendererOption
-		switch lib.UserConfig.Reader.Size.(type) {
-		case string:
-			switch lib.UserConfig.Reader.Size {
-			case "full", "fullscreen":
-				glamWidth = glamour.WithWordWrap(width)
-			case "most":
-				glamWidth = glamour.WithWordWrap(int(float64(width) * 0.75))
-			case "recomended":
-				glamWidth = glamour.WithWordWrap(80)
-			}
+		// we make this part mutli-threaded otherwise its really slow
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			var glamWidth glamour.TermRendererOption
+			switch lib.UserConfig.Reader.Size.(type) {
+			case string:
+				switch lib.UserConfig.Reader.Size {
+				case "full", "fullscreen":
+					glamWidth = glamour.WithWordWrap(width)
+				case "most":
+					glamWidth = glamour.WithWordWrap(int(float64(width) * 0.75))
+				case "recomended":
+					glamWidth = glamour.WithWordWrap(80)
+				}
 
-		case int64:
-			w := int(lib.UserConfig.Reader.Size.(int64))
-			glamWidth = glamour.WithWordWrap(w)
-		default:
-			log.Fatalf("invalid reader size: %v", lib.UserConfig.Reader.Size)
-		}
-		m.glam, _ = glamour.NewTermRenderer(
-			glamour.WithEnvironmentConfig(),
-			glamWidth,
-		)
+			case int64:
+				w := int(lib.UserConfig.Reader.Size.(int64))
+				glamWidth = glamour.WithWordWrap(w)
+			default:
+				log.Fatalf("invalid reader size: %v", lib.UserConfig.Reader.Size)
+			}
+			m.glam, _ = glamour.NewTermRenderer(
+				glamour.WithEnvironmentConfig(),
+				glamWidth,
+			)
+		}()
 
 		if lib.UserConfig.Home == "mixed" {
 			m.loadMixed()
@@ -80,6 +87,7 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
 			m.loadHome()
 		}
 
+		wg.Wait()
 		m.ready = true
 	} else {
 		m.viewport.Width = width
