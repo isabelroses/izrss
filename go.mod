@@ -9,7 +9,7 @@ require (
 	github.com/charmbracelet/bubbletea v0.27.1
 	github.com/charmbracelet/lipgloss v0.13.0
 	github.com/mmcdole/gofeed v1.3.0
-	github.com/pelletier/go-toml/v2 v2.2.2
+	github.com/pelletier/go-toml/v2 v2.2.3
 	github.com/urfave/cli/v2 v2.27.4
 )
 
