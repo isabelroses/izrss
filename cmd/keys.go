@@ -94,8 +94,7 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 			feed := &m.context.feeds[id]
 			lib.FetchURL(feed.URL, false)
 			feed.Posts = lib.GetPosts(feed.URL)
-			err := error(nil)
-			m.context.feeds, err = m.context.feeds.ReadTracking()
+			err := m.context.feeds.ReadTracking()
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -103,8 +102,7 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 
 		case key.Matches(msg, m.keys.RefreshAll):
 			m.context.feeds = lib.GetAllContent(lib.UserConfig.Urls, false)
-			err := error(nil)
-			m.context.feeds, err = m.context.feeds.ReadTracking()
+			err := m.context.feeds.ReadTracking()
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -124,8 +122,7 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Refresh):
 			feed := &m.context.feed
 			feed.Posts = lib.GetPosts(feed.URL)
-			err := error(nil)
-			m.context.feeds, err = m.context.feeds.ReadTracking()
+			err := m.context.feeds.ReadTracking()
 			if err != nil {
 				log.Fatal(err)
 			}

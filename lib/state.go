@@ -40,7 +40,7 @@ func (feeds Feeds) WriteTracking() error {
 }
 
 // ReadTracking reads the tracking state from a JSON file
-func (feeds Feeds) ReadTracking() (Feeds, error) {
+func (feeds *Feeds) ReadTracking() error {
 	fileStr := getStateFile("tracking.json")
 	if _, err := os.Stat(fileStr); os.IsNotExist(err) {
 		err := feeds.WriteTracking()
@@ -51,18 +51,18 @@ func (feeds Feeds) ReadTracking() (Feeds, error) {
 
 	file, err := os.ReadFile(fileStr)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	feeds2 := Feeds{}
-	err = json.Unmarshal(file, &feeds2)
+	trackingData := Feeds{}
+	err = json.Unmarshal(file, &trackingData)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	mergedFeed := mergeFeeds(feeds, feeds2)
+	feeds.mergeFeeds(trackingData)
 
-	return mergedFeed, nil
+	return nil
 }
 
 func getStateFile(file string) string {

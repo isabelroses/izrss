@@ -65,27 +65,25 @@ func (f Feeds) GetTotalUnreads() int {
 // silly leah thinks this is chatgpt-ed but NO. I wrote this myself. I'm just that good.
 // also a bit of nix inspired me to write this `foldl recursiveUpdate { } importedLibs`
 // okay maybe it was beacuse of the comments not actually the code, kinda fair.
-func mergeFeeds(feeds1, feeds2 Feeds) Feeds {
+func (feeds *Feeds) mergeFeeds(otherFeeds Feeds) {
 	// Create a map to hold posts' read state from feeds1 by their UUID for quick lookup
 	readStatusMap := make(map[string]bool)
 
 	// Iterate through feeds1 and map their posts by UUID
-	for _, feed := range feeds1 {
+	for _, feed := range *feeds {
 		for _, post := range feed.Posts {
 			readStatusMap[post.UUID] = post.Read
 		}
 	}
 
 	// Iterate through feeds2 and merge their posts into feeds1 based on UUID
-	for i := range feeds2 {
-		for j := range feeds2[i].Posts {
-			if readStatus, exists := readStatusMap[feeds2[i].Posts[j].UUID]; exists {
-				feeds1[i].Posts[j].Read = readStatus
+	for i := range otherFeeds {
+		for j := range otherFeeds[i].Posts {
+			if readStatus, exists := readStatusMap[otherFeeds[i].Posts[j].UUID]; exists {
+				(*feeds)[i].Posts[j].Read = readStatus
 			}
 		}
 	}
-
-	return feeds1
 }
 
 // SortPostsByDate sorts an array of Post structs by the Date field.
