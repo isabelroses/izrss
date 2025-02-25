@@ -53,6 +53,15 @@ func (f Feed) GetTotalUnreads() int {
 	return total
 }
 
+// GetTotalUnreads returns the total number of unread posts in all feeds
+func (f Feeds) GetTotalUnreads() int {
+	total := 0
+	for _, feed := range f {
+		total += feed.GetTotalUnreads()
+	}
+	return total
+}
+
 // silly leah thinks this is chatgpt-ed but NO. I wrote this myself. I'm just that good.
 // also a bit of nix inspired me to write this `foldl recursiveUpdate { } importedLibs`
 // okay maybe it was beacuse of the comments not actually the code, kinda fair.

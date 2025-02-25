@@ -19,3 +19,7 @@ func (m *Model) swapPage(next string) {
 		m.viewport.Height = m.viewport.Height + 2
 	}
 }
+
+func (m *Model) SetFeeds(feeds lib.Feeds) {
+	m.context.feeds = feeds
+}

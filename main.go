@@ -40,6 +40,10 @@ CUSTOMIZATION:
 				Value: "",
 				Usage: "the path to your config file",
 			},
+			&cli.BoolFlag{
+				Name:  "count-unread",
+				Usage: "count the number of unread posts",
+			},
 		},
 
 		Action: func(c *cli.Context) error {
@@ -51,7 +55,22 @@ CUSTOMIZATION:
 				os.Exit(1)
 			}
 
-			p := tea.NewProgram(cmd.NewModel(), tea.WithAltScreen())
+			feeds := lib.GetAllContent(lib.UserConfig.Urls, lib.CheckCache())
+			err := feeds.ReadTracking()
+			if err != nil {
+				log.Fatalf("could not read tracking file: %v", err)
+			}
+
+			if c.Bool("count-unread") {
+				totalUnread := feeds.GetTotalUnreads()
+				fmt.Print(totalUnread)
+				os.Exit(0)
+			}
+
+			m := cmd.NewModel()
+			m.SetFeeds(feeds)
+
+			p := tea.NewProgram(m, tea.WithAltScreen())
 			if _, err := p.Run(); err != nil {
 				log.Fatal(err)
 			}

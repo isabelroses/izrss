@@ -43,14 +43,7 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
 	m.table.SetHeight(height - lipgloss.Height(m.help.View(m.keys, m)))
 
 	if !m.ready {
-		m.context.feeds = lib.GetAllContent(lib.UserConfig.Urls, lib.CheckCache())
 		m.viewport = viewport.New(width, height)
-
-		err := error(nil)
-		m.context.feeds, err = m.context.feeds.ReadTracking()
-		if err != nil {
-			log.Fatalf("could not read tracking file: %v", err)
-		}
 
 		// we make this part mutli-threaded otherwise its really slow
 		var wg sync.WaitGroup
