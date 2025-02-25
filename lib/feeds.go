@@ -70,7 +70,7 @@ func mergeFeeds(feeds1, feeds2 Feeds) Feeds {
 	// Iterate through feeds2 and merge their posts into feeds1 based on UUID
 	for i := range feeds2 {
 		for j := range feeds2[i].Posts {
-			if readStatus, exists := readStatusMap[feeds1[i].Posts[j].UUID]; exists {
+			if readStatus, exists := readStatusMap[feeds2[i].Posts[j].UUID]; exists {
 				feeds1[i].Posts[j].Read = readStatus
 			}
 		}
