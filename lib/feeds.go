@@ -69,17 +69,17 @@ func (feeds *Feeds) mergeFeeds(otherFeeds Feeds) {
 	// Create a map to hold posts' read state from feeds1 by their UUID for quick lookup
 	readStatusMap := make(map[string]bool)
 
-	// Iterate through feeds1 and map their posts by UUID
-	for _, feed := range *feeds {
+	// Iterate through otherFeeds and map their posts by UUID
+	for _, feed := range otherFeeds {
 		for _, post := range feed.Posts {
 			readStatusMap[post.UUID] = post.Read
 		}
 	}
 
-	// Iterate through feeds2 and merge their posts into feeds1 based on UUID
-	for i := range otherFeeds {
-		for j := range otherFeeds[i].Posts {
-			if readStatus, exists := readStatusMap[otherFeeds[i].Posts[j].UUID]; exists {
+	// Iterate through feeds and merge their posts into feeds1 based on UUID
+	for i := range *feeds {
+		for j := range (*feeds)[i].Posts {
+			if readStatus, exists := readStatusMap[(*feeds)[i].Posts[j].UUID]; exists {
 				(*feeds)[i].Posts[j].Read = readStatus
 			}
 		}

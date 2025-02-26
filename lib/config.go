@@ -67,7 +67,7 @@ type colors struct {
 }
 
 type reader struct {
-	Size          interface{} `toml:"size"`
-	Theme         string      `toml:"theme"`
-	ReadThreshold float64     `toml:"read_threshold"`
+	Size          any     `toml:"size"`
+	Theme         string  `toml:"theme"`
+	ReadThreshold float64 `toml:"read_threshold"`
 }

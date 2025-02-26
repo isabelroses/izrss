@@ -54,7 +54,7 @@ func (feeds *Feeds) ReadTracking() error {
 		return err
 	}
 
-	trackingData := Feeds{}
+	var trackingData Feeds
 	err = json.Unmarshal(file, &trackingData)
 	if err != nil {
 		return err
