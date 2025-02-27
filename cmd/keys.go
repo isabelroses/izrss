@@ -99,18 +99,23 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 				log.Fatal(err)
 			}
 			m.loadHome()
+			m.table.MoveDown(id)
 
 		case key.Matches(msg, m.keys.RefreshAll):
+			prevPos := m.table.Cursor()
 			m.context.feeds = lib.GetAllContent(lib.UserConfig.Urls, false)
 			err := m.context.feeds.ReadTracking()
 			if err != nil {
 				log.Fatal(err)
 			}
 			m.loadHome()
+			m.table.MoveDown(prevPos)
 
 		case key.Matches(msg, m.keys.ReadAll):
+			prevPos := m.table.Cursor()
 			lib.ReadAll(m.context.feeds, m.table.Cursor())
 			m.loadHome()
+			m.table.MoveDown(prevPos)
 			err := m.context.feeds.WriteTracking()
 			if err != nil {
 				log.Fatalf("Could not write tracking data: %s", err)
@@ -167,8 +172,10 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 			}
 
 		case key.Matches(msg, m.keys.ReadAll):
+			prevPos := m.table.Cursor()
 			lib.ReadAll(m.context.feeds, m.context.feed.ID)
 			m.loadMixed()
+			m.table.MoveDown(prevPos)
 			err := m.context.feeds.WriteTracking()
 			if err != nil {
 				log.Fatalf("Could not write tracking data: %s", err)
