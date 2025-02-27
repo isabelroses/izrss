@@ -34,14 +34,14 @@ func TestMergeFeeds(t *testing.T) {
 	// Test case 2: Feeds with common posts
 	feeds3 := Feeds{
 		{Posts: []Post{
-			{UUID: "1", Read: false},
-			{UUID: "2", Read: false},
+			{UUID: "1", Read: true},
+			{UUID: "2", Read: true},
 		}},
 	}
 	feeds4 := Feeds{
 		{Posts: []Post{
-			{UUID: "1", Read: true},
-			{UUID: "2", Read: true},
+			{UUID: "1", Read: false},
+			{UUID: "2", Read: false},
 		}},
 	}
 
