@@ -7,8 +7,8 @@ dateformat = "2006/01/02"
 
 # a list of urls to fetch rss feeds from
 urls = [
-  "https://example.com/rss.xml",
-  "https://example.com/rss2.xml",
+  "https://isabelroses.com/feed.xml",
+  "https://robinroses.xyz/feed.xml",
 ]
 
 # there are settings that only apply to the reader view
@@ -22,6 +22,10 @@ read_threshold = 0.75
 # this value can also be an int, however this is not recommended as
 # it will not be responsive to screen sizes
 size = "full"
+
+# this value can be "environment" or a path to a glamour file otherwise this
+# will default auto style based on the terminal
+theme = "environment"
 
 # these values can be any format that lipgloss supports
 # see <https://github.com/charmbracelet/lipgloss#colors>

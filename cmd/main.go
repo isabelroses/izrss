@@ -81,6 +81,7 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
 			m.glam, _ = glamour.NewTermRenderer(
 				glamTheme,
 				glamWidth,
+				glamour.WithChromaFormatter("terminal256"),
 			)
 		}()
 
