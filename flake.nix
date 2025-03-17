@@ -17,8 +17,8 @@
         function: nixpkgs.lib.genAttrs systems (system: function nixpkgs.legacyPackages.${system});
     in
     {
-      packages = forAllSystems (pkgs: rec {
-        default = izrss;
+      packages = forAllSystems (pkgs: {
+        default = self.packages.${pkgs.stdenv.hostPlatform.system}.izrss;
         izrss = pkgs.callPackage ./nix/default.nix { version = self.shortRev or "unstable"; };
       });
 
@@ -30,6 +30,6 @@
         default = pkgs.callPackage ./nix/shell.nix { };
       });
 
-      homeManagerModules.default = import ./nix/hm-module.nix self;
+      homeManagerModules.default = ./nix/hm-module.nix;
     };
 }

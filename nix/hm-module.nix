@@ -1,4 +1,3 @@
-self:
 {
   lib,
   pkgs,
@@ -10,18 +9,25 @@ let
     mkIf
     mkOption
     mkEnableOption
-    mkPackageOption
     ;
 
   settingsFormat = pkgs.formats.toml { };
+
+  cfg = config.programs.izrss;
 in
 {
+  _class = "homeManager";
+
   meta.maintainers = [ lib.maintainers.isabelroses ];
 
   options.programs.izrss = {
     enable = mkEnableOption "A fast and once simple cli todo tool";
 
-    package = mkPackageOption self.packages.${pkgs.stdenv.hostPlatform.system} "izrss" { };
+    package = mkOption {
+      type = lib.types.package;
+      default = pkgs.callPackage ./default.nix { };
+      description = "The izrss package";
+    };
 
     settings = mkOption {
       inherit (settingsFormat) type;
@@ -65,15 +71,11 @@ in
     )
   ];
 
-  config =
-    let
-      cfg = config.programs.izrss;
-    in
-    mkIf cfg.enable {
-      home.packages = [ cfg.package ];
+  config = mkIf cfg.enable {
+    home.packages = [ cfg.package ];
 
-      xdg.configFile."izrss/config.toml" = mkIf (cfg.settings != { }) {
-        source = (settingsFormat.generate "izrss-config.toml" cfg.settings);
-      };
+    xdg.configFile."izrss/config.toml" = mkIf (cfg.settings != { }) {
+      source = settingsFormat.generate "izrss-config.toml" cfg.settings;
     };
+  };
 }

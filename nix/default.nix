@@ -19,6 +19,7 @@ buildGoModule {
       ]
     );
   };
+
   vendorHash = "sha256-2L/EUoPbz6AZqv84XPhiZhImOL4wyBOzx6Od4+nTJeY=";
 
   ldflags = [
@@ -32,6 +33,6 @@ buildGoModule {
     homepage = "https://github.com/isabelroses/izrss";
     license = lib.licenses.gpl3Plus;
     maintainers = with lib.maintainers; [ isabelroses ];
-    mainPackage = "izrss";
+    mainProgram = "izrss";
   };
 }
