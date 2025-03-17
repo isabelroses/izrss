@@ -38,7 +38,7 @@ var UserConfig = config{
 	Reader: reader{
 		Size:          "recomended",
 		ReadThreshold: 0.8,
-		Theme:         "dark",
+		Theme:         "",
 	},
 	Colors: colors{
 		Text:       "#cdd6f4",
