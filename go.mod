@@ -7,7 +7,7 @@ toolchain go1.24.1
 require (
 	github.com/JohannesKaufmann/html-to-markdown v1.6.0
 	github.com/adrg/xdg v0.5.3
-	github.com/charmbracelet/bubbles v0.20.0
+	github.com/charmbracelet/bubbles v0.21.0
 	github.com/charmbracelet/bubbletea v1.3.4
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/mmcdole/gofeed v1.3.0
