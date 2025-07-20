@@ -1,9 +1,11 @@
 {
   lib,
-  buildGoModule,
+  rustPlatform,
+  openssl,
+  pkg-config,
   version ? "unstable",
 }:
-buildGoModule {
+rustPlatform.buildRustPackage {
   pname = "izrss";
   inherit version;
 
@@ -11,22 +13,17 @@ buildGoModule {
     root = ../.;
     fileset = lib.fileset.intersection (lib.fileset.fromSource (lib.sources.cleanSource ../.)) (
       lib.fileset.unions [
-        ../go.mod
-        ../go.sum
-        ../main.go
-        ../lib
-        ../cmd
+        ../Cargo.toml
+        ../Cargo.lock
+        ../src
       ]
     );
   };
 
-  vendorHash = "sha256-2L/EUoPbz6AZqv84XPhiZhImOL4wyBOzx6Od4+nTJeY=";
+  buildInputs = [ openssl ];
+  nativeBuildInputs = [ pkg-config ];
 
-  ldflags = [
-    "-s"
-    "-w"
-    "-X main.version=${version}"
-  ];
+  cargoLock.lockFile = ../Cargo.lock;
 
   meta = {
     description = "A RSS feed reader for the terminal";

@@ -1,20 +1,26 @@
 {
-  go,
-  gopls,
-  gofumpt,
-  hyperfine,
-  goreleaser,
+  mkShell,
   callPackage,
+  rustPlatform,
+
+  # extra tooling
+  clippy,
+  rustfmt,
+  rust-analyzer,
 }:
 let
-  mainPkg = callPackage ./default.nix { };
+  defaultPackage = callPackage ./default.nix { };
 in
-mainPkg.overrideAttrs (oa: {
-  nativeBuildInputs = [
-    go
-    gopls
-    gofumpt
-    hyperfine # lets benchmark
-    goreleaser
-  ] ++ (oa.nativeBuildInputs or [ ]);
-})
+mkShell {
+  inputsFrom = [ defaultPackage ];
+
+  env = {
+    RUST_SRC_PATH = rustPlatform.rustLibSrc;
+  };
+
+  packages = [
+    clippy
+    rustfmt
+    rust-analyzer
+  ];
+}
