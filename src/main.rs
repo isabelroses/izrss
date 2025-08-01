@@ -42,8 +42,11 @@ async fn main() -> Result<()> {
 }
 
 pub struct App {
-    selected_feed: Option<feeds::Feed>,
+    view: View,
     feeds: FeedsList,
+    selected_feed: PostsList,
+    selected_post: Option<feeds::Post>,
+
     receiver: Receiver<feeds::Feed>,
     config: config::Config,
     exit: bool,
@@ -54,8 +57,29 @@ pub struct FeedsList {
     pub state: ListState,
 }
 
+pub struct PostsList {
+    pub items: Vec<feeds::Post>,
+    pub state: ListState,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum View {
+    Feeds,
+    Posts,
+    Post,
+}
+
 impl FeedsList {
     fn new(items: crate::feeds::Feeds) -> Self {
+        Self {
+            items,
+            state: ListState::default(),
+        }
+    }
+}
+
+impl PostsList {
+    fn new(items: Vec<feeds::Post>) -> Self {
         Self {
             items,
             state: ListState::default(),
@@ -68,8 +92,10 @@ impl App {
         let feed_items = state::read_state().unwrap_or_default();
 
         Self {
+            view: View::Feeds,
             feeds: FeedsList::new(feed_items),
-            selected_feed: None,
+            selected_feed: PostsList::new(vec![]),
+            selected_post: None,
             config,
             receiver,
             exit: false,
@@ -110,27 +136,63 @@ impl App {
             KeyCode::Char('q') => self.exit()?,
             KeyCode::Char('j') | KeyCode::Down => self.select_next(),
             KeyCode::Char('k') | KeyCode::Up => self.select_previous(),
-            KeyCode::Char('l') | KeyCode::Right => self.open_selected_feed(),
+            KeyCode::Char('l') | KeyCode::Right => self.open_selected(),
+            KeyCode::Char('h') | KeyCode::Left => self.close_selected(),
             _ => {}
         }
         Ok(())
     }
 
     fn select_next(&mut self) {
-        self.feeds.state.select_next();
+        match self.view {
+            View::Feeds => self.feeds.state.select_next(),
+            View::Posts => self.selected_feed.state.select_next(),
+            View::Post => (), // No selection in Post view
+        }
     }
     fn select_previous(&mut self) {
-        self.feeds.state.select_previous();
+        match self.view {
+            View::Feeds => self.feeds.state.select_previous(),
+            View::Posts => self.selected_feed.state.select_previous(),
+            View::Post => (), // No selection in Post view
+        }
     }
-    fn open_selected_feed(&mut self) {
-        self.selected_feed = {
-            let id = self.feeds.state.selected();
-            if let Some(id) = id {
-                Some(self.feeds.items[id].clone())
-            } else {
-                None
+
+    fn open_selected(&mut self) {
+        match self.view {
+            View::Feeds => {
+                let id = self.feeds.state.selected();
+                self.feeds.state.select(Some(0));
+
+                if let Some(id) = id {
+                    self.view = View::Posts;
+                    self.selected_feed = PostsList::new(self.feeds.items[id].posts.clone());
+                }
             }
-        };
+            View::Posts => {
+                let id = self.selected_feed.state.selected();
+
+                if let Some(id) = id {
+                    self.view = View::Post;
+                    self.selected_post = Some(self.selected_feed.items[id].clone());
+                    self.selected_feed.state.select(Some(0));
+                }
+            }
+            View::Post => (),
+        }
+    }
+
+    fn close_selected(&mut self) {
+        match self.view {
+            View::Feeds => (),
+            View::Posts => {
+                self.view = View::Feeds;
+            }
+            View::Post => {
+                self.view = View::Posts;
+                self.selected_post = None;
+            }
+        }
     }
 
     fn exit(&mut self) -> Result<()> {
@@ -146,15 +208,31 @@ impl Widget for &mut App {
             .borders(Borders::ALL)
             .border_set(border::ROUNDED);
 
-        let items: Vec<ListItem> = self
-            .feeds
-            .items
-            .iter()
-            .map(|feed| {
-                let title = format!("{}: {}", feed.title, feed.total_unread());
-                ListItem::new(title)
-            })
-            .collect();
+        if self.view == View::Post {
+            let text = tui_markdown::from_str(&self.selected_post.as_ref().unwrap().content);
+            text.render(area, buf);
+            return;
+        }
+
+        let items: Vec<ListItem> = if self.view == View::Feeds {
+            self.feeds
+                .items
+                .iter()
+                .map(|feed| {
+                    let title = format!("{}: {}", feed.title, feed.total_unread());
+                    ListItem::new(title)
+                })
+                .collect()
+        } else {
+            self.selected_feed
+                .items
+                .iter()
+                .map(|post| {
+                    let title = post.title.clone().to_string();
+                    ListItem::new(title)
+                })
+                .collect()
+        };
 
         let highlight_style = Style::new()
             .fg(Color::from_str(&self.config.get_invert_text_color()).unwrap())
@@ -165,6 +243,12 @@ impl Widget for &mut App {
             .highlight_style(highlight_style)
             .highlight_spacing(HighlightSpacing::Always);
 
-        StatefulWidget::render(list, area, buf, &mut self.feeds.state);
+        let state = if self.view == View::Feeds {
+            &mut self.feeds.state
+        } else {
+            &mut self.selected_feed.state
+        };
+
+        StatefulWidget::render(list, area, buf, state);
     }
 }
