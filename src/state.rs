@@ -16,7 +16,7 @@ pub fn read_state() -> Result<crate::feeds::Feeds> {
     Ok(items)
 }
 
-impl crate::App {
+impl crate::App<'_> {
     pub fn write_state(&self) -> Result<()> {
         let state_dir = get_state_dir()?;
         std::fs::create_dir_all(&state_dir)?;

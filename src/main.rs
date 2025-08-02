@@ -15,8 +15,11 @@ use tokio::sync::mpsc::Receiver;
 mod backend;
 mod config;
 mod feeds;
+mod reader;
 mod state;
 mod tui;
+
+use self::reader::Reader;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -41,11 +44,12 @@ async fn main() -> Result<()> {
     app_result
 }
 
-pub struct App {
+pub struct App<'a> {
     view: View,
     feeds: FeedsList,
     selected_feed: PostsList,
-    selected_post: Option<feeds::Post>,
+    selected_post: Reader<'a>,
+    selected_post_content: String,
 
     receiver: Receiver<feeds::Feed>,
     config: config::Config,
@@ -87,7 +91,7 @@ impl PostsList {
     }
 }
 
-impl App {
+impl<'a> App<'a> {
     pub fn new(receiver: Receiver<feeds::Feed>, config: config::Config) -> Self {
         let feed_items = state::read_state().unwrap_or_default();
 
@@ -95,7 +99,8 @@ impl App {
             view: View::Feeds,
             feeds: FeedsList::new(feed_items),
             selected_feed: PostsList::new(vec![]),
-            selected_post: None,
+            selected_post: Reader::new("".to_string()),
+            selected_post_content: "".to_string(),
             config,
             receiver,
             exit: false,
@@ -147,14 +152,14 @@ impl App {
         match self.view {
             View::Feeds => self.feeds.state.select_next(),
             View::Posts => self.selected_feed.state.select_next(),
-            View::Post => (), // No selection in Post view
+            View::Post => self.selected_post.scroll_state.scroll_down(),
         }
     }
     fn select_previous(&mut self) {
         match self.view {
             View::Feeds => self.feeds.state.select_previous(),
             View::Posts => self.selected_feed.state.select_previous(),
-            View::Post => (), // No selection in Post view
+            View::Post => self.selected_post.scroll_state.scroll_up(),
         }
     }
 
@@ -174,7 +179,8 @@ impl App {
 
                 if let Some(id) = id {
                     self.view = View::Post;
-                    self.selected_post = Some(self.selected_feed.items[id].clone());
+                    self.selected_post_content = self.selected_feed.items[id].content.to_string();
+                    self.selected_post = Reader::new(self.selected_post_content.clone());
                     self.selected_feed.state.select(Some(0));
                 }
             }
@@ -190,7 +196,6 @@ impl App {
             }
             View::Post => {
                 self.view = View::Posts;
-                self.selected_post = None;
             }
         }
     }
@@ -202,15 +207,20 @@ impl App {
     }
 }
 
-impl Widget for &mut App {
+impl Widget for &mut App<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let block = Block::default()
             .borders(Borders::ALL)
             .border_set(border::ROUNDED);
 
         if self.view == View::Post {
-            let text = tui_markdown::from_str(&self.selected_post.as_ref().unwrap().content);
-            text.render(area, buf);
+            StatefulWidget::render(
+                self.selected_post.clone(),
+                area,
+                buf,
+                &mut self.selected_post.scroll_state,
+            );
+
             return;
         }
 

@@ -83,7 +83,7 @@ pub async fn fetch_all_feeds(conf: crate::config::Config, sender: Sender<Feed>) 
 
                             let content = if let Some(content) = entry.content {
                                 if let Some(body) = content.body {
-                                    body.into_boxed_str()
+                                    html2md::parse_html(&body).into_boxed_str()
                                 } else {
                                     "No content available".to_owned().into_boxed_str()
                                 }
