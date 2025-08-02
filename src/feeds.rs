@@ -1,4 +1,7 @@
+use std::{cell::RefCell, io::Cursor, rc::Rc};
+
 use anyhow::Result;
+use html_to_markdown::{markdown, TagHandler};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::Sender;
 
@@ -83,7 +86,24 @@ pub async fn fetch_all_feeds(conf: crate::config::Config, sender: Sender<Feed>) 
 
                             let content = if let Some(content) = entry.content {
                                 if let Some(body) = content.body {
-                                    html2md::parse_html(&body).into_boxed_str()
+                                    let mut handlers: Vec<TagHandler> = vec![
+                                        Rc::new(RefCell::new(markdown::WebpageChromeRemover)),
+                                        Rc::new(RefCell::new(markdown::ParagraphHandler)),
+                                        Rc::new(RefCell::new(markdown::HeadingHandler)),
+                                        Rc::new(RefCell::new(markdown::ListHandler)),
+                                        Rc::new(RefCell::new(markdown::TableHandler::new())),
+                                        Rc::new(RefCell::new(markdown::StyledTextHandler)),
+                                        Rc::new(RefCell::new(markdown::CodeHandler)),
+                                    ];
+
+                                    let reader = Cursor::new(body);
+
+                                    html_to_markdown::convert_html_to_markdown(
+                                        reader,
+                                        &mut handlers,
+                                    )
+                                    .unwrap_or("No content available".to_owned())
+                                    .into_boxed_str()
                                 } else {
                                     "No content available".to_owned().into_boxed_str()
                                 }
