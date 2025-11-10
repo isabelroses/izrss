@@ -126,13 +126,16 @@ impl<'a> App<'a> {
             let _ = self.write_state();
         }
 
-        match event::read()? {
-            // it's important to check that the event is a key press event as
-            // crossterm also emits key release and repeat events on Windows.
-            Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
-                self.handle_key_event(key_event)
+        // Poll for events with a short timeout instead of blocking
+        if event::poll(Duration::from_millis(250))? {
+            match event::read()? {
+                Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
+                    self.handle_key_event(key_event)
+                }
+                _ => Ok(()),
             }
-            _ => Ok(()),
+        } else {
+            Ok(())
         }
     }
 
