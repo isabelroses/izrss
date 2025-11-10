@@ -10,6 +10,7 @@ use ratatui::{
     },
 };
 use std::str::FromStr;
+use std::time::Duration;
 use tokio::sync::mpsc::Receiver;
 
 mod backend;
@@ -77,7 +78,7 @@ impl FeedsList {
     fn new(items: crate::feeds::Feeds) -> Self {
         Self {
             items,
-            state: ListState::default(),
+            state: ListState::default().with_selected(Some(0)),
         }
     }
 }
@@ -86,7 +87,7 @@ impl PostsList {
     fn new(items: Vec<feeds::Post>) -> Self {
         Self {
             items,
-            state: ListState::default(),
+            state: ListState::default().with_selected(Some(0)),
         }
     }
 }
@@ -116,12 +117,17 @@ impl<'a> App<'a> {
     }
 
     fn handle_events(&mut self) -> Result<()> {
+        // Process all available feed updates without blocking
         while let Ok(fetched) = self.receiver.try_recv() {
             if let Some(existing) = self.feeds.items.iter_mut().find(|f| f.url == fetched.url) {
                 feeds::merge_fetched_feed(existing, fetched);
             } else {
                 self.feeds.items.push(fetched);
             }
+
+            if self.feeds.items.len() == 1 {
+                self.feeds.state.select(Some(0));
+            };
 
             let _ = self.write_state();
         }
