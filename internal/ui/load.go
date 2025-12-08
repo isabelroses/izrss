@@ -83,16 +83,29 @@ func (m *Model) loadHome() {
 		{Title: "Title", Width: m.table.Width() - 10},
 	}
 
-	rows := make([]table.Row, 0, len(m.context.feeds)+1)
-	for _, feed := range m.context.feeds {
-		totalUnread := strconv.Itoa(feed.GetTotalUnreads())
-		fraction := fmt.Sprintf("%s/%d", totalUnread, len(feed.Posts))
-		rows = append(rows, table.Row{fraction, feed.Title})
-	}
+	var rows []table.Row
 
-	// Show loading indicator if still loading
-	if m.loading && m.loadedCount < m.totalCount {
-		rows = append(rows, table.Row{"", fmt.Sprintf("Loading... (%d/%d)", m.loadedCount, m.totalCount)})
+	if m.loading && len(m.context.feeds) == 0 {
+		// Show skeleton UI with placeholder rows while loading
+		rows = make([]table.Row, m.totalCount)
+		for i := range rows {
+			rows[i] = table.Row{"···", "Loading..."}
+		}
+	} else {
+		rows = make([]table.Row, 0, len(m.context.feeds)+1)
+		for _, feed := range m.context.feeds {
+			totalUnread := strconv.Itoa(feed.GetTotalUnreads())
+			fraction := fmt.Sprintf("%s/%d", totalUnread, len(feed.Posts))
+			rows = append(rows, table.Row{fraction, feed.Title})
+		}
+
+		// Show loading indicator if still loading more feeds
+		if m.loading && m.loadedCount < m.totalCount {
+			remaining := m.totalCount - m.loadedCount
+			for i := 0; i < remaining; i++ {
+				rows = append(rows, table.Row{"···", "Loading..."})
+			}
+		}
 	}
 
 	m.swapPage("home")
