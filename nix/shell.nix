@@ -1,5 +1,5 @@
 {
-  mkShellNoCC,
+  mkShell,
   callPackage,
 
   # extra tooling
@@ -11,7 +11,7 @@
 let
   defaultPackage = callPackage ./package.nix { };
 in
-mkShellNoCC {
+mkShell {
   inputsFrom = [ defaultPackage ];
 
   packages = [
