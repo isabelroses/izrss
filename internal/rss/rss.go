@@ -6,13 +6,10 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
-	"github.com/adrg/xdg"
 	"github.com/mmcdole/gofeed"
 
 	"github.com/isabelroses/izrss/internal/storage"
@@ -151,14 +148,8 @@ func NewFetcher(db *storage.DB, dateFormat string) *Fetcher {
 
 // FetchURL fetches the content of a URL and returns it as a byte slice
 func (f *Fetcher) FetchURL(url string, preferCache bool) ([]byte, error) {
-	fileStr := "izrss/" + urlToDir(url)
-	file, err := xdg.CacheFile(fileStr)
-	if err != nil {
-		return nil, fmt.Errorf("getting cache file path: %w", err)
-	}
-
 	if preferCache {
-		if data, err := os.ReadFile(file); err == nil {
+		if data, err := f.db.LoadFeedCache(url); err == nil && data != nil {
 			return data, nil
 		}
 	}
@@ -174,8 +165,8 @@ func (f *Fetcher) FetchURL(url string, preferCache bool) ([]byte, error) {
 		return nil, fmt.Errorf("reading response body: %w", err)
 	}
 
-	if err := os.WriteFile(file, body, 0o644); err != nil {
-		return nil, fmt.Errorf("writing cache file: %w", err)
+	if err := f.db.SaveFeedCache(url, body); err != nil {
+		log.Printf("could not cache feed %s: %v", url, err)
 	}
 
 	return body, nil
@@ -308,18 +299,6 @@ func (f *Fetcher) CheckCache() bool {
 }
 
 // Helper functions
-
-func urlToDir(url string) string {
-	url = strings.TrimPrefix(url, "https://")
-	url = strings.TrimPrefix(url, "http://")
-	url = strings.ReplaceAll(url, "/", "_")
-
-	if dotCount := strings.Count(url, "."); dotCount > 1 {
-		url = strings.Replace(url, ".", "_", dotCount-1)
-	}
-
-	return url
-}
 
 func convertDate(dateString, dateFormat string) string {
 	layouts := []string{

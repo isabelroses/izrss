@@ -61,6 +61,12 @@ func (db *DB) createTables() error {
 			value TEXT NOT NULL
 		);
 
+		CREATE TABLE IF NOT EXISTS feed_cache (
+			url TEXT PRIMARY KEY,
+			content BLOB NOT NULL,
+			fetched_at TEXT NOT NULL
+		);
+
 		CREATE INDEX IF NOT EXISTS idx_feed_url ON post_read_status(feed_url);
 	`)
 	return err
@@ -179,5 +185,34 @@ func (db *DB) SetCacheTime() error {
 		VALUES ('last_fetch_time', ?)
 		ON CONFLICT(key) DO UPDATE SET value = excluded.value
 	`, time.Now().Format(time.RFC3339))
+	return err
+}
+
+// SaveFeedCache stores the fetched feed content in the database
+func (db *DB) SaveFeedCache(url string, content []byte) error {
+	_, err := db.conn.Exec(`
+		INSERT INTO feed_cache (url, content, fetched_at)
+		VALUES (?, ?, ?)
+		ON CONFLICT(url) DO UPDATE SET content = excluded.content, fetched_at = excluded.fetched_at
+	`, url, content, time.Now().Format(time.RFC3339))
+	return err
+}
+
+// LoadFeedCache retrieves cached feed content from the database
+func (db *DB) LoadFeedCache(url string) ([]byte, error) {
+	var content []byte
+	err := db.conn.QueryRow(`SELECT content FROM feed_cache WHERE url = ?`, url).Scan(&content)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("querying feed cache: %w", err)
+	}
+	return content, nil
+}
+
+// ClearFeedCache removes all cached feed content
+func (db *DB) ClearFeedCache() error {
+	_, err := db.conn.Exec(`DELETE FROM feed_cache`)
 	return err
 }

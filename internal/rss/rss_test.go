@@ -89,24 +89,6 @@ func TestMarkRead(t *testing.T) {
 	}
 }
 
-func TestURLToDir(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{"https://isabelroses.com/feed.xml", "isabelroses_com_feed.xml"},
-		{"http://example.com/rss", "example.com_rss"},
-		{"https://blog.example.org/feed.atom", "blog_example_org_feed.atom"},
-	}
-
-	for _, tt := range tests {
-		result := urlToDir(tt.input)
-		if result != tt.expected {
-			t.Errorf("urlToDir(%q) = %q, want %q", tt.input, result, tt.expected)
-		}
-	}
-}
-
 func TestReadSymbol(t *testing.T) {
 	if ReadSymbol(true) != "" {
 		t.Errorf("Expected empty string for read post")
