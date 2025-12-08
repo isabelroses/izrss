@@ -112,20 +112,15 @@ func (m *Model) loadHome() {
 	m.loadNewTable(columns, rows)
 }
 
-// postColumns returns the standard columns for post lists
-func (m *Model) postColumns() []table.Column {
-	return []table.Column{
-		{Title: "", Width: 2},
-		{Title: "Date", Width: 15},
-		{Title: "Title", Width: m.table.Width() - 17},
-	}
-}
-
 func (m *Model) loadContent(id int) {
 	feed := m.context.feeds[id]
 	feed.ID = id
 
-	columns := m.postColumns()
+	columns := []table.Column{
+		{Title: "", Width: 2},
+		{Title: "Date", Width: 15},
+		{Title: "Title", Width: m.table.Width() - 17},
+	}
 
 	rows := make([]table.Row, 0, len(feed.Posts))
 	for _, post := range feed.Posts {

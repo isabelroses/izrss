@@ -51,17 +51,18 @@ type Model struct {
 
 // Init sets the initial state of the model
 func (m Model) Init() tea.Cmd {
-	cmds := []tea.Cmd{
+	// Use Sequence to ensure window size is processed first, then load feeds
+	// This ensures the skeleton UI displays properly before loading starts
+	initCmds := tea.Sequence(
 		tea.SetWindowTitle("izrss"),
-		tea.WindowSize(), // Get actual terminal size immediately
-	}
+		tea.WindowSize(), // Get actual terminal size first
+	)
 
-	// Start loading feeds asynchronously if in loading mode
 	if m.loading && m.loadedCount == 0 {
-		cmds = append(cmds, m.loadFeedsCmd())
+		return tea.Sequence(initCmds, m.loadFeedsCmd())
 	}
 
-	return tea.Batch(cmds...)
+	return initCmds
 }
 
 // NewModel creates a new model with sensible defaults
