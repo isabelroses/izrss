@@ -78,21 +78,20 @@ func run(c *cli.Context) error {
 
 	// Create fetcher and load feeds
 	fetcher := rss.NewFetcher(db, cfg.DateFormat)
-	feeds := fetcher.GetAllContent(cfg.Urls, fetcher.CheckCache())
 
-	if err := feeds.ReadTracking(db); err != nil {
-		return fmt.Errorf("reading tracking data: %w", err)
-	}
-
-	// Handle count-unread flag
+	// Handle count-unread flag - needs synchronous loading
 	if c.Bool("count-unread") {
+		feeds := fetcher.GetAllContent(cfg.Urls, fetcher.CheckCache())
+		if err := feeds.ReadTracking(db); err != nil {
+			return fmt.Errorf("reading tracking data: %w", err)
+		}
 		fmt.Print(feeds.GetTotalUnreads())
 		return nil
 	}
 
-	// Run the TUI
+	// Run the TUI with async feed loading
 	m := ui.NewModel(cfg, db, fetcher)
-	m.SetFeeds(feeds)
+	m.StartAsyncLoading()
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {

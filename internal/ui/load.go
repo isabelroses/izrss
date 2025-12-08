@@ -7,9 +7,33 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/table"
+	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/isabelroses/izrss/internal/rss"
 )
+
+// loadFeedsCmd creates a command that loads all feeds progressively
+func (m *Model) loadFeedsCmd() tea.Cmd {
+	preferCache := m.fetcher.CheckCache()
+	urls := m.cfg.Urls
+
+	// Create commands for each feed
+	cmds := make([]tea.Cmd, 0, len(urls)+1)
+	for _, url := range urls {
+		u := url // capture
+		cmds = append(cmds, func() tea.Msg {
+			feed := m.fetcher.GetContentForURL(u, preferCache)
+			return FeedLoadedMsg{Feed: feed}
+		})
+	}
+
+	// Add final command to signal completion
+	cmds = append(cmds, func() tea.Msg {
+		return AllFeedsLoadedMsg{}
+	})
+
+	return tea.Sequence(cmds...)
+}
 
 // loadHome loads the home view with the list of feeds
 func (m *Model) loadHome() {
@@ -18,11 +42,16 @@ func (m *Model) loadHome() {
 		{Title: "Title", Width: m.table.Width() - 10},
 	}
 
-	rows := make([]table.Row, 0, len(m.context.feeds))
+	rows := make([]table.Row, 0, len(m.context.feeds)+1)
 	for _, feed := range m.context.feeds {
 		totalUnread := strconv.Itoa(feed.GetTotalUnreads())
 		fraction := fmt.Sprintf("%s/%d", totalUnread, len(feed.Posts))
 		rows = append(rows, table.Row{fraction, feed.Title})
+	}
+
+	// Show loading indicator if still loading
+	if m.loading && m.loadedCount < m.totalCount {
+		rows = append(rows, table.Row{"", fmt.Sprintf("Loading... (%d/%d)", m.loadedCount, m.totalCount)})
 	}
 
 	m.swapPage("home")

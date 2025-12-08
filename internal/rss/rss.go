@@ -71,7 +71,8 @@ func SortPosts(posts []Post, dateFormat string) {
 	})
 }
 
-func (f Feeds) sort(urls []string) Feeds {
+// Sort sorts feeds by the order of URLs in the config
+func (f Feeds) Sort(urls []string) Feeds {
 	urlMap := make(map[string]int)
 	for i, str := range urls {
 		urlMap[str] = i
@@ -331,7 +332,7 @@ func (f *Fetcher) GetAllContent(urls []string, preferCache bool) Feeds {
 
 	wg.Wait()
 
-	return feeds.sort(urls)
+	return feeds.Sort(urls)
 }
 
 // getAllContentFromCache loads all feeds from parsed cache in a single batch query

@@ -15,16 +15,27 @@ import (
 	"github.com/isabelroses/izrss/internal/storage"
 )
 
+// FeedLoadedMsg is sent when a feed has been loaded
+type FeedLoadedMsg struct {
+	Feed rss.Feed
+}
+
+// AllFeedsLoadedMsg is sent when all feeds have been loaded
+type AllFeedsLoadedMsg struct{}
+
 // Model is the main model for the application
 type Model struct {
-	help     HelpModel
-	keys     keyMap
-	glam     *glamour.TermRenderer
-	context  context
-	viewport viewport.Model
-	filter   textinput.Model
-	table    table.Model
-	ready    bool
+	help        HelpModel
+	keys        keyMap
+	glam        *glamour.TermRenderer
+	context     context
+	viewport    viewport.Model
+	filter      textinput.Model
+	table       table.Model
+	ready       bool
+	loading     bool
+	loadedCount int
+	totalCount  int
 
 	// Dependencies
 	cfg     *config.Config
@@ -35,6 +46,13 @@ type Model struct {
 
 // Init sets the initial state of the model
 func (m Model) Init() tea.Cmd {
+	// Start loading feeds asynchronously if in loading mode
+	if m.loading && m.loadedCount == 0 {
+		return tea.Batch(
+			tea.SetWindowTitle("izrss"),
+			m.loadFeedsCmd(),
+		)
+	}
 	return tea.Batch(
 		tea.SetWindowTitle("izrss"),
 	)
@@ -54,17 +72,20 @@ func NewModel(cfg *config.Config, db *storage.DB, fetcher *rss.Fetcher) *Model {
 		Foreground(lipgloss.Color("229"))
 
 	return &Model{
-		context:  context{},
-		viewport: viewport.Model{},
-		table:    t,
-		ready:    false,
-		help:     NewHelp(styles),
-		keys:     defaultKeyMap,
-		filter:   f,
-		cfg:      cfg,
-		db:       db,
-		fetcher:  fetcher,
-		styles:   styles,
+		context:     context{},
+		viewport:    viewport.Model{},
+		table:       t,
+		ready:       false,
+		loading:     false,
+		loadedCount: 0,
+		totalCount:  len(cfg.Urls),
+		help:        NewHelp(styles),
+		keys:        defaultKeyMap,
+		filter:      f,
+		cfg:         cfg,
+		db:          db,
+		fetcher:     fetcher,
+		styles:      styles,
 	}
 }
 
@@ -81,6 +102,33 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		m, cmd = m.handleKeys(msg)
 		cmds = append(cmds, cmd)
+	case FeedLoadedMsg:
+		m.context.feeds = append(m.context.feeds, msg.Feed)
+		m.loadedCount++
+		// Refresh the view to show new feed
+		if m.ready {
+			if m.cfg.Home == "mixed" {
+				m.loadMixed()
+			} else {
+				m.loadHome()
+			}
+		}
+	case AllFeedsLoadedMsg:
+		m.loading = false
+		// Apply read tracking after all feeds loaded
+		if err := m.context.feeds.ReadTracking(m.db); err != nil {
+			log.Printf("error reading tracking: %v", err)
+		}
+		// Sort feeds to match config order
+		m.context.feeds = m.context.feeds.Sort(m.cfg.Urls)
+		// Final refresh
+		if m.ready {
+			if m.cfg.Home == "mixed" {
+				m.loadMixed()
+			} else {
+				m.loadHome()
+			}
+		}
 	}
 
 	m, cmd = m.updateViewport(msg)

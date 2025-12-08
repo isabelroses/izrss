@@ -24,3 +24,9 @@ func (m *Model) swapPage(next string) {
 func (m *Model) SetFeeds(feeds rss.Feeds) {
 	m.context.feeds = feeds
 }
+
+// StartAsyncLoading enables async loading mode
+func (m *Model) StartAsyncLoading() {
+	m.loading = true
+	m.loadedCount = 0
+}
