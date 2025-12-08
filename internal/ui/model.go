@@ -64,6 +64,9 @@ func NewModel(cfg *config.Config, db *storage.DB, fetcher *rss.Fetcher) *Model {
 
 	t := table.New(table.WithFocused(true))
 	t.SetStyles(TableStyles(cfg))
+	// Set initial size - will be updated on WindowSizeMsg
+	t.SetWidth(80)
+	t.SetHeight(20)
 
 	f := textinput.New()
 	f.Prompt = "Filter: "
@@ -71,11 +74,14 @@ func NewModel(cfg *config.Config, db *storage.DB, fetcher *rss.Fetcher) *Model {
 		Bold(true).
 		Foreground(lipgloss.Color("229"))
 
-	return &Model{
+	// Create viewport with initial size
+	vp := viewport.New(80, 20)
+
+	m := &Model{
 		context:     context{},
-		viewport:    viewport.Model{},
+		viewport:    vp,
 		table:       t,
-		ready:       false,
+		ready:       true, // Start ready immediately
 		loading:     false,
 		loadedCount: 0,
 		totalCount:  len(cfg.Urls),
@@ -87,6 +93,18 @@ func NewModel(cfg *config.Config, db *storage.DB, fetcher *rss.Fetcher) *Model {
 		fetcher:     fetcher,
 		styles:      styles,
 	}
+
+	// Setup glamour with default width
+	m.setupGlamour(80)
+
+	// Initialize the home view so UI is ready immediately
+	if cfg.Home == "mixed" {
+		m.loadMixed()
+	} else {
+		m.loadHome()
+	}
+
+	return m
 }
 
 // Update handles messages and updates the model
@@ -106,12 +124,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.context.feeds = append(m.context.feeds, msg.Feed)
 		m.loadedCount++
 		// Refresh the view to show new feed
-		if m.ready {
-			if m.cfg.Home == "mixed" {
-				m.loadMixed()
-			} else {
-				m.loadHome()
-			}
+		if m.cfg.Home == "mixed" {
+			m.loadMixed()
+		} else {
+			m.loadHome()
 		}
 	case AllFeedsLoadedMsg:
 		m.loading = false
@@ -122,12 +138,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Sort feeds to match config order
 		m.context.feeds = m.context.feeds.Sort(m.cfg.Urls)
 		// Final refresh
-		if m.ready {
-			if m.cfg.Home == "mixed" {
-				m.loadMixed()
-			} else {
-				m.loadHome()
-			}
+		if m.cfg.Home == "mixed" {
+			m.loadMixed()
+		} else {
+			m.loadHome()
 		}
 	}
 
@@ -146,21 +160,16 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
 	m.table.SetWidth(width)
 	m.table.SetHeight(height - lipgloss.Height(m.help.View(m.keys, m)))
 
-	if !m.ready {
-		m.viewport = viewport.New(width, height)
+	m.viewport.Width = width
+	m.viewport.Height = height
 
-		m.setupGlamour(width)
+	m.setupGlamour(width)
 
-		if m.cfg.Home == "mixed" {
-			m.loadMixed()
-		} else {
-			m.loadHome()
-		}
-
-		m.ready = true
+	// Refresh the current view with new dimensions
+	if m.cfg.Home == "mixed" {
+		m.loadMixed()
 	} else {
-		m.viewport.Width = width
-		m.viewport.Height = height
+		m.loadHome()
 	}
 
 	return m
