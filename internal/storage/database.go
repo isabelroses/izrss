@@ -22,6 +22,26 @@ func New(path string) (*DB, error) {
 		return nil, fmt.Errorf("opening database: %w", err)
 	}
 
+	// Set connection pool limits
+	conn.SetMaxOpenConns(1) // SQLite works better with single connection
+	conn.SetMaxIdleConns(1)
+
+	// Enable WAL mode and optimize for performance
+	pragmas := []string{
+		"PRAGMA journal_mode=WAL",
+		"PRAGMA synchronous=NORMAL",
+		"PRAGMA cache_size=-64000", // 64MB cache
+		"PRAGMA temp_store=MEMORY",
+		"PRAGMA mmap_size=268435456", // 256MB mmap
+	}
+
+	for _, pragma := range pragmas {
+		if _, err := conn.Exec(pragma); err != nil {
+			_ = conn.Close()
+			return nil, fmt.Errorf("setting pragma %s: %w", pragma, err)
+		}
+	}
+
 	db := &DB{conn: conn}
 	if err := db.createTables(); err != nil {
 		_ = conn.Close()
@@ -54,18 +74,24 @@ func (db *DB) createTables() error {
 			uuid TEXT PRIMARY KEY,
 			feed_url TEXT NOT NULL,
 			read INTEGER NOT NULL DEFAULT 0
-		);
+		) WITHOUT ROWID;
 
 		CREATE TABLE IF NOT EXISTS cache_metadata (
 			key TEXT PRIMARY KEY,
 			value TEXT NOT NULL
-		);
+		) WITHOUT ROWID;
 
 		CREATE TABLE IF NOT EXISTS feed_cache (
 			url TEXT PRIMARY KEY,
 			content BLOB NOT NULL,
 			fetched_at TEXT NOT NULL
-		);
+		) WITHOUT ROWID;
+
+		CREATE TABLE IF NOT EXISTS parsed_feed_cache (
+			url TEXT PRIMARY KEY,
+			parsed_data BLOB NOT NULL,
+			cached_at TEXT NOT NULL
+		) WITHOUT ROWID;
 
 		CREATE INDEX IF NOT EXISTS idx_feed_url ON post_read_status(feed_url);
 	`)
@@ -215,4 +241,52 @@ func (db *DB) LoadFeedCache(url string) ([]byte, error) {
 func (db *DB) ClearFeedCache() error {
 	_, err := db.conn.Exec(`DELETE FROM feed_cache`)
 	return err
+}
+
+// SaveParsedFeed stores a parsed feed structure in the database
+func (db *DB) SaveParsedFeed(url string, data []byte) error {
+	_, err := db.conn.Exec(`
+		INSERT INTO parsed_feed_cache (url, parsed_data, cached_at)
+		VALUES (?, ?, ?)
+		ON CONFLICT(url) DO UPDATE SET parsed_data = excluded.parsed_data, cached_at = excluded.cached_at
+	`, url, data, time.Now().Format(time.RFC3339))
+	return err
+}
+
+// LoadParsedFeed retrieves a cached parsed feed structure
+func (db *DB) LoadParsedFeed(url string) ([]byte, error) {
+	var data []byte
+	err := db.conn.QueryRow(`SELECT parsed_data FROM parsed_feed_cache WHERE url = ?`, url).Scan(&data)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("querying parsed feed cache: %w", err)
+	}
+	return data, nil
+}
+
+// LoadAllParsedFeeds retrieves all cached parsed feed structures in a single query
+func (db *DB) LoadAllParsedFeeds() (map[string][]byte, error) {
+	rows, err := db.conn.Query(`SELECT url, parsed_data FROM parsed_feed_cache`)
+	if err != nil {
+		return nil, fmt.Errorf("querying all parsed feeds: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	feeds := make(map[string][]byte)
+	for rows.Next() {
+		var url string
+		var data []byte
+		if err := rows.Scan(&url, &data); err != nil {
+			return nil, fmt.Errorf("scanning row: %w", err)
+		}
+		feeds[url] = data
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating rows: %w", err)
+	}
+
+	return feeds, nil
 }

@@ -2,6 +2,8 @@
 package rss
 
 import (
+	"bytes"
+	"encoding/gob"
 	"fmt"
 	"io"
 	"log"
@@ -101,7 +103,13 @@ func MarkRead(feeds Feeds, feedID, postID int) {
 
 // WriteTracking saves the tracking state to the database
 func (feeds Feeds) WriteTracking(db *storage.DB) error {
-	var statuses []storage.PostReadStatus
+	// Pre-calculate total size to avoid reallocation
+	totalPosts := 0
+	for _, feed := range feeds {
+		totalPosts += len(feed.Posts)
+	}
+
+	statuses := make([]storage.PostReadStatus, 0, totalPosts)
 	for _, feed := range feeds {
 		for _, post := range feed.Posts {
 			statuses = append(statuses, storage.PostReadStatus{
@@ -136,13 +144,26 @@ func (feeds *Feeds) ReadTracking(db *storage.DB) error {
 type Fetcher struct {
 	db         *storage.DB
 	dateFormat string
+	client     *http.Client
 }
 
 // NewFetcher creates a new Fetcher
 func NewFetcher(db *storage.DB, dateFormat string) *Fetcher {
+	// Configure HTTP client with connection pooling for concurrent requests
+	transport := &http.Transport{
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 10,
+		IdleConnTimeout:     90 * time.Second,
+		DisableKeepAlives:   false,
+	}
+
 	return &Fetcher{
 		db:         db,
 		dateFormat: dateFormat,
+		client: &http.Client{
+			Transport: transport,
+			Timeout:   30 * time.Second,
+		},
 	}
 }
 
@@ -154,7 +175,7 @@ func (f *Fetcher) FetchURL(url string, preferCache bool) ([]byte, error) {
 		}
 	}
 
-	resp, err := http.Get(url)
+	resp, err := f.client.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("fetching URL %s: %w", url, err)
 	}
@@ -174,6 +195,17 @@ func (f *Fetcher) FetchURL(url string, preferCache bool) ([]byte, error) {
 
 // GetContentForURL fetches the content of a URL and returns it as a Feed
 func (f *Fetcher) GetContentForURL(url string, preferCache bool) Feed {
+	// Try parsed feed cache first (avoids XML parsing entirely)
+	if preferCache {
+		if cachedData, err := f.db.LoadParsedFeed(url); err == nil && cachedData != nil {
+			var feed Feed
+			decoder := gob.NewDecoder(bytes.NewReader(cachedData))
+			if err := decoder.Decode(&feed); err == nil {
+				return feed
+			}
+		}
+	}
+
 	feed := f.setupReader(url, preferCache)
 
 	if feed == nil {
@@ -192,6 +224,15 @@ func (f *Fetcher) GetContentForURL(url string, preferCache bool) Feed {
 
 	for _, item := range feed.Items {
 		feedRet.Posts = append(feedRet.Posts, f.createPost(item))
+	}
+
+	// Cache the parsed feed for faster subsequent loads
+	var buf bytes.Buffer
+	encoder := gob.NewEncoder(&buf)
+	if err := encoder.Encode(&feedRet); err == nil {
+		if err := f.db.SaveParsedFeed(url, buf.Bytes()); err != nil {
+			log.Printf("failed to cache parsed feed %s: %v", url, err)
+		}
 	}
 
 	return feedRet
@@ -259,28 +300,63 @@ func (f *Fetcher) GetAllContent(urls []string, preferCache bool) Feeds {
 		}
 	}
 
+	// When using cache, batch load all parsed feeds in one query
+	if preferCache {
+		return f.getAllContentFromCache(urls)
+	}
+
+	// Use worker pool for fresh fetches to limit concurrent HTTP requests
+	const maxWorkers = 20
+	semaphore := make(chan struct{}, maxWorkers)
+
 	var wg sync.WaitGroup
-	responses := make(chan Feed, len(urls))
+	var mu sync.Mutex
+	feeds := make(Feeds, 0, len(urls))
 
 	for _, url := range urls {
 		wg.Add(1)
 		go func(u string) {
 			defer wg.Done()
-			responses <- f.GetContentForURL(u, preferCache)
+
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+
+			feed := f.GetContentForURL(u, false)
+
+			mu.Lock()
+			feeds = append(feeds, feed)
+			mu.Unlock()
 		}(url)
 	}
 
-	go func() {
-		wg.Wait()
-		close(responses)
-	}()
-
-	feeds := make(Feeds, 0, len(urls))
-	for response := range responses {
-		feeds = append(feeds, response)
-	}
+	wg.Wait()
 
 	return feeds.sort(urls)
+}
+
+// getAllContentFromCache loads all feeds from parsed cache in a single batch query
+func (f *Fetcher) getAllContentFromCache(urls []string) Feeds {
+	// Load all parsed feeds in one query instead of N queries
+	cachedFeeds, err := f.db.LoadAllParsedFeeds()
+	if err != nil {
+		log.Printf("could not load parsed feeds cache: %v", err)
+		cachedFeeds = make(map[string][]byte)
+	}
+
+	feeds := make(Feeds, 0, len(urls))
+	for _, url := range urls {
+		if cachedData, exists := cachedFeeds[url]; exists {
+			var feed Feed
+			decoder := gob.NewDecoder(bytes.NewReader(cachedData))
+			if err := decoder.Decode(&feed); err == nil {
+				feeds = append(feeds, feed)
+				continue
+			}
+		}
+		// Fallback to individual fetch if not in cache
+		feeds = append(feeds, f.GetContentForURL(url, true))
+	}
+	return feeds
 }
 
 // CheckCache returns true if cached data should be used

@@ -36,7 +36,13 @@ func (m *Model) loadMixed() {
 		{Title: "Title", Width: m.table.Width() - 17},
 	}
 
-	var posts []rss.Post
+	// Pre-calculate total size to avoid reallocation
+	totalPosts := 0
+	for _, feed := range m.context.feeds {
+		totalPosts += len(feed.Posts)
+	}
+
+	posts := make([]rss.Post, 0, totalPosts)
 	for _, feed := range m.context.feeds {
 		posts = append(posts, feed.Posts...)
 	}
