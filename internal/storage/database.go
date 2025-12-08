@@ -102,11 +102,11 @@ func (db *DB) SavePostReadStatuses(statuses []PostReadStatus) error {
 		return fmt.Errorf("beginning transaction: %w", err)
 	}
 	defer func() {
-    err := tx.Rollback()
-    if err != nil && err != sql.ErrTxDone {
-        fmt.Printf("transaction rollback error: %v\n", err)
-    }
-  }()
+		err := tx.Rollback()
+		if err != nil && err != sql.ErrTxDone {
+			fmt.Printf("transaction rollback error: %v\n", err)
+		}
+	}()
 
 	stmt, err := tx.Prepare(`
 		INSERT INTO post_read_status (uuid, feed_url, read)
