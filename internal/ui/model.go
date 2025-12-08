@@ -46,16 +46,17 @@ type Model struct {
 
 // Init sets the initial state of the model
 func (m Model) Init() tea.Cmd {
+	cmds := []tea.Cmd{
+		tea.SetWindowTitle("izrss"),
+		tea.WindowSize(), // Get actual terminal size immediately
+	}
+
 	// Start loading feeds asynchronously if in loading mode
 	if m.loading && m.loadedCount == 0 {
-		return tea.Batch(
-			tea.SetWindowTitle("izrss"),
-			m.loadFeedsCmd(),
-		)
+		cmds = append(cmds, m.loadFeedsCmd())
 	}
-	return tea.Batch(
-		tea.SetWindowTitle("izrss"),
-	)
+
+	return tea.Batch(cmds...)
 }
 
 // NewModel creates a new model with sensible defaults
@@ -64,9 +65,6 @@ func NewModel(cfg *config.Config, db *storage.DB, fetcher *rss.Fetcher) *Model {
 
 	t := table.New(table.WithFocused(true))
 	t.SetStyles(TableStyles(cfg))
-	// Set initial size - will be updated on WindowSizeMsg
-	t.SetWidth(80)
-	t.SetHeight(20)
 
 	f := textinput.New()
 	f.Prompt = "Filter: "
@@ -74,14 +72,11 @@ func NewModel(cfg *config.Config, db *storage.DB, fetcher *rss.Fetcher) *Model {
 		Bold(true).
 		Foreground(lipgloss.Color("229"))
 
-	// Create viewport with initial size
-	vp := viewport.New(80, 20)
-
-	m := &Model{
+	return &Model{
 		context:     context{},
-		viewport:    vp,
+		viewport:    viewport.Model{},
 		table:       t,
-		ready:       true, // Start ready immediately
+		ready:       false,
 		loading:     false,
 		loadedCount: 0,
 		totalCount:  len(cfg.Urls),
@@ -93,18 +88,6 @@ func NewModel(cfg *config.Config, db *storage.DB, fetcher *rss.Fetcher) *Model {
 		fetcher:     fetcher,
 		styles:      styles,
 	}
-
-	// Setup glamour with default width
-	m.setupGlamour(80)
-
-	// Initialize the home view so UI is ready immediately
-	if cfg.Home == "mixed" {
-		m.loadMixed()
-	} else {
-		m.loadHome()
-	}
-
-	return m
 }
 
 // Update handles messages and updates the model
@@ -160,8 +143,13 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
 	m.table.SetWidth(width)
 	m.table.SetHeight(height - lipgloss.Height(m.help.View(m.keys, m)))
 
-	m.viewport.Width = width
-	m.viewport.Height = height
+	if !m.ready {
+		m.viewport = viewport.New(width, height)
+		m.ready = true
+	} else {
+		m.viewport.Width = width
+		m.viewport.Height = height
+	}
 
 	m.setupGlamour(width)
 

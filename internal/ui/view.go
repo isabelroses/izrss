@@ -8,6 +8,11 @@ import (
 
 // View renders the model as a string
 func (m Model) View() string {
+	// Wait for window size before rendering
+	if !m.ready {
+		return ""
+	}
+
 	if m.context.curr == "reader" {
 		return m.styles.Main.Render(
 			lipgloss.JoinVertical(
