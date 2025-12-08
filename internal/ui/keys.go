@@ -1,14 +1,16 @@
-// Package cmd contains all the command functions
-package cmd
+package ui
 
 import (
 	"log"
+	"os/exec"
+	"runtime"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/isabelroses/izrss/lib"
+	"github.com/isabelroses/izrss/internal/rss"
 )
 
 type keyMap struct {
@@ -28,23 +30,16 @@ type keyMap struct {
 }
 
 func (k keyMap) ShortHelp(m Model) []key.Binding {
-	var help []key.Binding
-
 	if m.context.curr == "reader" {
-		help = []key.Binding{k.Open, k.ToggleRead, k.Quit}
-	} else {
-		help = []key.Binding{k.Help, k.Quit}
+		return []key.Binding{k.Open, k.ToggleRead, k.Quit}
 	}
-
-	return help
+	return []key.Binding{k.Help, k.Quit}
 }
 
 func (k keyMap) FullHelp(m Model) [][]key.Binding {
-	var help [][]key.Binding
-
 	switch m.context.curr {
 	case "home":
-		help = [][]key.Binding{
+		return [][]key.Binding{
 			{k.Up, k.Down},
 			{k.JumpUp, k.JumpDown},
 			{k.Back, k.Open},
@@ -53,7 +48,7 @@ func (k keyMap) FullHelp(m Model) [][]key.Binding {
 			{k.Help, k.Quit},
 		}
 	case "content":
-		help = [][]key.Binding{
+		return [][]key.Binding{
 			{k.Up, k.Down},
 			{k.JumpUp, k.JumpDown},
 			{k.Back, k.Open},
@@ -63,24 +58,19 @@ func (k keyMap) FullHelp(m Model) [][]key.Binding {
 			{k.Help, k.Quit},
 		}
 	case "mixed":
-		help = [][]key.Binding{
+		return [][]key.Binding{
 			{k.Up, k.Down},
 			{k.JumpUp, k.JumpDown},
 			{k.Back, k.Open},
 			{k.Search, k.ToggleRead},
-			// {k.Refresh, k.RefreshAll},
 			{k.Help, k.Quit},
 		}
-	case "reader":
-		help = [][]key.Binding{}
+	default:
+		return [][]key.Binding{}
 	}
-
-	return help
 }
 
-// TODO: refator this so its per page and not global
 func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
-	// handle page specific keys
 	switch m.context.curr {
 	case "home":
 		switch {
@@ -92,29 +82,32 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Refresh):
 			id := m.table.Cursor()
 			feed := &m.context.feeds[id]
-			lib.FetchURL(feed.URL, false)
-			feed.Posts = lib.GetPosts(feed.URL)
-			err := m.context.feeds.ReadTracking()
+
+			_, err := m.fetcher.FetchURL(feed.URL, false)
 			if err != nil {
-				log.Fatal(err)
+				log.Printf("error fetching feed URL: %v", err)
+				break
+			}
+
+			feed.Posts = m.fetcher.GetPosts(feed.URL)
+			if err := m.context.feeds.ReadTracking(m.db); err != nil {
+				log.Printf("error reading tracking: %v", err)
 			}
 			m.loadHome()
 			m.table.MoveDown(id)
 
 		case key.Matches(msg, m.keys.RefreshAll):
-			m.context.feeds = lib.GetAllContent(lib.UserConfig.Urls, false)
-			err := m.context.feeds.ReadTracking()
-			if err != nil {
-				log.Fatal(err)
+			m.context.feeds = m.fetcher.GetAllContent(m.cfg.Urls, false)
+			if err := m.context.feeds.ReadTracking(m.db); err != nil {
+				log.Printf("error reading tracking: %v", err)
 			}
 			m.loadHome()
 
 		case key.Matches(msg, m.keys.ReadAll):
-			lib.ReadAll(m.context.feeds, m.table.Cursor())
+			rss.ReadAll(m.context.feeds, m.table.Cursor())
 			m.loadHome()
-			err := m.context.feeds.WriteTracking()
-			if err != nil {
-				log.Fatalf("Could not write tracking data: %s", err)
+			if err := m.context.feeds.WriteTracking(m.db); err != nil {
+				log.Printf("error writing tracking: %v", err)
 			}
 		}
 
@@ -122,10 +115,9 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 		switch {
 		case key.Matches(msg, m.keys.Refresh):
 			feed := &m.context.feed
-			feed.Posts = lib.GetPosts(feed.URL)
-			err := m.context.feeds.ReadTracking()
-			if err != nil {
-				log.Fatal(err)
+			feed.Posts = m.fetcher.GetPosts(feed.URL)
+			if err := m.context.feeds.ReadTracking(m.db); err != nil {
+				log.Printf("error reading tracking: %v", err)
 			}
 			m.loadContent(m.context.feed.ID)
 
@@ -138,19 +130,17 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.loadReader()
 
 		case key.Matches(msg, m.keys.ToggleRead):
-			lib.ToggleRead(m.context.feeds, m.context.feed.ID, m.table.Cursor())
+			rss.ToggleRead(m.context.feeds, m.context.feed.ID, m.table.Cursor())
 			m.loadContent(m.context.feed.ID)
-			err := m.context.feeds.WriteTracking()
-			if err != nil {
-				log.Fatalf("Could not write tracking data: %s", err)
+			if err := m.context.feeds.WriteTracking(m.db); err != nil {
+				log.Printf("error writing tracking: %v", err)
 			}
 
 		case key.Matches(msg, m.keys.ReadAll):
-			lib.ReadAll(m.context.feeds, m.context.feed.ID)
+			rss.ReadAll(m.context.feeds, m.context.feed.ID)
 			m.loadContent(m.context.feed.ID)
-			err := m.context.feeds.WriteTracking()
-			if err != nil {
-				log.Fatalf("Could not write tracking data: %s", err)
+			if err := m.context.feeds.WriteTracking(m.db); err != nil {
+				log.Printf("error writing tracking: %v", err)
 			}
 		}
 
@@ -160,19 +150,17 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.loadReader()
 
 		case key.Matches(msg, m.keys.ToggleRead):
-			lib.ToggleRead(m.context.feeds, m.context.feed.ID, m.table.Cursor())
+			rss.ToggleRead(m.context.feeds, m.context.feed.ID, m.table.Cursor())
 			m.loadMixed()
-			err := m.context.feeds.WriteTracking()
-			if err != nil {
-				log.Fatalf("Could not write tracking data: %s", err)
+			if err := m.context.feeds.WriteTracking(m.db); err != nil {
+				log.Printf("error writing tracking: %v", err)
 			}
 
 		case key.Matches(msg, m.keys.ReadAll):
-			lib.ReadAll(m.context.feeds, m.context.feed.ID)
+			rss.ReadAll(m.context.feeds, m.context.feed.ID)
 			m.loadMixed()
-			err := m.context.feeds.WriteTracking()
-			if err != nil {
-				log.Fatalf("Could not write tracking data: %s", err)
+			if err := m.context.feeds.WriteTracking(m.db); err != nil {
+				log.Printf("error writing tracking: %v", err)
 			}
 		}
 
@@ -188,17 +176,15 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.viewport.SetYOffset(0)
 
 		case key.Matches(msg, m.keys.Open):
-			err := lib.OpenURL(m.context.post.Link)
-			if err != nil {
-				log.Panic(err)
+			if err := openURL(m.context.post.Link); err != nil {
+				log.Printf("error opening URL: %v", err)
 			}
 
 		case key.Matches(msg, m.keys.ToggleRead):
-			lib.ToggleRead(m.context.feeds, m.context.feed.ID, m.context.post.ID)
+			rss.ToggleRead(m.context.feeds, m.context.feed.ID, m.context.post.ID)
 			m.loadContent(m.context.feed.ID)
-			err := m.context.feeds.WriteTracking()
-			if err != nil {
-				log.Fatalf("Could not write tracking data: %s", err)
+			if err := m.context.feeds.WriteTracking(m.db); err != nil {
+				log.Printf("error writing tracking: %v", err)
 			}
 		}
 
@@ -214,7 +200,7 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 		}
 	}
 
-	// handle global keys
+	// Global keys
 	switch {
 	case key.Matches(msg, m.keys.JumpUp):
 		m.table.MoveUp(5)
@@ -231,9 +217,8 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 		m.table.SetHeight(m.viewport.Height - lipgloss.Height(m.help.View(m.keys, m)))
 
 	case key.Matches(msg, m.keys.Quit):
-		err := m.context.feeds.WriteTracking()
-		if err != nil {
-			log.Fatalf("Could not write tracking data: %s", err)
+		if err := m.context.feeds.WriteTracking(m.db); err != nil {
+			log.Printf("error writing tracking: %v", err)
 		}
 		return m, tea.Quit
 	}
@@ -241,7 +226,7 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 	return m, nil
 }
 
-var keys = keyMap{
+var defaultKeyMap = keyMap{
 	Up: key.NewBinding(
 		key.WithKeys("up", "k"),
 		key.WithHelp("↑/k", "move up"),
@@ -294,4 +279,37 @@ var keys = keyMap{
 		key.WithKeys("X"),
 		key.WithHelp("X", "mark all as read"),
 	),
+}
+
+// openURL opens the specified URL in the default browser
+func openURL(url string) error {
+	var cmd string
+	var args []string
+
+	switch runtime.GOOS {
+	case "windows":
+		cmd = "cmd"
+		args = []string{"/c", "start", url}
+	case "darwin":
+		cmd = "open"
+		args = []string{url}
+	default:
+		if isWSL() {
+			cmd = "cmd.exe"
+			args = []string{"/c", "start", url}
+		} else {
+			cmd = "xdg-open"
+			args = []string{url}
+		}
+	}
+
+	return exec.Command(cmd, args...).Start()
+}
+
+func isWSL() bool {
+	releaseData, err := exec.Command("uname", "-r").Output()
+	if err != nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(string(releaseData)), "microsoft")
 }

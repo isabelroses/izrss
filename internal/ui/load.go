@@ -1,4 +1,4 @@
-package cmd
+package ui
 
 import (
 	"fmt"
@@ -8,21 +8,21 @@ import (
 
 	"github.com/charmbracelet/bubbles/table"
 
-	"github.com/isabelroses/izrss/lib"
+	"github.com/isabelroses/izrss/internal/rss"
 )
 
-// load the home view, this conists of the list of feeds
+// loadHome loads the home view with the list of feeds
 func (m *Model) loadHome() {
 	columns := []table.Column{
 		{Title: "Unread", Width: 10},
 		{Title: "Title", Width: m.table.Width() - 10},
 	}
 
-	rows := []table.Row{}
-	for _, Feed := range m.context.feeds {
-		totalUnread := strconv.Itoa(Feed.GetTotalUnreads())
-		fraction := fmt.Sprintf("%s/%d", totalUnread, len(Feed.Posts))
-		rows = append(rows, table.Row{fraction, Feed.Title})
+	rows := make([]table.Row, 0, len(m.context.feeds))
+	for _, feed := range m.context.feeds {
+		totalUnread := strconv.Itoa(feed.GetTotalUnreads())
+		fraction := fmt.Sprintf("%s/%d", totalUnread, len(feed.Posts))
+		rows = append(rows, table.Row{fraction, feed.Title})
 	}
 
 	m.swapPage("home")
@@ -36,23 +36,20 @@ func (m *Model) loadMixed() {
 		{Title: "Title", Width: m.table.Width() - 17},
 	}
 
-	posts := []lib.Post{}
+	var posts []rss.Post
 	for _, feed := range m.context.feeds {
 		posts = append(posts, feed.Posts...)
 	}
 
-	err := lib.SortPosts(posts)
-	if err != nil {
-		log.Printf("Failed to sort %s", err)
-	}
+	rss.SortPosts(posts, m.cfg.DateFormat)
 
 	rows := make([]table.Row, len(posts))
 	for i, post := range posts {
-		read := lib.ReadSymbol(post.Read)
+		read := rss.ReadSymbol(post.Read)
 		rows[i] = table.Row{read, post.Date, post.Title}
 	}
 
-	m.context.feed = lib.Feed{Title: "Mixed", Posts: posts, ID: 0, URL: ""}
+	m.context.feed = rss.Feed{Title: "Mixed", Posts: posts, ID: 0, URL: ""}
 
 	m.loadNewTable(columns, rows)
 	m.swapPage("mixed")
@@ -68,9 +65,9 @@ func (m *Model) loadContent(id int) {
 		{Title: "Title", Width: m.table.Width() - 17},
 	}
 
-	rows := []table.Row{}
+	rows := make([]table.Row, 0, len(feed.Posts))
 	for _, post := range feed.Posts {
-		readsym := lib.ReadSymbol(post.Read)
+		readsym := rss.ReadSymbol(post.Read)
 		rows = append(rows, table.Row{readsym, post.Date, post.Title})
 	}
 
@@ -81,18 +78,16 @@ func (m *Model) loadContent(id int) {
 
 func (m *Model) loadSearch() {
 	m.swapPage("search")
-
 	m.table.Blur()
-
 	m.filter.Focus()
 	m.filter.SetValue("")
 }
 
-func (m Model) loadSearchValues() {
+func (m *Model) loadSearchValues() {
 	search := m.filter.Value()
 
-	var filteredPosts []lib.Post
-	rows := []table.Row{}
+	var filteredPosts []rss.Post
+	var rows []table.Row
 
 	for _, feed := range m.context.feeds {
 		for _, post := range feed.Posts {
@@ -117,11 +112,34 @@ func (m Model) loadSearchValues() {
 }
 
 func (m *Model) loadNewTable(columns []table.Column, rows []table.Row) {
-	t := &m.table
+	// Clear rows first to prevent panic
+	m.table.SetRows([]table.Row{})
+	m.table.SetColumns(columns)
+	m.table.SetRows(rows)
+}
 
-	// NOTE: clear the rows first to prevent panic
-	t.SetRows([]table.Row{})
+func (m *Model) loadReader() {
+	id := m.table.Cursor()
+	post := m.context.feed.Posts[id]
+	post.ID = id
 
-	t.SetColumns(columns)
-	t.SetRows(rows)
+	m.swapPage("reader")
+	m.context.post = post
+	m.viewport.YPosition = 0
+
+	// Render the post
+	fromMd, err := htmlToMarkdown.ConvertString(post.Content)
+	if err != nil {
+		log.Printf("could not convert html to markdown: %v", err)
+		fromMd = post.Content
+	}
+
+	out, err := m.glam.Render(fromMd)
+	if err != nil {
+		log.Printf("could not render markdown: %v", err)
+		out = fromMd
+	}
+
+	m.viewport.SetContent(out)
+	m.viewport.Height = m.viewport.Height - 2
 }

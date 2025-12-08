@@ -1,21 +1,19 @@
-package cmd
+package ui
 
 import (
 	"fmt"
 
 	"github.com/charmbracelet/lipgloss"
-
-	"github.com/isabelroses/izrss/lib"
 )
 
 // View renders the model as a string
 func (m Model) View() string {
-	out := ""
-
 	if !m.ready {
-		out = "Initializing..."
-	} else if m.context.curr == "reader" {
-		out = lib.MainStyle.Render(
+		return "Initializing..."
+	}
+
+	if m.context.curr == "reader" {
+		return m.styles.Main.Render(
 			lipgloss.JoinVertical(
 				lipgloss.Top,
 				fmt.Sprintf("%s - %3.f%%", m.context.post.Title, m.viewport.ScrollPercent()*100),
@@ -23,9 +21,7 @@ func (m Model) View() string {
 				m.help.View(m.keys, m),
 			),
 		)
-	} else {
-		out = lib.MainStyle.Render(m.viewport.View())
 	}
 
-	return out
+	return m.styles.Main.Render(m.viewport.View())
 }
