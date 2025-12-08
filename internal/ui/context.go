@@ -1,15 +1,15 @@
-package cmd
+package ui
 
 import (
-	"github.com/isabelroses/izrss/lib"
+	"github.com/isabelroses/izrss/internal/rss"
 )
 
 type context struct {
 	prev  string
 	curr  string
-	feeds lib.Feeds
-	post  lib.Post
-	feed  lib.Feed
+	feeds rss.Feeds
+	post  rss.Post
+	feed  rss.Feed
 }
 
 func (m *Model) swapPage(next string) {
@@ -20,6 +20,7 @@ func (m *Model) swapPage(next string) {
 	}
 }
 
-func (m *Model) SetFeeds(feeds lib.Feeds) {
+// SetFeeds sets the feeds for the model
+func (m *Model) SetFeeds(feeds rss.Feeds) {
 	m.context.feeds = feeds
 }

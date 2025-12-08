@@ -14,8 +14,7 @@ buildGoModule {
         ../go.mod
         ../go.sum
         ../main.go
-        ../lib
-        ../cmd
+        ../internal
       ]
     );
   };

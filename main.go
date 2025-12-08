@@ -1,4 +1,4 @@
-// Package main is the entry point for the application
+// Package main is the entry point for the izrss application
 package main
 
 import (
@@ -9,8 +9,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/urfave/cli/v2"
 
-	"github.com/isabelroses/izrss/cmd"
-	"github.com/isabelroses/izrss/lib"
+	"github.com/isabelroses/izrss/internal/config"
+	"github.com/isabelroses/izrss/internal/rss"
+	"github.com/isabelroses/izrss/internal/storage"
+	"github.com/isabelroses/izrss/internal/ui"
 )
 
 var version = "unstable"
@@ -46,40 +48,56 @@ CUSTOMIZATION:
 			},
 		},
 
-		Action: func(c *cli.Context) error {
-			lib.LoadConfig(c.String("config"))
-
-			if len(lib.UserConfig.Urls) == 0 {
-				fmt.Println("No urls were found in config file, please add some and try again")
-				fmt.Println("You can find an example config file on the github page")
-				os.Exit(1)
-			}
-
-			feeds := lib.GetAllContent(lib.UserConfig.Urls, lib.CheckCache())
-			err := feeds.ReadTracking()
-			if err != nil {
-				log.Fatalf("could not read tracking file: %v", err)
-			}
-
-			if c.Bool("count-unread") {
-				totalUnread := feeds.GetTotalUnreads()
-				fmt.Print(totalUnread)
-				os.Exit(0)
-			}
-
-			m := cmd.NewModel()
-			m.SetFeeds(feeds)
-
-			p := tea.NewProgram(m, tea.WithAltScreen())
-			if _, err := p.Run(); err != nil {
-				log.Fatal(err)
-			}
-
-			return nil
-		},
+		Action: run,
 	}
 
 	if err := app.Run(os.Args); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func run(c *cli.Context) error {
+	// Load configuration
+	cfg, err := config.Load(c.String("config"))
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+
+	if len(cfg.Urls) == 0 {
+		fmt.Println("No urls were found in config file, please add some and try again")
+		fmt.Println("You can find an example config file on the github page")
+		os.Exit(1)
+	}
+
+	// Initialize database
+	db, err := storage.NewDefault()
+	if err != nil {
+		return fmt.Errorf("initializing database: %w", err)
+	}
+	defer db.Close()
+
+	// Create fetcher and load feeds
+	fetcher := rss.NewFetcher(db, cfg.DateFormat)
+	feeds := fetcher.GetAllContent(cfg.Urls, fetcher.CheckCache())
+
+	if err := feeds.ReadTracking(db); err != nil {
+		return fmt.Errorf("reading tracking data: %w", err)
+	}
+
+	// Handle count-unread flag
+	if c.Bool("count-unread") {
+		fmt.Print(feeds.GetTotalUnreads())
+		return nil
+	}
+
+	// Run the TUI
+	m := ui.NewModel(cfg, db, fetcher)
+	m.SetFeeds(feeds)
+
+	p := tea.NewProgram(m, tea.WithAltScreen())
+	if _, err := p.Run(); err != nil {
+		return fmt.Errorf("running TUI: %w", err)
+	}
+
+	return nil
 }
