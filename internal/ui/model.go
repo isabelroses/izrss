@@ -188,9 +188,15 @@ func (m Model) updateViewport(msg tea.Msg) (Model, tea.Cmd) {
 		m.viewport.SetContent(view)
 	}
 
-	// HACK: if the previous was mixed we never marked the post as read
-	if m.context.curr == "reader" && m.context.prev == "mixed" && m.viewport.ScrollPercent() >= m.cfg.Reader.ReadThreshold {
-		rss.MarkRead(m.context.feeds, m.context.feed.ID, m.context.post.ID)
+	// Auto-mark post as read when scrolled past the threshold
+	if m.context.curr == "reader" && m.viewport.ScrollPercent() >= m.cfg.Reader.ReadThreshold {
+		post := &m.context.feeds[m.context.feed.ID].Posts[m.context.post.ID]
+		if !post.Read {
+			rss.MarkRead(m.context.feeds, m.context.feed.ID, m.context.post.ID)
+			if err := m.context.feeds.WriteTracking(m.db); err != nil {
+				log.Printf("error writing tracking: %v", err)
+			}
+		}
 	}
 
 	m.viewport, cmd = m.viewport.Update(msg)
