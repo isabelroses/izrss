@@ -82,7 +82,13 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Refresh):
 			id := m.table.Cursor()
 			feed := &m.context.feeds[id]
-			m.fetcher.FetchURL(feed.URL, false)
+
+			_, err := m.fetcher.FetchURL(feed.URL, false)
+			if err != nil {
+				log.Printf("error fetching feed URL: %v", err)
+				break
+			}
+
 			feed.Posts = m.fetcher.GetPosts(feed.URL)
 			if err := m.context.feeds.ReadTracking(m.db); err != nil {
 				log.Printf("error reading tracking: %v", err)
