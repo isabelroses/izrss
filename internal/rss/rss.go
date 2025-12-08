@@ -158,7 +158,7 @@ func (f *Fetcher) FetchURL(url string, preferCache bool) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("fetching URL %s: %w", url, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

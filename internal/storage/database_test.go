@@ -18,13 +18,13 @@ func setupTestDB(t *testing.T) (*DB, func()) {
 	dbPath := filepath.Join(tmpDir, "test.db")
 	db, err := New(dbPath)
 	if err != nil {
-		os.RemoveAll(tmpDir)
+		_ = os.RemoveAll(tmpDir)
 		t.Fatalf("Failed to create database: %v", err)
 	}
 
 	cleanup := func() {
-		db.Close()
-		os.RemoveAll(tmpDir)
+		_ = db.Close()
+		_ = os.RemoveAll(tmpDir)
 	}
 
 	return db, cleanup
@@ -35,7 +35,7 @@ func TestNew(t *testing.T) {
 	defer cleanup()
 
 	if db == nil {
-		t.Error("Expected non-nil database")
+		t.Fatal("Expected non-nil database")
 	}
 	if db.conn == nil {
 		t.Error("Expected non-nil connection")

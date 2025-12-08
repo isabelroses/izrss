@@ -74,7 +74,7 @@ func run(c *cli.Context) error {
 	if err != nil {
 		return fmt.Errorf("initializing database: %w", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Create fetcher and load feeds
 	fetcher := rss.NewFetcher(db, cfg.DateFormat)

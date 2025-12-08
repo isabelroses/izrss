@@ -24,7 +24,7 @@ func New(path string) (*DB, error) {
 
 	db := &DB{conn: conn}
 	if err := db.createTables(); err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("creating tables: %w", err)
 	}
 
@@ -116,7 +116,7 @@ func (db *DB) SavePostReadStatuses(statuses []PostReadStatus) error {
 	if err != nil {
 		return fmt.Errorf("preparing statement: %w", err)
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 
 	for _, status := range statuses {
 		readInt := 0
@@ -140,7 +140,7 @@ func (db *DB) LoadPostReadStatuses() (map[string]bool, error) {
 	if err != nil {
 		return nil, fmt.Errorf("querying read statuses: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	statuses := make(map[string]bool)
 	for rows.Next() {
