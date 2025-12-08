@@ -6,10 +6,7 @@
 dateformat = "2006/01/02"
 
 # a list of urls to fetch rss feeds from
-urls = [
-  "https://isabelroses.com/feed.xml",
-  "https://robinroses.xyz/feed.xml",
-]
+urls = ["https://isabelroses.com/feed.xml", "https://uncenter.dev/feed.xml"]
 
 # there are settings that only apply to the reader view
 [reader]
