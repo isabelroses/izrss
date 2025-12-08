@@ -174,7 +174,7 @@ func (f *Fetcher) FetchURL(url string, preferCache bool) ([]byte, error) {
 		return nil, fmt.Errorf("reading response body: %w", err)
 	}
 
-	if err := os.WriteFile(file, body, 0644); err != nil {
+	if err := os.WriteFile(file, body, 0o644); err != nil {
 		return nil, fmt.Errorf("writing cache file: %w", err)
 	}
 

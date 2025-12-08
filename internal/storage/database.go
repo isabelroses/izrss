@@ -81,7 +81,7 @@ func (db *DB) SavePostReadStatus(uuid, feedURL string, read bool) error {
 	}
 
 	_, err := db.conn.Exec(`
-		INSERT INTO post_read_status (uuid, feed_url, read) 
+		INSERT INTO post_read_status (uuid, feed_url, read)
 		VALUES (?, ?, ?)
 		ON CONFLICT(uuid) DO UPDATE SET read = excluded.read
 	`, uuid, feedURL, readInt)
@@ -98,7 +98,7 @@ func (db *DB) SavePostReadStatuses(statuses []PostReadStatus) error {
 	defer tx.Rollback()
 
 	stmt, err := tx.Prepare(`
-		INSERT INTO post_read_status (uuid, feed_url, read) 
+		INSERT INTO post_read_status (uuid, feed_url, read)
 		VALUES (?, ?, ?)
 		ON CONFLICT(uuid) DO UPDATE SET read = excluded.read
 	`)
@@ -170,7 +170,7 @@ func (db *DB) GetCacheTime() (*time.Time, error) {
 // SetCacheTime stores the current time as the last fetch time
 func (db *DB) SetCacheTime() error {
 	_, err := db.conn.Exec(`
-		INSERT INTO cache_metadata (key, value) 
+		INSERT INTO cache_metadata (key, value)
 		VALUES ('last_fetch_time', ?)
 		ON CONFLICT(key) DO UPDATE SET value = excluded.value
 	`, time.Now().Format(time.RFC3339))
