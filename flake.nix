@@ -19,11 +19,11 @@
     {
       packages = forAllSystems (pkgs: {
         default = self.packages.${pkgs.stdenv.hostPlatform.system}.izrss;
-        izrss = pkgs.callPackage ./nix/default.nix { version = self.shortRev or "unstable"; };
+        izrss = pkgs.callPackage ./nix/package.nix { version = self.shortRev or "unstable"; };
       });
 
       overlays.default = final: _: {
-        izrss = final.callPackage ./nix/default.nix { version = self.shortRev or "unstable"; };
+        izrss = final.callPackage ./nix/package.nix { version = self.shortRev or "unstable"; };
       };
 
       devShells = forAllSystems (pkgs: {

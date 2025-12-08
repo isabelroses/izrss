@@ -25,7 +25,7 @@ in
 
     package = mkOption {
       type = lib.types.package;
-      default = pkgs.callPackage ./default.nix { };
+      default = pkgs.callPackage ./package.nix { };
       description = "The izrss package";
     };
 

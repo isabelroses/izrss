@@ -1,20 +1,23 @@
 {
+  mkShellNoCC,
+  callPackage,
+
+  # extra tooling
   go,
   gopls,
   gofumpt,
-  hyperfine,
   goreleaser,
-  callPackage,
 }:
 let
-  mainPkg = callPackage ./default.nix { };
+  defaultPackage = callPackage ./package.nix { };
 in
-mainPkg.overrideAttrs (oa: {
-  nativeBuildInputs = [
+mkShellNoCC {
+  inputsFrom = [ defaultPackage ];
+
+  packages = [
     go
     gopls
     gofumpt
-    hyperfine # lets benchmark
     goreleaser
-  ] ++ (oa.nativeBuildInputs or [ ]);
-})
+  ];
+}
