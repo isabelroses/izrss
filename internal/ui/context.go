@@ -20,11 +20,6 @@ func (m *Model) swapPage(next string) {
 	}
 }
 
-// SetFeeds sets the feeds for the model
-func (m *Model) SetFeeds(feeds rss.Feeds) {
-	m.context.feeds = feeds
-}
-
 // StartAsyncLoading enables async loading mode
 func (m *Model) StartAsyncLoading() {
 	m.loading = true

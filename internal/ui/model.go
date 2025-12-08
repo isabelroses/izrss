@@ -20,6 +20,11 @@ type FeedLoadedMsg struct {
 	Feed rss.Feed
 }
 
+// BatchFeedsLoadedMsg is sent when all feeds are loaded from cache at once
+type BatchFeedsLoadedMsg struct {
+	Feeds rss.Feeds
+}
+
 // AllFeedsLoadedMsg is sent when all feeds have been loaded
 type AllFeedsLoadedMsg struct{}
 
@@ -106,26 +111,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case FeedLoadedMsg:
 		m.context.feeds = append(m.context.feeds, msg.Feed)
 		m.loadedCount++
-		// Refresh the view to show new feed
-		if m.cfg.Home == "mixed" {
-			m.loadMixed()
-		} else {
-			m.loadHome()
-		}
+		m.refreshView()
+	case BatchFeedsLoadedMsg:
+		m.context.feeds = msg.Feeds
+		m.loadedCount = len(msg.Feeds)
+		m.loading = false
+		m.readTracking()
+		m.refreshView()
 	case AllFeedsLoadedMsg:
 		m.loading = false
-		// Apply read tracking after all feeds loaded
-		if err := m.context.feeds.ReadTracking(m.db); err != nil {
-			log.Printf("error reading tracking: %v", err)
-		}
-		// Sort feeds to match config order
+		m.readTracking()
 		m.context.feeds = m.context.feeds.Sort(m.cfg.Urls)
-		// Final refresh
-		if m.cfg.Home == "mixed" {
-			m.loadMixed()
-		} else {
-			m.loadHome()
-		}
+		m.refreshView()
 	}
 
 	m, cmd = m.updateViewport(msg)
@@ -161,6 +158,15 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
 	}
 
 	return m
+}
+
+// refreshView reloads the current home view
+func (m *Model) refreshView() {
+	if m.cfg.Home == "mixed" {
+		m.loadMixed()
+	} else {
+		m.loadHome()
+	}
 }
 
 func (m *Model) setupGlamour(width int) {

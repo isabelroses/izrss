@@ -13,6 +13,20 @@ import (
 	"github.com/isabelroses/izrss/internal/rss"
 )
 
+// writeTracking saves tracking state and logs any error
+func (m *Model) writeTracking() {
+	if err := m.context.feeds.WriteTracking(m.db); err != nil {
+		log.Printf("error writing tracking: %v", err)
+	}
+}
+
+// readTracking loads tracking state and logs any error
+func (m *Model) readTracking() {
+	if err := m.context.feeds.ReadTracking(m.db); err != nil {
+		log.Printf("error reading tracking: %v", err)
+	}
+}
+
 type keyMap struct {
 	Up         key.Binding
 	Down       key.Binding
@@ -90,25 +104,19 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 			}
 
 			feed.Posts = m.fetcher.GetPosts(feed.URL)
-			if err := m.context.feeds.ReadTracking(m.db); err != nil {
-				log.Printf("error reading tracking: %v", err)
-			}
+			m.readTracking()
 			m.loadHome()
 			m.table.MoveDown(id)
 
 		case key.Matches(msg, m.keys.RefreshAll):
 			m.context.feeds = m.fetcher.GetAllContent(m.cfg.Urls, false)
-			if err := m.context.feeds.ReadTracking(m.db); err != nil {
-				log.Printf("error reading tracking: %v", err)
-			}
+			m.readTracking()
 			m.loadHome()
 
 		case key.Matches(msg, m.keys.ReadAll):
 			rss.ReadAll(m.context.feeds, m.table.Cursor())
 			m.loadHome()
-			if err := m.context.feeds.WriteTracking(m.db); err != nil {
-				log.Printf("error writing tracking: %v", err)
-			}
+			m.writeTracking()
 		}
 
 	case "content":
@@ -116,9 +124,7 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Refresh):
 			feed := &m.context.feed
 			feed.Posts = m.fetcher.GetPosts(feed.URL)
-			if err := m.context.feeds.ReadTracking(m.db); err != nil {
-				log.Printf("error reading tracking: %v", err)
-			}
+			m.readTracking()
 			m.loadContent(m.context.feed.ID)
 
 		case key.Matches(msg, m.keys.Back):
@@ -132,16 +138,12 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.ToggleRead):
 			rss.ToggleRead(m.context.feeds, m.context.feed.ID, m.table.Cursor())
 			m.loadContent(m.context.feed.ID)
-			if err := m.context.feeds.WriteTracking(m.db); err != nil {
-				log.Printf("error writing tracking: %v", err)
-			}
+			m.writeTracking()
 
 		case key.Matches(msg, m.keys.ReadAll):
 			rss.ReadAll(m.context.feeds, m.context.feed.ID)
 			m.loadContent(m.context.feed.ID)
-			if err := m.context.feeds.WriteTracking(m.db); err != nil {
-				log.Printf("error writing tracking: %v", err)
-			}
+			m.writeTracking()
 		}
 
 	case "mixed":
@@ -152,16 +154,12 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.ToggleRead):
 			rss.ToggleRead(m.context.feeds, m.context.feed.ID, m.table.Cursor())
 			m.loadMixed()
-			if err := m.context.feeds.WriteTracking(m.db); err != nil {
-				log.Printf("error writing tracking: %v", err)
-			}
+			m.writeTracking()
 
 		case key.Matches(msg, m.keys.ReadAll):
 			rss.ReadAll(m.context.feeds, m.context.feed.ID)
 			m.loadMixed()
-			if err := m.context.feeds.WriteTracking(m.db); err != nil {
-				log.Printf("error writing tracking: %v", err)
-			}
+			m.writeTracking()
 		}
 
 	case "reader":
@@ -183,9 +181,7 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.ToggleRead):
 			rss.ToggleRead(m.context.feeds, m.context.feed.ID, m.context.post.ID)
 			m.loadContent(m.context.feed.ID)
-			if err := m.context.feeds.WriteTracking(m.db); err != nil {
-				log.Printf("error writing tracking: %v", err)
-			}
+			m.writeTracking()
 		}
 
 	case "search":
@@ -217,9 +213,7 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 		m.table.SetHeight(m.viewport.Height - lipgloss.Height(m.help.View(m.keys, m)))
 
 	case key.Matches(msg, m.keys.Quit):
-		if err := m.context.feeds.WriteTracking(m.db); err != nil {
-			log.Printf("error writing tracking: %v", err)
-		}
+		m.writeTracking()
 		return m, tea.Quit
 	}
 

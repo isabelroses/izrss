@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"bytes"
+	"encoding/gob"
 	"fmt"
 	"log"
 	"strconv"
@@ -17,12 +19,51 @@ func (m *Model) loadFeedsCmd() tea.Cmd {
 	preferCache := m.fetcher.CheckCache()
 	urls := m.cfg.Urls
 
+	// If using cache, batch load all parsed feeds first for speed
+	if preferCache {
+		return m.loadFeedsFromCacheCmd(urls)
+	}
+
+	// For fresh fetches, load one at a time with progress updates
+	return m.loadFeedsFreshCmd(urls)
+}
+
+// loadFeedsFromCacheCmd loads all feeds from cache in one batch
+func (m *Model) loadFeedsFromCacheCmd(urls []string) tea.Cmd {
+	return func() tea.Msg {
+		// Batch load all parsed feeds in one query
+		cachedFeeds, err := m.db.LoadAllParsedFeeds()
+		if err != nil {
+			log.Printf("could not load parsed feeds cache: %v", err)
+			cachedFeeds = make(map[string][]byte)
+		}
+
+		feeds := make(rss.Feeds, 0, len(urls))
+		for _, url := range urls {
+			if cachedData, exists := cachedFeeds[url]; exists {
+				var feed rss.Feed
+				decoder := gob.NewDecoder(bytes.NewReader(cachedData))
+				if err := decoder.Decode(&feed); err == nil {
+					feeds = append(feeds, feed)
+					continue
+				}
+			}
+			// Fallback to individual fetch if not in cache
+			feeds = append(feeds, m.fetcher.GetContentForURL(url, true))
+		}
+
+		return BatchFeedsLoadedMsg{Feeds: feeds}
+	}
+}
+
+// loadFeedsFreshCmd loads feeds one at a time for fresh fetches
+func (m *Model) loadFeedsFreshCmd(urls []string) tea.Cmd {
 	// Create commands for each feed
 	cmds := make([]tea.Cmd, 0, len(urls)+1)
 	for _, url := range urls {
 		u := url // capture
 		cmds = append(cmds, func() tea.Msg {
-			feed := m.fetcher.GetContentForURL(u, preferCache)
+			feed := m.fetcher.GetContentForURL(u, false)
 			return FeedLoadedMsg{Feed: feed}
 		})
 	}
@@ -58,12 +99,17 @@ func (m *Model) loadHome() {
 	m.loadNewTable(columns, rows)
 }
 
-func (m *Model) loadMixed() {
-	columns := []table.Column{
+// postColumns returns the standard columns for post lists
+func (m *Model) postColumns() []table.Column {
+	return []table.Column{
 		{Title: "", Width: 2},
 		{Title: "Date", Width: 15},
 		{Title: "Title", Width: m.table.Width() - 17},
 	}
+}
+
+func (m *Model) loadMixed() {
+	columns := m.postColumns()
 
 	// Pre-calculate total size to avoid reallocation
 	totalPosts := 0
@@ -94,11 +140,7 @@ func (m *Model) loadContent(id int) {
 	feed := m.context.feeds[id]
 	feed.ID = id
 
-	columns := []table.Column{
-		{Title: "", Width: 2},
-		{Title: "Date", Width: 15},
-		{Title: "Title", Width: m.table.Width() - 17},
-	}
+	columns := m.postColumns()
 
 	rows := make([]table.Row, 0, len(feed.Posts))
 	for _, post := range feed.Posts {
