@@ -108,34 +108,6 @@ func (m *Model) postColumns() []table.Column {
 	}
 }
 
-func (m *Model) loadMixed() {
-	columns := m.postColumns()
-
-	// Pre-calculate total size to avoid reallocation
-	totalPosts := 0
-	for _, feed := range m.context.feeds {
-		totalPosts += len(feed.Posts)
-	}
-
-	posts := make([]rss.Post, 0, totalPosts)
-	for _, feed := range m.context.feeds {
-		posts = append(posts, feed.Posts...)
-	}
-
-	rss.SortPosts(posts, m.cfg.DateFormat)
-
-	rows := make([]table.Row, len(posts))
-	for i, post := range posts {
-		read := rss.ReadSymbol(post.Read)
-		rows[i] = table.Row{read, post.Date, post.Title}
-	}
-
-	m.context.feed = rss.Feed{Title: "Mixed", Posts: posts, ID: 0, URL: ""}
-
-	m.loadNewTable(columns, rows)
-	m.swapPage("mixed")
-}
-
 func (m *Model) loadContent(id int) {
 	feed := m.context.feeds[id]
 	feed.ID = id

@@ -78,7 +78,7 @@ func NewModel(cfg *config.Config, db *storage.DB, fetcher *rss.Fetcher) *Model {
 		Foreground(lipgloss.Color("229"))
 
 	return &Model{
-		context:     context{},
+		context:     context{curr: "home"},
 		viewport:    viewport.Model{},
 		table:       t,
 		ready:       false,
@@ -111,18 +111,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case FeedLoadedMsg:
 		m.context.feeds = append(m.context.feeds, msg.Feed)
 		m.loadedCount++
-		m.refreshView()
+		m.loadHome()
 	case BatchFeedsLoadedMsg:
 		m.context.feeds = msg.Feeds
 		m.loadedCount = len(msg.Feeds)
 		m.loading = false
 		m.readTracking()
-		m.refreshView()
+		m.loadHome()
 	case AllFeedsLoadedMsg:
 		m.loading = false
 		m.readTracking()
 		m.context.feeds = m.context.feeds.Sort(m.cfg.Urls)
-		m.refreshView()
+		m.loadHome()
 	}
 
 	m, cmd = m.updateViewport(msg)
@@ -151,22 +151,9 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
 	m.setupGlamour(width)
 
 	// Refresh the current view with new dimensions
-	if m.cfg.Home == "mixed" {
-		m.loadMixed()
-	} else {
-		m.loadHome()
-	}
+	m.loadHome()
 
 	return m
-}
-
-// refreshView reloads the current home view
-func (m *Model) refreshView() {
-	if m.cfg.Home == "mixed" {
-		m.loadMixed()
-	} else {
-		m.loadHome()
-	}
 }
 
 func (m *Model) setupGlamour(width int) {

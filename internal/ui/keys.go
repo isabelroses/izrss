@@ -71,14 +71,6 @@ func (k keyMap) FullHelp(m Model) [][]key.Binding {
 			{k.ToggleRead, k.ReadAll},
 			{k.Help, k.Quit},
 		}
-	case "mixed":
-		return [][]key.Binding{
-			{k.Up, k.Down},
-			{k.JumpUp, k.JumpDown},
-			{k.Back, k.Open},
-			{k.Search, k.ToggleRead},
-			{k.Help, k.Quit},
-		}
 	default:
 		return [][]key.Binding{}
 	}
@@ -146,30 +138,10 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.writeTracking()
 		}
 
-	case "mixed":
-		switch {
-		case key.Matches(msg, m.keys.Open):
-			m.loadReader()
-
-		case key.Matches(msg, m.keys.ToggleRead):
-			rss.ToggleRead(m.context.feeds, m.context.feed.ID, m.table.Cursor())
-			m.loadMixed()
-			m.writeTracking()
-
-		case key.Matches(msg, m.keys.ReadAll):
-			rss.ReadAll(m.context.feeds, m.context.feed.ID)
-			m.loadMixed()
-			m.writeTracking()
-		}
-
 	case "reader":
 		switch {
 		case key.Matches(msg, m.keys.Back):
-			if m.context.prev == "mixed" {
-				m.loadMixed()
-			} else {
-				m.loadContent(m.context.feed.ID)
-			}
+			m.loadContent(m.context.feed.ID)
 			m.table.SetCursor(m.context.post.ID)
 			m.viewport.SetYOffset(0)
 
