@@ -2,12 +2,13 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"os"
 
+	"github.com/alecthomas/kong"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/urfave/cli/v2"
 
 	"github.com/isabelroses/izrss/internal/config"
 	"github.com/isabelroses/izrss/internal/rss"
@@ -17,48 +18,36 @@ import (
 
 var version = "unstable"
 
-func main() {
-	cli.AppHelpTemplate = fmt.Sprintf(`%s
-CUSTOMIZATION:
-    The main bulk of customization is done via the "~/.config/izrss/config.toml" file. You can find an example file on the github page.
-
-    The rest of the config is done via using the environment variables "GLAMOUR_STYLE".
-    For a good example see: <https://github.com/catppuccin/glamour>`,
-		cli.AppHelpTemplate,
-	)
-
-	app := &cli.App{
-		Name:    "izrss",
-		Version: version,
-		Authors: []*cli.Author{{
-			Name:  "Isabel Roses",
-			Email: "isabel@isabelroses.com",
-		}},
-		Usage: "An RSS feed reader for the terminal.",
-
-		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:  "config",
-				Value: "",
-				Usage: "the path to your config file",
-			},
-			&cli.BoolFlag{
-				Name:  "count-unread",
-				Usage: "count the number of unread posts",
-			},
-		},
-
-		Action: run,
-	}
-
-	if err := app.Run(os.Args); err != nil {
-		log.Fatal(err)
-	}
+// CLI describes the command-line interface.
+type CLI struct {
+	Config      string           `help:"The path to your config file."`
+	CountUnread bool             `help:"Count the number of unread posts."`
+	Version     kong.VersionFlag `help:"Print the version and exit."`
 }
 
-func run(c *cli.Context) error {
+const description = `An RSS feed reader for the terminal.
+
+The main bulk of customization is done via the "~/.config/izrss/config.toml"
+file. You can find an example file on the github page.
+
+The rest of the config is done via the "GLAMOUR_STYLE" environment variable.
+For a good example see: https://github.com/catppuccin/glamour`
+
+func main() {
+	var cli CLI
+	kctx := kong.Parse(&cli,
+		kong.Name("izrss"),
+		kong.Description(description),
+		kong.Vars{"version": version},
+		kong.UsageOnError(),
+	)
+
+	kctx.FatalIfErrorf(run(&cli))
+}
+
+func run(cli *CLI) error {
 	// Load configuration
-	cfg, err := config.Load(c.String("config"))
+	cfg, err := config.Load(cli.Config)
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
@@ -76,27 +65,34 @@ func run(c *cli.Context) error {
 	}
 	defer func() { _ = db.Close() }()
 
-	// Create fetcher and load feeds
 	fetcher := rss.NewFetcher(db, cfg.DateFormat)
-	feeds := fetcher.GetAllContent(cfg.Urls, fetcher.CheckCache())
 
-	if err := feeds.ReadTracking(db); err != nil {
-		return fmt.Errorf("reading tracking data: %w", err)
-	}
-
-	// Handle count-unread flag
-	if c.Bool("count-unread") {
+	if cli.CountUnread {
+		feeds := fetcher.GetAllContent(cfg.Urls, true)
+		if err := feeds.ReadTracking(db); err != nil {
+			return fmt.Errorf("reading tracking data: %w", err)
+		}
 		fmt.Print(feeds.GetTotalUnreads())
 		return nil
 	}
 
-	// Run the TUI
 	m := ui.NewModel(cfg, db, fetcher)
-	m.SetFeeds(feeds)
+
+	// Buffer log output while the alt screen is active so stray errors can't
+	// corrupt the display; flush it once the TUI closes.
+	var logs bytes.Buffer
+	log.SetOutput(&logs)
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
-	if _, err := p.Run(); err != nil {
-		return fmt.Errorf("running TUI: %w", err)
+	_, runErr := p.Run()
+
+	log.SetOutput(os.Stderr)
+	if logs.Len() > 0 {
+		fmt.Fprint(os.Stderr, logs.String())
+	}
+
+	if runErr != nil {
+		return fmt.Errorf("running TUI: %w", runErr)
 	}
 
 	return nil
