@@ -112,10 +112,15 @@ func (m *Model) loadSearchValues() {
 }
 
 func (m *Model) loadNewTable(columns []table.Column, rows []table.Row) {
-	// Clear rows first to prevent panic
-	m.table.SetRows([]table.Row{})
+	cursor := m.table.Cursor()
+
+	// Clear the rows before swapping columns so a row can't be rendered against a
+	// different column count (which panics). bubbles >= v1 clamps the cursor to
+	// the row count on SetRows, so clearing detaches it; reattach + clamp after.
+	m.table.SetRows(nil)
 	m.table.SetColumns(columns)
 	m.table.SetRows(rows)
+	m.table.SetCursor(cursor)
 }
 
 func (m *Model) loadReader() {
