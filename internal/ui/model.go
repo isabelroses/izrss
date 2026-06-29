@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 
 	"github.com/isabelroses/izrss/internal/config"
 	"github.com/isabelroses/izrss/internal/rss"
@@ -27,10 +28,11 @@ type Model struct {
 	ready    bool
 
 	// Dependencies
-	cfg     *config.Config
-	db      *storage.DB
-	fetcher *rss.Fetcher
-	styles  *Styles
+	cfg       *config.Config
+	db        *storage.DB
+	fetcher   *rss.Fetcher
+	styles    *Styles
+	glamStyle string
 }
 
 // Init loads feeds from cache for an instant first paint, then refreshes them
@@ -55,18 +57,27 @@ func NewModel(cfg *config.Config, db *storage.DB, fetcher *rss.Fetcher) *Model {
 		Bold(true).
 		Foreground(lipgloss.Color("229"))
 
+	// Resolve the background now, before bubbletea owns stdin. Glamour's auto-style
+	// detects it lazily on first render, but by then bubbletea swallows the
+	// terminal's reply, so glamour blocks ~5s and freezes the UI.
+	glamStyle := "light"
+	if termenv.HasDarkBackground() {
+		glamStyle = "dark"
+	}
+
 	return &Model{
-		context:  context{},
-		viewport: viewport.Model{},
-		table:    t,
-		ready:    false,
-		help:     NewHelp(styles),
-		keys:     defaultKeyMap,
-		filter:   f,
-		cfg:      cfg,
-		db:       db,
-		fetcher:  fetcher,
-		styles:   styles,
+		context:   context{},
+		viewport:  viewport.Model{},
+		table:     t,
+		ready:     false,
+		help:      NewHelp(styles),
+		keys:      defaultKeyMap,
+		filter:    f,
+		cfg:       cfg,
+		db:        db,
+		fetcher:   fetcher,
+		styles:    styles,
+		glamStyle: glamStyle,
 	}
 }
 
@@ -157,7 +168,7 @@ func (m *Model) setupGlamour(width int) {
 	case "environment":
 		glamTheme = glamour.WithEnvironmentConfig()
 	case "":
-		glamTheme = glamour.WithAutoStyle()
+		glamTheme = glamour.WithStandardStyle(m.glamStyle)
 	default:
 		glamTheme = glamour.WithStylePath(m.cfg.Reader.Theme)
 	}
