@@ -2,6 +2,7 @@
 package rss
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"log"
@@ -15,15 +16,23 @@ import (
 	"github.com/isabelroses/izrss/internal/storage"
 )
 
+// httpClient's timeout stops one hung feed from stalling a whole refresh.
+var httpClient = &http.Client{Timeout: 20 * time.Second}
+
+// maxConcurrentFetches bounds peak memory: each in-flight feed holds its full
+// body and parsed object graph, so a large feed list would otherwise spike.
+const maxConcurrentFetches = 12
+
 // Post represents a single post in a feed
 type Post struct {
-	UUID    string
-	Title   string
-	Content string
-	Link    string
-	Date    string
-	ID      int
-	Read    bool
+	Published time.Time
+	UUID      string
+	Title     string
+	Content   string
+	Link      string
+	Date      string
+	ID        int
+	Read      bool
 }
 
 // Feed represents a single feed
@@ -57,15 +66,10 @@ func (f Feeds) GetTotalUnreads() int {
 	return total
 }
 
-// SortPosts sorts posts by date in descending order
-func SortPosts(posts []Post, dateFormat string) {
-	sort.Slice(posts, func(i, j int) bool {
-		dateI, errI := time.Parse(dateFormat, posts[i].Date)
-		dateJ, errJ := time.Parse(dateFormat, posts[j].Date)
-		if errI != nil || errJ != nil {
-			return false
-		}
-		return dateI.After(dateJ)
+// SortPosts sorts posts by publish date in descending order
+func SortPosts(posts []Post) {
+	sort.SliceStable(posts, func(i, j int) bool {
+		return posts[i].Published.After(posts[j].Published)
 	})
 }
 
@@ -101,7 +105,12 @@ func MarkRead(feeds Feeds, feedID, postID int) {
 
 // WriteTracking saves the tracking state to the database
 func (feeds Feeds) WriteTracking(db *storage.DB) error {
-	var statuses []storage.PostReadStatus
+	total := 0
+	for _, feed := range feeds {
+		total += len(feed.Posts)
+	}
+
+	statuses := make([]storage.PostReadStatus, 0, total)
 	for _, feed := range feeds {
 		for _, post := range feed.Posts {
 			statuses = append(statuses, storage.PostReadStatus{
@@ -154,7 +163,7 @@ func (f *Fetcher) FetchURL(url string, preferCache bool) ([]byte, error) {
 		}
 	}
 
-	resp, err := http.Get(url)
+	resp, err := httpClient.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("fetching URL %s: %w", url, err)
 	}
@@ -223,12 +232,15 @@ func (f *Fetcher) createPost(item *gofeed.Item) Post {
 		content = "This post does not contain any content.\nPress \"o\" to open the post in your preferred browser"
 	}
 
+	published, date := parseDate(item, f.dateFormat)
+
 	return Post{
-		Title:   item.Title,
-		Content: content,
-		Link:    item.Link,
-		Date:    convertDate(item.Published, f.dateFormat),
-		UUID:    item.GUID,
+		Title:     item.Title,
+		Content:   content,
+		Link:      item.Link,
+		Date:      date,
+		Published: published,
+		UUID:      item.GUID,
 	}
 }
 
@@ -243,8 +255,7 @@ func (f *Fetcher) setupReader(url string, preferCache bool) *gofeed.Feed {
 		return nil
 	}
 
-	fp := gofeed.NewParser()
-	feed, err := fp.ParseString(string(data))
+	feed, err := gofeed.NewParser().Parse(bytes.NewReader(data))
 	if err != nil {
 		log.Printf("could not parse feed %s: %v", url, err)
 		return nil
@@ -264,10 +275,13 @@ func (f *Fetcher) GetAllContent(urls []string, preferCache bool) Feeds {
 	var wg sync.WaitGroup
 	responses := make(chan Feed, len(urls))
 
+	sem := make(chan struct{}, maxConcurrentFetches)
 	for _, url := range urls {
 		wg.Add(1)
 		go func(u string) {
 			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
 			responses <- f.GetContentForURL(u, preferCache)
 		}(url)
 	}
@@ -285,49 +299,42 @@ func (f *Fetcher) GetAllContent(urls []string, preferCache bool) Feeds {
 	return feeds.sort(urls)
 }
 
-// CheckCache returns true if cached data should be used
-func (f *Fetcher) CheckCache() bool {
-	last, err := f.db.GetCacheTime()
-	if err != nil {
-		log.Printf("could not get cache time: %v", err)
-		return false
-	}
-
-	if last == nil {
-		return false
-	}
-
-	return time.Since(*last) <= 24*time.Hour
-}
-
 // Helper functions
 
-func convertDate(dateString, dateFormat string) string {
-	layouts := []string{
-		"Mon, 02 Jan 2006 15:04:05 -0700",
-		"Mon, 02 Jan 2006 15:04:05 MST",
-		"Monday, 02-Jan-06 15:04:05 MST",
-		"02 Jan 2006 15:04:05 -0700",
-		"02 Jan 2006 15:04:05 +0000",
-		"02 Jan 2006 15:04:05 MST",
-		"02-Jan-06 15:04:05 MST",
-		"2006-02-01T15:04:05",
-		"2006-01-02T15:04:05",
-		"January 02, 2006",
-		"02/Jan/2006",
-		"02-Jan-2006",
-		"2006-01-02",
-		"01/02/2006",
-		time.RFC3339,
+// dateLayouts are tried, in order, when gofeed does not provide a pre-parsed
+// timestamp for an item.
+var dateLayouts = []string{
+	"Mon, 02 Jan 2006 15:04:05 -0700",
+	"Mon, 02 Jan 2006 15:04:05 MST",
+	"Monday, 02-Jan-06 15:04:05 MST",
+	"02 Jan 2006 15:04:05 -0700",
+	"02 Jan 2006 15:04:05 +0000",
+	"02 Jan 2006 15:04:05 MST",
+	"02-Jan-06 15:04:05 MST",
+	"2006-02-01T15:04:05",
+	"2006-01-02T15:04:05",
+	"January 02, 2006",
+	"02/Jan/2006",
+	"02-Jan-2006",
+	"2006-01-02",
+	"01/02/2006",
+	time.RFC3339,
+}
+
+// parseDate returns an item's publish time (for sorting) and display string,
+// preferring gofeed's pre-parsed timestamp and falling back to manual layouts.
+func parseDate(item *gofeed.Item, dateFormat string) (time.Time, string) {
+	if item.PublishedParsed != nil {
+		return *item.PublishedParsed, item.PublishedParsed.Format(dateFormat)
 	}
 
-	for _, layout := range layouts {
-		if parsedDate, err := time.Parse(layout, dateString); err == nil {
-			return parsedDate.Format(dateFormat)
+	for _, layout := range dateLayouts {
+		if t, err := time.Parse(layout, item.Published); err == nil {
+			return t, t.Format(dateFormat)
 		}
 	}
 
-	return dateString
+	return time.Time{}, item.Published
 }
 
 // ReadSymbol returns a bullet character for unread posts, empty string for read
