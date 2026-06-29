@@ -15,12 +15,20 @@ type DB struct {
 	conn *sql.DB
 }
 
-// New creates a new database connection at the specified path
+// New creates a new database connection at the specified path. WAL mode and a
+// busy timeout let the background refresh write without "database is locked".
 func New(path string) (*DB, error) {
-	conn, err := sql.Open("sqlite3", path)
+	dsn := path + "?_journal_mode=WAL&_busy_timeout=5000"
+	conn, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("opening database: %w", err)
 	}
+
+	// Bound the pool and release idle connections so a refresh can't keep a
+	// connection open per feed.
+	conn.SetMaxOpenConns(8)
+	conn.SetMaxIdleConns(2)
+	conn.SetConnMaxIdleTime(time.Minute)
 
 	db := &DB{conn: conn}
 	if err := db.createTables(); err != nil {
