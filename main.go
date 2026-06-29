@@ -16,7 +16,7 @@ import (
 	"github.com/isabelroses/izrss/internal/ui"
 )
 
-var version = "unstable"
+var Version = "unstable"
 
 // CLI describes the command-line interface.
 type CLI struct {
@@ -38,7 +38,7 @@ func main() {
 	kctx := kong.Parse(&cli,
 		kong.Name("izrss"),
 		kong.Description(description),
-		kong.Vars{"version": version},
+		kong.Vars{"version": Version},
 		kong.UsageOnError(),
 	)
 
