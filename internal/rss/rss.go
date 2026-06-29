@@ -194,6 +194,7 @@ func (f *Fetcher) GetContentForURL(url string, preferCache bool) Feed {
 		feedRet.Posts = append(feedRet.Posts, f.createPost(item))
 	}
 
+	SortPosts(feedRet.Posts)
 	return feedRet
 }
 
@@ -209,6 +210,7 @@ func (f *Fetcher) GetPosts(url string) []Post {
 		posts = append(posts, f.createPost(item))
 	}
 
+	SortPosts(posts)
 	return posts
 }
 
