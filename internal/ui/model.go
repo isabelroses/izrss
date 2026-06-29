@@ -33,10 +33,12 @@ type Model struct {
 	styles  *Styles
 }
 
-// Init sets the initial state of the model
+// Init loads feeds from cache for an instant first paint, then refreshes them
+// over the network, so the UI never blocks on startup.
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		tea.SetWindowTitle("izrss"),
+		tea.Sequence(m.loadCachedFeeds(), m.refreshAll()),
 	)
 }
 
@@ -81,6 +83,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		m, cmd = m.handleKeys(msg)
 		cmds = append(cmds, cmd)
+	case feedsRefreshedMsg:
+		m.context.feeds = msg.feeds
+		m.reloadList()
+	case feedRefreshedMsg:
+		if msg.id >= 0 && msg.id < len(m.context.feeds) {
+			m.context.feeds[msg.id].Posts = msg.posts
+			if err := m.context.feeds.ReadTracking(m.db); err != nil {
+				log.Printf("error reading tracking: %v", err)
+			}
+		}
+		m.reloadList()
 	}
 
 	m, cmd = m.updateViewport(msg)

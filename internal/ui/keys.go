@@ -81,27 +81,10 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 
 		case key.Matches(msg, m.keys.Refresh):
 			id := m.table.Cursor()
-			feed := &m.context.feeds[id]
-
-			_, err := m.fetcher.FetchURL(feed.URL, false)
-			if err != nil {
-				log.Printf("error fetching feed URL: %v", err)
-				break
-			}
-
-			feed.Posts = m.fetcher.GetPosts(feed.URL)
-			if err := m.context.feeds.ReadTracking(m.db); err != nil {
-				log.Printf("error reading tracking: %v", err)
-			}
-			m.loadHome()
-			m.table.MoveDown(id)
+			return m, m.refreshFeed(id, m.context.feeds[id].URL)
 
 		case key.Matches(msg, m.keys.RefreshAll):
-			m.context.feeds = m.fetcher.GetAllContent(m.cfg.Urls, false)
-			if err := m.context.feeds.ReadTracking(m.db); err != nil {
-				log.Printf("error reading tracking: %v", err)
-			}
-			m.loadHome()
+			return m, m.refreshAll()
 
 		case key.Matches(msg, m.keys.ReadAll):
 			rss.ReadAll(m.context.feeds, m.table.Cursor())
@@ -114,12 +97,7 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "content":
 		switch {
 		case key.Matches(msg, m.keys.Refresh):
-			feed := &m.context.feed
-			feed.Posts = m.fetcher.GetPosts(feed.URL)
-			if err := m.context.feeds.ReadTracking(m.db); err != nil {
-				log.Printf("error reading tracking: %v", err)
-			}
-			m.loadContent(m.context.feed.ID)
+			return m, m.refreshFeed(m.context.feed.ID, m.context.feed.URL)
 
 		case key.Matches(msg, m.keys.Back):
 			m.loadHome()
