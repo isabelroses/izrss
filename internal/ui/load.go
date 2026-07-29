@@ -5,22 +5,25 @@ import (
 	"log"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/table"
+	"charm.land/bubbles/v2/table"
 	"github.com/mattn/go-runewidth"
 
 	"github.com/isabelroses/izrss/internal/rss"
 )
 
+const boldOn, boldOff = "\x1b[1m", "\x1b[22m"
+
+// boldOverhead is the constant display width the bold-on/off escapes add.
+var boldOverhead = runewidth.StringWidth(boldOn) + runewidth.StringWidth(boldOff)
+
 // boldUnread bolds s with an explicit bold-off (SGR 22) instead of a full reset
 // so the table's selected-row highlight survives, and pre-truncates so the
 // table's ANSI-unaware truncation can't cut an escape sequence.
 func boldUnread(s string, width int) string {
-	const on, off = "\x1b[1m", "\x1b[22m"
-	overhead := runewidth.StringWidth(on) + runewidth.StringWidth(off)
-	if width > overhead && runewidth.StringWidth(s)+overhead > width {
-		s = runewidth.Truncate(s, width-overhead, "…")
+	if width > boldOverhead && runewidth.StringWidth(s)+boldOverhead > width {
+		s = runewidth.Truncate(s, width-boldOverhead, "…")
 	}
-	return on + s + off
+	return boldOn + s + boldOff
 }
 
 // loadHome loads the home view with the list of feeds
@@ -81,6 +84,11 @@ func (m *Model) loadMixed() {
 }
 
 func (m *Model) loadContent(id int) {
+	// The cursor is -1 while the feed list is still empty.
+	if id < 0 || id >= len(m.context.feeds) {
+		return
+	}
+
 	feed := m.context.feeds[id]
 	feed.ID = id
 
@@ -143,14 +151,16 @@ func (m *Model) loadNewTable(columns []table.Column, rows []table.Row) {
 
 func (m *Model) loadReader() {
 	id := m.table.Cursor()
+	if id < 0 || id >= len(m.context.feed.Posts) {
+		return
+	}
+
 	post := m.context.feed.Posts[id]
 	post.ID = id
 
 	m.swapPage("reader")
 	m.context.post = post
-	m.viewport.YPosition = 0
 
-	// Render the post
 	fromMd, err := htmlToMarkdown.ConvertString(post.Content)
 	if err != nil {
 		log.Printf("could not convert html to markdown: %v", err)
@@ -164,5 +174,5 @@ func (m *Model) loadReader() {
 	}
 
 	m.viewport.SetContent(out)
-	m.viewport.Height = m.viewport.Height - 2
+	m.viewport.SetHeight(m.viewport.Height() - 2)
 }

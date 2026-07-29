@@ -7,8 +7,8 @@ import (
 	"log"
 	"os"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/alecthomas/kong"
-	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/isabelroses/izrss/internal/config"
 	"github.com/isabelroses/izrss/internal/rss"
@@ -46,7 +46,6 @@ func main() {
 }
 
 func run(cli *CLI) error {
-	// Load configuration
 	cfg, err := config.Load(cli.Config)
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
@@ -58,7 +57,6 @@ func run(cli *CLI) error {
 		os.Exit(1)
 	}
 
-	// Initialize database
 	db, err := storage.NewDefault()
 	if err != nil {
 		return fmt.Errorf("initializing database: %w", err)
@@ -83,7 +81,7 @@ func run(cli *CLI) error {
 	var logs bytes.Buffer
 	log.SetOutput(&logs)
 
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	p := tea.NewProgram(m)
 	_, runErr := p.Run()
 
 	log.SetOutput(os.Stderr)

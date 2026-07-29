@@ -6,9 +6,9 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/isabelroses/izrss/internal/rss"
 )
@@ -70,7 +70,7 @@ func (k keyMap) FullHelp(m Model) [][]key.Binding {
 	}
 }
 
-func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
+func (m Model) handleKeys(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	switch m.context.curr {
 	case "home":
 		switch {
@@ -81,13 +81,20 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 
 		case key.Matches(msg, m.keys.Refresh):
 			id := m.table.Cursor()
+			if id < 0 || id >= len(m.context.feeds) {
+				return m, nil
+			}
 			return m, m.refreshFeed(id, m.context.feeds[id].URL)
 
 		case key.Matches(msg, m.keys.RefreshAll):
 			return m, m.refreshAll()
 
 		case key.Matches(msg, m.keys.ReadAll):
-			rss.ReadAll(m.context.feeds, m.table.Cursor())
+			id := m.table.Cursor()
+			if id < 0 || id >= len(m.context.feeds) {
+				return m, nil
+			}
+			rss.ReadAll(m.context.feeds, id)
 			m.loadHome()
 			if err := m.context.feeds.WriteTracking(m.db); err != nil {
 				log.Printf("error writing tracking: %v", err)
@@ -108,9 +115,13 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.loadReader()
 
 		case key.Matches(msg, m.keys.ToggleRead):
-			rss.ToggleRead(m.context.feeds, m.context.feed.ID, m.table.Cursor())
+			post := m.table.Cursor()
+			if post < 0 || post >= len(m.context.feeds[m.context.feed.ID].Posts) {
+				return m, nil
+			}
+			rss.ToggleRead(m.context.feeds, m.context.feed.ID, post)
 			m.loadContent(m.context.feed.ID)
-			if err := m.context.feeds.WriteTracking(m.db); err != nil {
+			if err := m.context.feeds.WritePostTracking(m.db, m.context.feed.ID, post); err != nil {
 				log.Printf("error writing tracking: %v", err)
 			}
 
@@ -128,9 +139,13 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.loadReader()
 
 		case key.Matches(msg, m.keys.ToggleRead):
-			rss.ToggleRead(m.context.feeds, m.context.feed.ID, m.table.Cursor())
+			post := m.table.Cursor()
+			if post < 0 || post >= len(m.context.feeds[m.context.feed.ID].Posts) {
+				return m, nil
+			}
+			rss.ToggleRead(m.context.feeds, m.context.feed.ID, post)
 			m.loadMixed()
-			if err := m.context.feeds.WriteTracking(m.db); err != nil {
+			if err := m.context.feeds.WritePostTracking(m.db, m.context.feed.ID, post); err != nil {
 				log.Printf("error writing tracking: %v", err)
 			}
 
@@ -161,7 +176,7 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.ToggleRead):
 			rss.ToggleRead(m.context.feeds, m.context.feed.ID, m.context.post.ID)
 			m.loadContent(m.context.feed.ID)
-			if err := m.context.feeds.WriteTracking(m.db); err != nil {
+			if err := m.context.feeds.WritePostTracking(m.db, m.context.feed.ID, m.context.post.ID); err != nil {
 				log.Printf("error writing tracking: %v", err)
 			}
 		}
@@ -178,7 +193,6 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 		}
 	}
 
-	// Global keys
 	switch {
 	case key.Matches(msg, m.keys.JumpUp):
 		m.table.MoveUp(5)
@@ -192,7 +206,7 @@ func (m Model) handleKeys(msg tea.KeyMsg) (Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.Help):
 		m.help.ShowAll = !m.help.ShowAll
-		m.table.SetHeight(m.viewport.Height - lipgloss.Height(m.help.View(m.keys, m)))
+		m.table.SetHeight(m.viewport.Height() - lipgloss.Height(m.help.View(m.keys, m)))
 
 	case key.Matches(msg, m.keys.Quit):
 		if err := m.context.feeds.WriteTracking(m.db); err != nil {

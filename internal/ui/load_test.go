@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/bubbles/table"
+	"charm.land/bubbles/v2/table"
 	"github.com/mattn/go-runewidth"
 )
 
@@ -23,6 +23,29 @@ func TestLoadNewTable_PreservesCursor(t *testing.T) {
 
 	if got := m.table.Cursor(); got != 2 {
 		t.Errorf("expected cursor preserved at 2, got %d", got)
+	}
+}
+
+// The bubbles v2 table cursor is -1 while the feed list is empty; opening a
+// feed then must not panic indexing the empty slice.
+func TestLoadContent_EmptyFeedsIsNoOp(t *testing.T) {
+	m := &Model{table: table.New(table.WithFocused(true))}
+
+	m.loadContent(-1)
+	m.loadContent(0)
+
+	if m.context.curr == "content" {
+		t.Errorf("loadContent should not switch to content view with no feeds")
+	}
+}
+
+func TestLoadReader_EmptyPostsIsNoOp(t *testing.T) {
+	m := &Model{table: table.New(table.WithFocused(true))}
+
+	m.loadReader()
+
+	if m.context.curr == "reader" {
+		t.Errorf("loadReader should not switch to reader view with no posts")
 	}
 }
 

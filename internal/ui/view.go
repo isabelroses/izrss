@@ -3,17 +3,18 @@ package ui
 import (
 	"fmt"
 
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
-// View renders the model as a string
-func (m Model) View() string {
-	if !m.ready {
-		return "Initializing..."
-	}
-
-	if m.context.curr == "reader" {
-		return m.styles.Main.Render(
+// View renders the model as a tea.View
+func (m Model) View() tea.View {
+	var content string
+	switch {
+	case !m.ready:
+		content = "Initializing..."
+	case m.context.curr == "reader":
+		content = m.styles.Main.Render(
 			lipgloss.JoinVertical(
 				lipgloss.Top,
 				fmt.Sprintf("%s - %3.f%%", m.context.post.Title, m.viewport.ScrollPercent()*100),
@@ -21,7 +22,12 @@ func (m Model) View() string {
 				m.help.View(m.keys, m),
 			),
 		)
+	default:
+		content = m.styles.Main.Render(m.viewport.View())
 	}
 
-	return m.styles.Main.Render(m.viewport.View())
+	v := tea.NewView(content)
+	v.AltScreen = true
+	v.WindowTitle = "izrss"
+	return v
 }

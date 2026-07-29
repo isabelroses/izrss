@@ -16,6 +16,6 @@ func (m *Model) swapPage(next string) {
 	m.context.prev = m.context.curr
 	m.context.curr = next
 	if m.context.prev == "reader" {
-		m.viewport.Height = m.viewport.Height + 2
+		m.viewport.SetHeight(m.viewport.Height() + 2)
 	}
 }

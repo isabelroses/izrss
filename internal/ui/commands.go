@@ -3,7 +3,7 @@ package ui
 import (
 	"log"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/isabelroses/izrss/internal/rss"
 )

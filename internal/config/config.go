@@ -9,7 +9,6 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
-// Config holds the application configuration
 type Config struct {
 	Home       string   `toml:"home"`
 	DateFormat string   `toml:"dateformat"`
@@ -18,14 +17,12 @@ type Config struct {
 	Colors     Colors   `toml:"colors"`
 }
 
-// Reader contains reader-specific configuration
 type Reader struct {
 	Size          any     `toml:"size"`
 	Theme         string  `toml:"theme"`
 	ReadThreshold float64 `toml:"read_threshold"`
 }
 
-// Colors contains UI color configuration
 type Colors struct {
 	Text       string `toml:"text"`
 	Inverttext string `toml:"inverttext"`
@@ -34,7 +31,6 @@ type Colors struct {
 	Borders    string `toml:"borders"`
 }
 
-// Default returns the default configuration
 func Default() *Config {
 	return &Config{
 		Home:       "home",
@@ -69,7 +65,6 @@ func Load(path string) (*Config, error) {
 
 	configRaw, err := os.ReadFile(path)
 	if err != nil {
-		// Config file doesn't exist, use defaults
 		return cfg, nil
 	}
 

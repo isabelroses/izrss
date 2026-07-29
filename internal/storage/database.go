@@ -48,7 +48,6 @@ func NewDefault() (*DB, error) {
 	return New(dbPath)
 }
 
-// Close closes the database connection
 func (db *DB) Close() error {
 	if db.conn != nil {
 		return db.conn.Close()
@@ -80,7 +79,6 @@ func (db *DB) createTables() error {
 	return err
 }
 
-// PostReadStatus represents a post's read status in the database
 type PostReadStatus struct {
 	UUID    string
 	FeedURL string

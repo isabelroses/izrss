@@ -23,7 +23,6 @@ var httpClient = &http.Client{Timeout: 20 * time.Second}
 // body and parsed object graph, so a large feed list would otherwise spike.
 const maxConcurrentFetches = 12
 
-// Post represents a single post in a feed
 type Post struct {
 	Published time.Time
 	UUID      string
@@ -35,7 +34,6 @@ type Post struct {
 	Read      bool
 }
 
-// Feed represents a single feed
 type Feed struct {
 	Title string
 	URL   string
@@ -43,7 +41,6 @@ type Feed struct {
 	ID    int
 }
 
-// Feeds represents a collection of feeds
 type Feeds []Feed
 
 // GetTotalUnreads returns the total number of unread posts in a feed
@@ -86,7 +83,6 @@ func (f Feeds) sort(urls []string) Feeds {
 	return f
 }
 
-// ToggleRead toggles the read status of a post
 func ToggleRead(feeds Feeds, feedID, postID int) {
 	feeds[feedID].Posts[postID].Read = !feeds[feedID].Posts[postID].Read
 }
@@ -98,7 +94,6 @@ func ReadAll(feeds Feeds, feedID int) {
 	}
 }
 
-// MarkRead marks a post as read
 func MarkRead(feeds Feeds, feedID, postID int) {
 	feeds[feedID].Posts[postID].Read = true
 }
@@ -121,6 +116,13 @@ func (feeds Feeds) WriteTracking(db *storage.DB) error {
 		}
 	}
 	return db.SavePostReadStatuses(statuses)
+}
+
+// WritePostTracking persists just the read status of feeds[feedID].Posts[postID],
+// rather than rewriting every post like WriteTracking.
+func (feeds Feeds) WritePostTracking(db *storage.DB, feedID, postID int) error {
+	post := feeds[feedID].Posts[postID]
+	return db.SavePostReadStatus(post.UUID, feeds[feedID].URL, post.Read)
 }
 
 // ReadTracking reads the tracking state from the database
@@ -147,7 +149,6 @@ type Fetcher struct {
 	dateFormat string
 }
 
-// NewFetcher creates a new Fetcher
 func NewFetcher(db *storage.DB, dateFormat string) *Fetcher {
 	return &Fetcher{
 		db:         db,
@@ -298,8 +299,6 @@ func (f *Fetcher) GetAllContent(urls []string, preferCache bool) Feeds {
 
 	return feeds.sort(urls)
 }
-
-// Helper functions
 
 // dateLayouts are tried, in order, when gofeed does not provide a pre-parsed
 // timestamp for an item.

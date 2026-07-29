@@ -3,12 +3,12 @@ package ui
 import (
 	"log"
 
-	"github.com/charmbracelet/bubbles/table"
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/table"
+	"charm.land/bubbles/v2/textinput"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/glamour"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 
 	"github.com/isabelroses/izrss/internal/config"
@@ -27,7 +27,6 @@ type Model struct {
 	table    table.Model
 	ready    bool
 
-	// Dependencies
 	cfg       *config.Config
 	db        *storage.DB
 	fetcher   *rss.Fetcher
@@ -38,10 +37,7 @@ type Model struct {
 // Init loads feeds from cache for an instant first paint, then refreshes them
 // over the network, so the UI never blocks on startup.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(
-		tea.SetWindowTitle("izrss"),
-		tea.Sequence(m.loadCachedFeeds(), m.refreshAll()),
-	)
+	return tea.Sequence(m.loadCachedFeeds(), m.refreshAll())
 }
 
 // NewModel creates a new model with sensible defaults
@@ -51,23 +47,26 @@ func NewModel(cfg *config.Config, db *storage.DB, fetcher *rss.Fetcher) *Model {
 	t := table.New(table.WithFocused(true))
 	t.SetStyles(TableStyles(cfg))
 
-	f := textinput.New()
-	f.Prompt = "Filter: "
-	f.PromptStyle = lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("229"))
-
 	// Resolve the background now, before bubbletea owns stdin. Glamour's auto-style
 	// detects it lazily on first render, but by then bubbletea swallows the
 	// terminal's reply, so glamour blocks ~5s and freezes the UI.
+	isDark := termenv.HasDarkBackground()
 	glamStyle := "light"
-	if termenv.HasDarkBackground() {
+	if isDark {
 		glamStyle = "dark"
 	}
 
+	f := textinput.New()
+	f.Prompt = "Filter: "
+	fStyles := textinput.DefaultStyles(isDark)
+	fStyles.Focused.Prompt = lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("229"))
+	f.SetStyles(fStyles)
+
 	return &Model{
 		context:   context{},
-		viewport:  viewport.Model{},
+		viewport:  viewport.New(),
 		table:     t,
 		ready:     false,
 		help:      NewHelp(styles),
@@ -91,7 +90,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m = m.handleWindowSize(msg)
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		m, cmd = m.handleKeys(msg)
 		cmds = append(cmds, cmd)
 	case feedsRefreshedMsg:
@@ -123,7 +122,7 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
 	m.table.SetHeight(height - lipgloss.Height(m.help.View(m.keys, m)))
 
 	if !m.ready {
-		m.viewport = viewport.New(width, height)
+		m.viewport = viewport.New(viewport.WithWidth(width), viewport.WithHeight(height))
 
 		m.setupGlamour(width)
 
@@ -135,8 +134,8 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
 
 		m.ready = true
 	} else {
-		m.viewport.Width = width
-		m.viewport.Height = height
+		m.viewport.SetWidth(width)
+		m.viewport.SetHeight(height)
 	}
 
 	return m
@@ -212,12 +211,11 @@ func (m Model) updateViewport(msg tea.Msg) (Model, tea.Cmd) {
 		m.viewport.SetContent(view)
 	}
 
-	// Auto-mark post as read when scrolled past the threshold
 	if m.context.curr == "reader" && m.viewport.ScrollPercent() >= m.cfg.Reader.ReadThreshold {
 		post := &m.context.feeds[m.context.feed.ID].Posts[m.context.post.ID]
 		if !post.Read {
 			rss.MarkRead(m.context.feeds, m.context.feed.ID, m.context.post.ID)
-			if err := m.context.feeds.WriteTracking(m.db); err != nil {
+			if err := m.context.feeds.WritePostTracking(m.db, m.context.feed.ID, m.context.post.ID); err != nil {
 				log.Printf("error writing tracking: %v", err)
 			}
 		}
