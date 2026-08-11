@@ -2,14 +2,14 @@ package ui
 
 import (
 	"log"
+	"os"
 
 	"charm.land/bubbles/v2/table"
 	"charm.land/bubbles/v2/textinput"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/glamour/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/glamour"
-	"github.com/muesli/termenv"
 
 	"github.com/isabelroses/izrss/internal/config"
 	"github.com/isabelroses/izrss/internal/rss"
@@ -47,10 +47,10 @@ func NewModel(cfg *config.Config, db *storage.DB, fetcher *rss.Fetcher) *Model {
 	t := table.New(table.WithFocused(true))
 	t.SetStyles(TableStyles(cfg))
 
-	// Resolve the background now, before bubbletea owns stdin. Glamour's auto-style
-	// detects it lazily on first render, but by then bubbletea swallows the
-	// terminal's reply, so glamour blocks ~5s and freezes the UI.
-	isDark := termenv.HasDarkBackground()
+	// Resolve the background now, before bubbletea owns stdin: querying it later
+	// means bubbletea swallows the terminal's reply and we block ~5s waiting on a
+	// response that never arrives. Glamour v2 has no auto-style, so we pick one.
+	isDark := lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
 	glamStyle := "light"
 	if isDark {
 		glamStyle = "dark"
