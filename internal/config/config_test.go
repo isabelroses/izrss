@@ -35,7 +35,7 @@ func TestDefault(t *testing.T) {
 		t.Errorf("unexpected defaults: %+v", cfg)
 	}
 	r := cfg.Reader
-	if r.Size != "recomended" || r.ReadThreshold != 0.8 || r.Theme != "" {
+	if r.Size != "recommended" || r.Width != (Width{Cols: 80}) || r.ReadThreshold != 0.8 || r.Theme != "" {
 		t.Errorf("unexpected reader defaults: %+v", r)
 	}
 	want := Colors{Text: "#cdd6f4", Inverttext: "#1e1e2e", Subtext: "#a6adc8", Accent: "#74c7ec", Borders: "#313244"}

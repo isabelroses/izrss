@@ -68,3 +68,61 @@ func TestExampleConfigLoads(t *testing.T) {
 		t.Errorf("example reader keys not loaded: %+v", cfg.Reader)
 	}
 }
+
+func TestReaderWidth(t *testing.T) {
+	tests := []struct {
+		size  any
+		width int
+		want  int
+	}{
+		{"full", 120, 120},
+		{"fullscreen", 120, 120},
+		{"most", 120, 90},
+		{"recommended", 120, 80},
+		{"recomended", 120, 80},
+		{int64(60), 120, 60},
+		{int64(500), 120, 120},
+		{int64(5), 120, 20},
+		{"full", 10, 10},
+		{nil, 120, 80},
+		{"wide", 120, 80},
+	}
+	for _, tt := range tests {
+		w, _ := widthOf(tt.size)
+		if got := w.Of(tt.width); got != tt.want {
+			t.Errorf("width of %v in %d = %d, want %d", tt.size, tt.width, got, tt.want)
+		}
+	}
+}
+
+// Values the reader can't use are logged at load and replaced by defaults,
+// rather than each being guessed at where it is used.
+func TestLoad_ResolvesReaderValues(t *testing.T) {
+	logged := captureLog(t)
+	cfg, err := Load(writeConfig(t, `[reader]
+size = "wide"
+images = "sometimes"
+read_threshold = 1.5
+image_max_height = -3
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := cfg.Reader
+	if r.Width != (Width{Cols: 80}) || r.Images != "auto" || r.ReadThreshold != 0.8 || r.ImageMaxHeight != 0 {
+		t.Errorf("resolved = %+v", r)
+	}
+	for _, key := range []string{"reader.size", "reader.images", "reader.read_threshold", "reader.image_max_height"} {
+		if !bytes.Contains(logged.Bytes(), []byte(key)) {
+			t.Errorf("%s not logged: %q", key, logged)
+		}
+	}
+
+	cfg, err = Load(writeConfig(t, "[reader]\nsize = \"most\"\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Reader.Width != (Width{Percent: 75}) {
+		t.Errorf("most = %+v", cfg.Reader.Width)
+	}
+}
