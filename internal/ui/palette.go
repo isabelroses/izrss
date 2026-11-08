@@ -32,7 +32,6 @@ type palette struct {
 	input  textinput.Model
 	hits   []rss.PostRef
 	cursor int
-	index  *searchIndex // built on the first search; nil when stale
 }
 
 func newPalette() palette {
@@ -45,7 +44,7 @@ func newPalette() palette {
 func (m *Model) openPalette() tea.Cmd {
 	m.overlay = overlayPalette
 	m.palette.input.Reset()
-	m.palette.hits, m.palette.cursor, m.palette.index = nil, 0, nil
+	m.palette.hits, m.palette.cursor = nil, 0
 	return m.palette.input.Focus()
 }
 
@@ -75,47 +74,18 @@ func (m *Model) paletteKey(msg tea.KeyPressMsg) tea.Cmd {
 	var cmd tea.Cmd
 	m.palette.input, cmd = m.palette.input.Update(msg)
 	if q := m.palette.input.Value(); q != before {
-		if m.palette.index == nil {
-			m.palette.index = newSearchIndex(m.feeds.All())
-		}
-		m.palette.hits = m.palette.index.search(q)
+		m.palette.hits = searchPosts(m.feeds.All(), q)
 		m.palette.cursor = 0
 	}
 	return cmd
 }
 
-// feedsChanged keeps the palette's results in step with m.feeds: an open
-// palette re-runs its query on a fresh index, a closed one drops the index.
-func (m *Model) feedsChanged() {
-	m.palette.index = nil
-	m.researchPalette()
-}
-
-// feedChanged is feedsChanged when only the feed with url changed (or was
-// added): an open palette's index re-indexes just that feed.
-func (m *Model) feedChanged(url string) {
-	if m.overlay != overlayPalette || m.palette.index == nil {
-		m.feedsChanged()
-		return
-	}
-	m.palette.index.update(m.feeds.All(), url)
-	m.researchPalette()
-}
-
-// researchPalette re-runs an open palette's query over m.feeds.
+// researchPalette re-runs an open palette's query after the feeds changed.
 func (m *Model) researchPalette() {
 	if m.overlay != overlayPalette {
-		m.palette.index = nil
 		return
 	}
-	if q := m.palette.input.Value(); q != "" {
-		if m.palette.index == nil {
-			m.palette.index = newSearchIndex(m.feeds.All())
-		}
-		m.palette.hits = m.palette.index.search(q)
-	} else {
-		m.palette.hits = nil
-	}
+	m.palette.hits = searchPosts(m.feeds.All(), m.palette.input.Value())
 	m.palette.cursor = min(m.palette.cursor, max(len(m.palette.hits)-1, 0))
 }
 
@@ -123,7 +93,6 @@ func (m *Model) researchPalette() {
 func (m *Model) closePalette() {
 	m.overlay = overlayNone
 	m.palette.input.Blur()
-	m.palette.index = nil
 }
 
 func paletteWidth(width int) int { return min(paletteMaxWidth, width*8/10) }

@@ -87,7 +87,7 @@ func (m *Model) feedLoaded(msg feedLoadedMsg) tea.Cmd {
 		log.Printf("%v", res.CacheErr)
 		cmd = tea.Batch(cmd, m.notify(toastError, "couldn't cache "+res.Name+" feed"))
 	}
-	m.feedChanged(msg.feed.URL)
+	m.researchPalette()
 	m.rebuildFeeds()
 	if m.screen == screenReader {
 		m.reopen()

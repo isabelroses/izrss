@@ -192,7 +192,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.read != nil {
 			m.read.Restore(msg.read)
 		}
-		m.feedsChanged()
+		m.researchPalette()
 		m.refresh.SetAt(msg.at)
 		m.rebuildFeeds()
 		m.selectInitialFeed()
@@ -221,8 +221,8 @@ func (m *Model) resize(width, height int) {
 	m.width, m.height = width, height
 	m.viewport.SetWidth(width)
 	m.viewport.Style = pageStyle(width)
-	m.viewport.SetHeight(max(height-2, 1)) // header and hint lines; the page style pads inside
-	body := max(height-1, 0)               // the hint/status line
+	m.viewport.SetHeight(max(height-2-pageGap(height), 1)) // header and hint lines, the gap above the hint; the page style pads inside
+	body := max(height-1, 0)                               // the hint/status line
 	m.feedList.setHeight(body)
 	m.postList.setHeight(body)
 	m.ready = true
@@ -238,9 +238,6 @@ func (m *Model) selectInitialFeed() {
 		m.rebuildPosts()
 	}
 }
-
-// quit exits; read state is saved as it changes.
-func (m *Model) quit() tea.Cmd { return tea.Quit }
 
 // logPanic records a panic and its stack in the log file, then lets it
 // continue so Bubble Tea restores the terminal. Use as `defer logPanic()`.

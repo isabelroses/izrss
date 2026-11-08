@@ -123,13 +123,3 @@ func TestList_SelectionBars(t *testing.T) {
 		}
 	}
 }
-
-func BenchmarkListView(b *testing.B) {
-	l := list{height: 40}
-	l.setItems(items(400), item{})
-	l.move(200)
-	b.ReportAllocs()
-	for b.Loop() {
-		_ = l.view(80, true, testListTheme())
-	}
-}

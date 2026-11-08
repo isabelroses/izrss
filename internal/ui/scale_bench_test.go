@@ -4,13 +4,8 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net/http"
-	"net/http/httptest"
 	"os"
-	"runtime/metrics"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -26,6 +21,19 @@ const (
 	scaleFeeds = 250
 	scalePosts = 40
 )
+
+var readerSink string
+
+// thirdsUnread is a read status for every post of feeds: one in three unread.
+func thirdsUnread(feeds rss.Feeds) []storage.PostReadStatus {
+	var out []storage.PostReadStatus
+	for _, f := range feeds {
+		for j, p := range f.Posts {
+			out = append(out, storage.PostReadStatus{FeedURL: f.URL, Key: p.Key(), Read: j%3 != 0})
+		}
+	}
+	return out
+}
 
 // scaleFeedXML is an RSS 2.0 document as the feed cache stores it: 40 items
 // of ~2KB HTML each, published an hour apart and offset per feed so "All
@@ -82,43 +90,12 @@ func scaleModel(b *testing.B) Model {
 	return m
 }
 
-// peakHeap samples the live heap every 100µs until stopped, and reports the
-// largest sample as peak-heap-MB.
-func peakHeap(b *testing.B) (stop func()) {
-	b.Helper()
-	var peak atomic.Uint64
-	done := make(chan struct{})
-	var wg sync.WaitGroup
-	wg.Go(func() {
-		s := []metrics.Sample{{Name: "/memory/classes/heap/objects:bytes"}}
-		t := time.NewTicker(100 * time.Microsecond)
-		defer t.Stop()
-		for {
-			metrics.Read(s)
-			if v := s[0].Value.Uint64(); v > peak.Load() {
-				peak.Store(v)
-			}
-			select {
-			case <-done:
-				return
-			case <-t.C:
-			}
-		}
-	})
-	return func() {
-		close(done)
-		wg.Wait()
-		b.ReportMetric(float64(peak.Load())/(1<<20), "peak-heap-MB")
-	}
-}
-
 // BenchmarkStartup250 is time to first frame with 250 cached feeds: the
 // model, the cache-only load with read state, and the first View.
 func BenchmarkStartup250(b *testing.B) {
 	cfg, db := scaleSetup(b)
 	fetcher := rss.NewFetcher(db, cfg.DateFormat)
 	b.ReportAllocs()
-	defer peakHeap(b)()
 	for b.Loop() {
 		m := *NewModel(cfg, db, fetcher, nil, nil)
 		m, _ = update(m, tea.WindowSizeMsg{Width: 120, Height: 40})
@@ -178,37 +155,6 @@ func BenchmarkMainView250(b *testing.B) {
 	}
 }
 
-// BenchmarkScroll250 moves down the "All posts" list a row and draws it.
-func BenchmarkScroll250(b *testing.B) {
-	m := scaleModel(b)
-	m.feedList.move(-m.feedList.cursor)
-	m.rebuildPosts()
-	m.focus = panePosts
-	b.ReportAllocs()
-	for b.Loop() {
-		if m.postList.cursor == len(m.postList.items)-1 {
-			m.postList.move(-m.postList.cursor)
-		}
-		m, _ = update(m, press("down"))
-		readerSink = m.View().Content
-	}
-}
-
-// BenchmarkFeedSwitch250 moves the feeds-pane selection between "All posts"
-// and the first feed, drawing each.
-func BenchmarkFeedSwitch250(b *testing.B) {
-	m := scaleModel(b)
-	m.focus = paneFeeds
-	m.feedList.move(1 - m.feedList.cursor)
-	b.ReportAllocs()
-	for b.Loop() {
-		m, _ = update(m, press("up"))
-		readerSink = m.View().Content
-		m, _ = update(m, press("down"))
-		readerSink = m.View().Content
-	}
-}
-
 // BenchmarkPaletteTyping250 types a query into the palette over 10k posts,
 // drawing a frame after each keystroke.
 func BenchmarkPaletteTyping250(b *testing.B) {
@@ -221,54 +167,5 @@ func BenchmarkPaletteTyping250(b *testing.B) {
 			readerSink = m.View().Content
 		}
 		m, _ = update(m, press("esc"))
-	}
-}
-
-// BenchmarkToggleRead250 toggles a post's read state, saving it, and draws.
-func BenchmarkToggleRead250(b *testing.B) {
-	m := scaleModel(b)
-	m.focus = panePosts
-	b.ReportAllocs()
-	for b.Loop() {
-		m, _ = update(m, press("x"))
-		readerSink = m.View().Content
-	}
-}
-
-// BenchmarkRefreshFetch250 is a full refresh as the program runs it: every
-// feed fetched (from a local server) and parsed concurrently, each result
-// handled by Update and drawn as it arrives.
-func BenchmarkRefreshFetch250(b *testing.B) {
-	m := scaleModel(b)
-	bodies := map[string][]byte{}
-	for i := range scaleFeeds {
-		bodies[fmt.Sprintf("/f%d.xml", i)] = []byte(scaleFeedXML(i))
-	}
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write(bodies[r.URL.Path])
-	}))
-	b.Cleanup(srv.Close)
-	urls := make([]string, scaleFeeds)
-	for i := range urls {
-		urls[i] = fmt.Sprintf("%s/f%d.xml", srv.URL, i)
-	}
-	m.cfg.Urls = urls
-	moved := append([]rss.Feed(nil), m.feeds.All()...)
-	for i := range moved {
-		moved[i].URL = urls[i]
-	}
-	m, _ = update(m, feedsRefreshedMsg{feeds: moved})
-	b.ReportAllocs()
-	defer peakHeap(b)()
-	for b.Loop() {
-		m.refresh.Start(urls)
-		msgs := make(chan feedLoadedMsg)
-		for _, url := range urls {
-			go func() { msgs <- feedLoadedMsg{feed: m.fetcher.GetContentForURL(url, false)} }()
-		}
-		for range urls {
-			m, _ = update(m, <-msgs)
-			readerSink = m.View().Content
-		}
 	}
 }

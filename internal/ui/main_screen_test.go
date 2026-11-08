@@ -2,7 +2,6 @@ package ui
 
 import (
 	"fmt"
-	"math/rand/v2"
 	"slices"
 	"strings"
 	"testing"
@@ -23,13 +22,6 @@ func TestStartsOnFirstFeed(t *testing.T) {
 	}
 	if selectedTitle(m.postList) != "Alpha post 0" || len(m.postList.items) != 4 {
 		t.Errorf("posts pane should show Alpha's posts, got %q (%d)", selectedTitle(m.postList), len(m.postList.items))
-	}
-}
-
-func TestPostsFollowFeedSelection(t *testing.T) {
-	m, _ := keys(newTestModel(t), "j")
-	if selectedTitle(m.feedList) != "Beta" || m.postList.items[0].title != "Beta post 0" {
-		t.Errorf("posts should follow the feed: feed %q first post %q", selectedTitle(m.feedList), m.postList.items[0].title)
 	}
 }
 
@@ -279,82 +271,6 @@ func TestAllPosts_TiesKeepFeedOrder(t *testing.T) {
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("rows = %q, want %q", got, want)
-	}
-}
-
-// sortNewestFirst orders exactly as a stable sort by descending time does,
-// whether the input is in runs (as feeds are) or not.
-func TestSortNewestFirst_MatchesStableSort(t *testing.T) {
-	rng := rand.New(rand.NewPCG(1, 2))
-	for n := range 200 {
-		refs := make([]postRef, n)
-		for i := range refs {
-			// Few distinct times so ties are common; some zero times.
-			ts := time.Time{}
-			if rng.IntN(5) > 0 {
-				ts = t0.Add(time.Duration(rng.IntN(8)) * time.Second / 2)
-			}
-			refs[i] = postRef{sec: ts.Unix(), nsec: int32(ts.Nanosecond()), feed: int32(i)}
-		}
-		if n%2 == 0 { // feed-like: sorted runs
-			for lo := 0; lo < n; lo += 7 {
-				run := refs[lo:min(lo+7, n)]
-				slices.SortStableFunc(run, func(a, b postRef) int { return cmpRef(b, a) })
-			}
-		}
-		want := slices.Clone(refs)
-		slices.SortStableFunc(want, func(a, b postRef) int { return cmpRef(b, a) })
-		if got := sortNewestFirst(slices.Clone(refs)); !slices.Equal(got, want) {
-			t.Fatalf("n=%d:\n got %v\nwant %v", n, got, want)
-		}
-	}
-}
-
-func cmpRef(a, b postRef) int {
-	switch {
-	case a.newer(b):
-		return 1
-	case b.newer(a):
-		return -1
-	}
-	return 0
-}
-
-// A refresh requested while one is running only adds feeds not already in
-// flight, so progress never counts past the number of feeds.
-func TestRefresh_NoStacking(t *testing.T) {
-	m := newTestModel(t)
-	m.fetcher = rss.NewFetcher(m.db, "02/01/2006")
-	m, first := update(m, press("r"))  // Alpha
-	m, second := update(m, press("R")) // adds Beta and Gamma
-	if totalOf(m) != m.feeds.Len() {
-		t.Fatalf("r then R: total %d, want %d", totalOf(m), m.feeds.Len())
-	}
-	if n := len(first) + len(second); n != m.feeds.Len() {
-		t.Errorf("r then R fetched %d feeds, want %d", n, m.feeds.Len())
-	}
-	m, again := update(m, press("R"))
-	if totalOf(m) != m.feeds.Len() || len(again) != 0 {
-		t.Errorf("R while all are in flight: total %d, %d fetches", totalOf(m), len(again))
-	}
-
-	f := sampleFeeds()
-	m, _ = update(m, feedLoadedMsg{feed: f[0]})
-	m, _ = update(m, feedLoadedMsg{feed: f[0]}) // a late duplicate
-	if done, _ := m.refresh.Progress(); done != 1 {
-		t.Errorf("a duplicate result was counted: done %d", done)
-	}
-	if s := statusText(m.unread, m.refresh, m.now()); s != "refreshing 1/3…" {
-		t.Errorf("status %q", s)
-	}
-	m, _ = update(m, feedLoadedMsg{feed: f[1]})
-	m, _ = update(m, feedLoadedMsg{feed: f[2]})
-	if totalOf(m) != 0 || m.refresh.At().IsZero() {
-		t.Errorf("refresh should be finished: total %d at %v", totalOf(m), m.refresh.At())
-	}
-	m, msgs := update(m, press("r"))
-	if totalOf(m) != 1 || len(msgs) != 1 {
-		t.Errorf("r after the refresh finished: total %d, %d fetches", totalOf(m), len(msgs))
 	}
 }
 

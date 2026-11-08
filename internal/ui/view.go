@@ -64,7 +64,11 @@ func (m Model) postsPane(width int, th listTheme) []string {
 }
 
 func (m Model) readerView() string {
-	return strings.Join([]string{m.readerHeader(), m.pageView(), m.statusLine(m.pageMargin())}, "\n")
+	lines := []string{m.readerHeader(), m.pageView()}
+	if pageGap(m.height) > 0 {
+		lines = append(lines, strings.Repeat(" ", m.width))
+	}
+	return strings.Join(append(lines, m.statusLine(m.pageMargin())), "\n")
 }
 
 // statusMargin is the main screen's edge gap, matching the list padding.
@@ -122,29 +126,9 @@ func (m Model) withOverlays(base string) string {
 	return compose(base, layers...)
 }
 
-// compose stacks layers over base. Only the rows the layers cover go through
-// the compositor, so a one-line toast doesn't re-parse the whole screen.
+// compose stacks layers over base.
 func compose(base string, layers ...*lipgloss.Layer) string {
-	top, bottom := layers[0].GetY(), 0
-	for _, l := range layers {
-		top = min(top, l.GetY())
-		bottom = max(bottom, l.GetY()+l.Height())
-	}
-	lines := strings.Split(base, "\n")
-	top = min(top, len(lines))
-	end := min(bottom, len(lines))
-
-	band := []*lipgloss.Layer{lipgloss.NewLayer(strings.Join(lines[top:end], "\n"))}
-	for _, l := range layers {
-		band = append(band, l.Y(l.GetY()-top))
-	}
-	mid := lipgloss.NewCompositor(band...).Render()
-
-	out := make([]string, 0, len(lines)+1)
-	out = append(out, lines[:top]...)
-	out = append(out, mid)
-	out = append(out, lines[end:]...)
-	return strings.Join(out, "\n")
+	return lipgloss.NewCompositor(append([]*lipgloss.Layer{lipgloss.NewLayer(base)}, layers...)...).Render()
 }
 
 // centred places content horizontally centred, a quarter of the way down.

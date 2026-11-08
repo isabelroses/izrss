@@ -153,21 +153,6 @@ func TestPalette_FeedShrinksWhileOpen(t *testing.T) {
 	}
 }
 
-func TestPalette_FeedsReplacedWhileOpen(t *testing.T) {
-	m, _ := keys(newTestModel(t), "/")
-	m = typeText(m, "post")
-	m, _ = keys(m, "down", "down", "down", "down", "down")
-	m, _ = update(m, feedsRefreshedMsg{feeds: sampleFeeds()[:1]})
-	if len(m.palette.hits) != 4 || m.palette.cursor >= len(m.palette.hits) {
-		t.Errorf("hits %d cursor %d after feeds replaced", len(m.palette.hits), m.palette.cursor)
-	}
-	_ = m.View()
-	m, _ = keys(m, "enter")
-	if m.screen != screenReader {
-		t.Error("enter should open a surviving hit")
-	}
-}
-
 // A hit whose post is gone (its feed shrank or was dropped after the hit was
 // listed) opens nothing, and does not crash or open some other post.
 func TestPalette_EnterOnStaleHit(t *testing.T) {

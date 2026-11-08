@@ -57,16 +57,3 @@ func loadedPhoto(tb testing.TB) (Model, imageLoadedMsg) {
 	}
 	return m, loaded
 }
-
-// BenchmarkImageUpdate is the time Update spends on one image arriving and
-// becoming ready: this blocks input and redraws.
-func BenchmarkImageUpdate(b *testing.B) {
-	m, loaded := loadedPhoto(b)
-	b.ReportAllocs()
-	for b.Loop() {
-		updated, cmd := m.Update(loaded)
-		_ = cmd
-		mm := updated.(Model)
-		mm.Update(imageReadyMsg{post: loaded.Post, src: loaded.Src})
-	}
-}

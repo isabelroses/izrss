@@ -46,7 +46,7 @@ func (m *Model) readerKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.screen = screenMain
 		return nil
 	case key.Matches(msg, k.ForceQuit):
-		return m.quit()
+		return tea.Quit
 	case key.Matches(msg, k.Toggle):
 		if _, ok := m.feeds.Post(m.open); ok {
 			return m.setRead(m.open, !m.read.IsRead(m.open.FeedURL, m.open.Key))
@@ -83,7 +83,8 @@ func (m *Model) renderReader() {
 }
 
 // pageView draws the viewport as viewport.View does, but from line widths
-// measured once per render; viewport.View re-measures them every frame, which is slow for image rows.
+// measured once per render: viewport.View re-measures them every frame, which
+// is slow for image rows.
 func (m Model) pageView() string {
 	vp := m.viewport
 	left, right, top := vp.Style.GetPaddingLeft(), vp.Style.GetPaddingRight(), vp.Style.GetPaddingTop()
@@ -141,6 +142,15 @@ func pageStyle(width int) lipgloss.Style {
 		side = 0
 	}
 	return lipgloss.NewStyle().Padding(1, side, 0, side)
+}
+
+// pageGap is the blank rows between the article and the hint line: one, unless
+// the terminal is too short to spare it.
+func pageGap(height int) int {
+	if height < 8 {
+		return 0
+	}
+	return 1
 }
 
 // pageMargin is the reader's side margin; the header and hint line align

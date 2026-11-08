@@ -3,6 +3,7 @@ package ui
 import (
 	"errors"
 	"log"
+	"slices"
 	"strconv"
 
 	"charm.land/bubbles/v2/key"
@@ -66,106 +67,36 @@ func (m *Model) rebuildPosts() {
 	}
 
 	feeds := m.feeds.All() // positions are only used within this rebuild
-	var refs []postRef
-	for i, f := range feeds {
-		if feed.key != allPostsKey && f.URL != feed.key {
-			continue
-		}
-		for j, p := range f.Posts {
-			refs = append(refs, postRef{sec: p.Published.Unix(), nsec: int32(p.Published.Nanosecond()), feed: int32(i), post: int32(j)})
-		}
-	}
 	all := feed.key == allPostsKey
-	if all {
-		refs = sortNewestFirst(refs)
-	}
-
-	var names []string // the feed column of "All posts"
-	if all {
-		names = make([]string, len(feeds))
-		for i, f := range feeds {
-			names[i] = f.Name()
+	type pos struct{ feed, post int }
+	var order []pos
+	for i, f := range feeds {
+		if all || f.URL == feed.key {
+			for j := range f.Posts {
+				order = append(order, pos{i, j})
+			}
 		}
 	}
-	items := make([]item, len(refs))
-	flags := make([][]bool, len(feeds)) // by feed, fetched as the feed's first post is met
-	for n, r := range refs {
-		f, p := &feeds[r.feed], &feeds[r.feed].Posts[r.post]
-		if flags[r.feed] == nil {
-			flags[r.feed] = m.read.Flags(*f)
-		}
+	if all {
+		slices.SortStableFunc(order, func(a, b pos) int {
+			return feeds[b.feed].Posts[b.post].Published.Compare(feeds[a.feed].Posts[a.post].Published)
+		})
+	}
+	items := make([]item, len(order))
+	for n, o := range order {
+		f, p := feeds[o.feed], feeds[o.feed].Posts[o.post]
 		source := ""
 		if all {
-			source = names[r.feed]
+			source = f.Name()
 		}
 		marker := " "
-		unread := !flags[r.feed][r.post]
+		unread := !m.read.IsRead(f.URL, p.Key())
 		if unread {
 			marker = "•"
 		}
 		items[n] = item{group: f.URL, key: p.Key(), title: p.Title, source: source, right: p.Date, marker: marker, strong: unread}
 	}
 	m.postList.setItems(items, keep)
-}
-
-// postRef is a post's place in m.feeds and its publish time, as Unix
-// seconds and nanoseconds, which order as time.Time.Compare does.
-type postRef struct {
-	sec              int64
-	nsec, feed, post int32
-}
-
-// newer reports whether a was published after b.
-func (a postRef) newer(b postRef) bool {
-	return a.sec > b.sec || a.sec == b.sec && a.nsec > b.nsec
-}
-
-// sortNewestFirst sorts refs newest first, stably, returning the sorted
-// slice (refs or a buffer of the same length). It is a natural merge sort:
-// each feed's posts are already newest first, so "All posts" is a merge of
-// a few long runs rather than a full sort.
-func sortNewestFirst(refs []postRef) []postRef {
-	// Split into maximal runs that are already in order.
-	bounds := []int{0}
-	for i := 1; i < len(refs); i++ {
-		if refs[i].newer(refs[i-1]) {
-			bounds = append(bounds, i)
-		}
-	}
-	bounds = append(bounds, len(refs))
-
-	// Merge adjacent runs pairwise until one is left; taking from the left
-	// run unless the right one is strictly newer keeps the sort stable.
-	src, dst := refs, make([]postRef, len(refs))
-	for len(bounds) > 2 {
-		merged := bounds[:1]
-		for k := 0; k+1 < len(bounds); k += 2 {
-			lo, mid := bounds[k], bounds[k+1]
-			if k+2 >= len(bounds) { // an odd run out: copy it over
-				copy(dst[lo:mid], src[lo:mid])
-				merged = append(merged, mid)
-				break
-			}
-			hi := bounds[k+2]
-			i, j, o := lo, mid, lo
-			for i < mid && j < hi {
-				if src[j].newer(src[i]) {
-					dst[o] = src[j]
-					j++
-				} else {
-					dst[o] = src[i]
-					i++
-				}
-				o++
-			}
-			o += copy(dst[o:], src[i:mid])
-			copy(dst[o:], src[j:hi])
-			merged = append(merged, hi)
-		}
-		bounds = merged
-		src, dst = dst, src
-	}
-	return src
 }
 
 // selectedPost finds the post under the posts-pane cursor.
@@ -197,7 +128,7 @@ func (m *Model) mainKey(msg tea.KeyPressMsg) tea.Cmd {
 	k := bindings
 	switch {
 	case key.Matches(msg, k.Quit):
-		return m.quit()
+		return tea.Quit
 	case key.Matches(msg, k.Up):
 		m.moveFocused(-1)
 	case key.Matches(msg, k.Down):

@@ -1,11 +1,14 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/isabelroses/izrss/internal/rss"
 )
 
 func TestReader_HeaderLine(t *testing.T) {
@@ -69,13 +72,13 @@ func TestReader_ThresholdMarksByKey(t *testing.T) {
 
 func TestReader_ViewportHeight(t *testing.T) {
 	m, _ := keys(newTestModel(t), "l", "enter")
-	if h := m.viewport.Height(); h != 38 {
-		t.Errorf("viewport height %d, want 38", h)
+	if h := m.viewport.Height(); h != 37 {
+		t.Errorf("viewport height %d, want 37", h)
 	}
 	m, _ = update(m, tea.WindowSizeMsg{Width: 100, Height: 30})
 	m, _ = keys(m, "esc", "enter")
-	if h := m.viewport.Height(); h != 28 {
-		t.Errorf("after resize and reopen: %d, want 28", h)
+	if h := m.viewport.Height(); h != 27 {
+		t.Errorf("after resize and reopen: %d, want 27", h)
 	}
 }
 
@@ -132,5 +135,29 @@ func TestReader_DocumentMargin(t *testing.T) {
 	}
 	if got, want := m.contentWidth(), m.textWidth()-2*docMargin; got != want {
 		t.Errorf("images fit %d columns, want %d", got, want)
+	}
+}
+
+// A blank row separates the end of the article from the hint line, and the
+// reader still fits short terminals.
+func TestReader_GapAboveHintLine(t *testing.T) {
+	var b strings.Builder
+	for i := range 100 {
+		fmt.Fprintf(&b, "<p>line %d</p>", i)
+	}
+	m, _ := openPost(newTestModel(t), rss.Post{UUID: "long", Title: "long", Content: b.String()})
+	m.viewport.GotoBottom()
+	if m.viewport.ScrollPercent() != 1 {
+		t.Fatalf("scroll percent %v at the bottom, want 1", m.viewport.ScrollPercent())
+	}
+	lines := strings.Split(ansi.Strip(m.View().Content), "\n")
+	if len(lines) != 40 || !strings.Contains(lines[len(lines)-3], "line 99") || strings.TrimSpace(lines[len(lines)-2]) != "" {
+		t.Errorf("want the last line, a blank row, then the hint line; got %q", lines[len(lines)-4:])
+	}
+	for _, h := range []int{7, 8} {
+		m, _ = update(m, tea.WindowSizeMsg{Width: 80, Height: h})
+		if n := strings.Count(m.View().Content, "\n") + 1; n != h {
+			t.Errorf("height %d: %d lines", h, n)
+		}
 	}
 }

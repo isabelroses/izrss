@@ -23,21 +23,11 @@ type Store interface {
 type State struct {
 	store Store
 	read  map[string]map[string]bool // feed URL -> post key -> read
-	cache map[string]*feedFlags      // feed URL -> flags of the posts last asked about
-}
-
-// feedFlags is the read flags of one feed's posts, valid while the feed still
-// has the posts slice they were computed for (a refresh swaps in a new one).
-type feedFlags struct {
-	first  *rss.Post
-	n      int
-	read   []bool
-	unread int
 }
 
 // New is an empty State saving to store.
 func New(store Store) *State {
-	return &State{store: store, read: map[string]map[string]bool{}, cache: map[string]*feedFlags{}}
+	return &State{store: store, read: map[string]map[string]bool{}}
 }
 
 // Snapshot is the saved state, as read off the main loop by Read.
@@ -70,7 +60,6 @@ func (s *State) Restore(snap Snapshot) {
 		}
 	}
 	s.read = read
-	s.cache = map[string]*feedFlags{}
 }
 
 // Load is Read then Restore, for callers off the main loop.
@@ -86,34 +75,16 @@ func (s *State) Load() error {
 // IsRead reports whether the post with key in the feed with feedURL is read.
 func (s *State) IsRead(feedURL, key string) bool { return s.read[feedURL][key] }
 
-// flagsOf is f's flags, computed once per feed and change.
-func (s *State) flagsOf(f rss.Feed) *feedFlags {
-	var first *rss.Post
-	if len(f.Posts) > 0 {
-		first = &f.Posts[0]
-	}
-	if c := s.cache[f.URL]; c != nil && c.first == first && c.n == len(f.Posts) {
-		return c
-	}
-	c := &feedFlags{first: first, n: len(f.Posts), read: make([]bool, len(f.Posts))}
-	m := s.read[f.URL]
+// Unread counts the unread posts of f.
+func (s *State) Unread(f rss.Feed) int {
+	unread := 0
 	for i := range f.Posts {
-		if m[f.Posts[i].Key()] {
-			c.read[i] = true
-		} else {
-			c.unread++
+		if !s.IsRead(f.URL, f.Posts[i].Key()) {
+			unread++
 		}
 	}
-	s.cache[f.URL] = c
-	return c
+	return unread
 }
-
-// Unread counts the unread posts of f.
-func (s *State) Unread(f rss.Feed) int { return s.flagsOf(f).unread }
-
-// Flags is whether each of f.Posts is read, in order. It is for drawing one
-// frame: the slice is shared, so do not keep or change it.
-func (s *State) Flags(f rss.Feed) []bool { return s.flagsOf(f).read }
 
 // Set marks the post ref addresses read or unread and saves it. A post
 // already in that state is not written. The mark holds in memory even when
@@ -150,7 +121,6 @@ func (s *State) MarkFeedRead(f rss.Feed) error {
 }
 
 func (s *State) mark(feedURL, key string, read bool) {
-	delete(s.cache, feedURL)
 	m := s.read[feedURL]
 	if m == nil {
 		m = map[string]bool{}

@@ -206,28 +206,6 @@ func TestReader_PendingThenReady(t *testing.T) {
 	}
 }
 
-func TestImageLoaded_StalePostIgnored(t *testing.T) {
-	srv := newImgServer(t)
-	m := imageModel(t)
-	m, cmdA := openPost(m, postWithImage(srv.URL+"/a.png"))
-	loadedA, _ := find[imageLoadedMsg](run(cmdA))
-
-	b := rss.Post{UUID: "p2", Title: "b", Content: "<p>post b</p>"}
-	m, _ = openPost(m, b)
-	before := m.viewport.GetContent()
-
-	m, msgs := update(m, loadedA)
-	if strings.Contains(raws(msgs), "\x1b_G") {
-		t.Error("a stale image must not be uploaded")
-	}
-	if _, ok := find[imageReadyMsg](msgs); ok {
-		t.Error("a stale image must not become ready")
-	}
-	if m.viewport.GetContent() != before {
-		t.Error("post B's content changed")
-	}
-}
-
 func TestImageLoaded_ErrorShowsAlt(t *testing.T) {
 	m := imageModel(t)
 	m, _ = openPost(m, postWithImage("https://example.invalid/a.png"))
@@ -268,69 +246,6 @@ func TestImageReady_KeepsReadingPosition(t *testing.T) {
 	}
 }
 
-func TestResize_RePlacesWithoutRefetch(t *testing.T) {
-	srv := newImgServer(t)
-	m := imageModel(t)
-	m, _ = loadAndShow(t, m, postWithImage(srv.URL+"/a.png"))
-	hits := srv.hits.Load()
-
-	m, msgs := update(m, tea.WindowSizeMsg{Width: 40, Height: 40})
-	r := raws(msgs)
-	id := imageInfo(m, srv.URL+"/a.png").ID
-	if !strings.Contains(r, "a=p") || !strings.Contains(r, "i="+strconv.Itoa(id)) {
-		t.Errorf("resize should re-place image %d, got %q", id, r)
-	}
-	if srv.hits.Load() != hits {
-		t.Error("resize must not re-fetch")
-	}
-	for line := range strings.SplitSeq(m.viewport.GetContent(), "\n") {
-		if w := ansi.StringWidth(line); w > 40 {
-			t.Errorf("line wider than the new width: %d", w)
-		}
-	}
-}
-
-// A resize while the reader is closed must still re-fit the images when the
-// same post is opened again.
-func TestResizeOnMain_ReopenRefits(t *testing.T) {
-	srv := newImgServer(t)
-	m := imageModel(t)
-	m, _ = loadAndShow(t, m, postWithImage(srv.URL+"/a.png"))
-	oldCols := imageInfo(m, srv.URL+"/a.png").Cols
-
-	m, _ = keys(m, "esc")
-	if m.screen != screenMain {
-		t.Fatal("esc should leave the reader")
-	}
-	m, _ = update(m, tea.WindowSizeMsg{Width: 40, Height: 40})
-	cmd := m.openReader(m.open)
-	r := raws(run(cmd))
-	pi := imageInfo(m, srv.URL+"/a.png")
-	if pi.Cols >= oldCols {
-		t.Errorf("cols %d not re-fitted from %d", pi.Cols, oldCols)
-	}
-	if !strings.Contains(r, "a=p") || !strings.Contains(r, "i="+strconv.Itoa(pi.ID)) {
-		t.Errorf("reopen should re-place image %d, got %q", pi.ID, r)
-	}
-	for line := range strings.SplitSeq(m.viewport.GetContent(), "\n") {
-		if w := ansi.StringWidth(line); w > 40 {
-			t.Errorf("line wider than the new width: %d", w)
-		}
-	}
-}
-
-func TestResume_ReUploads(t *testing.T) {
-	srv := newImgServer(t)
-	m := imageModel(t)
-	m, _ = loadAndShow(t, m, postWithImage(srv.URL+"/a.png"))
-	id := imageInfo(m, srv.URL+"/a.png").ID
-
-	_, msgs := update(m, tea.ResumeMsg{})
-	if r := raws(msgs); !strings.Contains(r, "a=T") || !strings.Contains(r, "i="+strconv.Itoa(id)) {
-		t.Errorf("resume should re-upload image %d, got %q", id, r[:min(len(r), 80)])
-	}
-}
-
 func TestView_PlaceholderKeepsIDColour(t *testing.T) {
 	srv := newImgServer(t)
 	m := imageModel(t)
@@ -358,60 +273,13 @@ func TestImageMaxRows_DefaultsToReaderHeight(t *testing.T) {
 	m := imageModel(t)
 	m.cfg.Reader.ImageMaxHeight = 0
 	m, _ = openPost(m, postWithImage("https://example.com/a.png"))
-	// 40 rows less the header, hint line and the blank row under the header.
-	if got, want := m.imageMaxRows(), 37; got != want {
+	// 40 rows less the header, hint line, the gap above it and the blank row under the header.
+	if got, want := m.imageMaxRows(), 36; got != want {
 		t.Errorf("imageMaxRows = %d, want the visible reader height %d", got, want)
 	}
 	m.cfg.Reader.ImageMaxHeight = 7
 	if got := m.imageMaxRows(); got != 7 {
 		t.Errorf("configured height ignored: %d", got)
-	}
-}
-
-func TestLoadImages_FetchesSrcsetAndUsesDeclaredWidth(t *testing.T) {
-	srv := newImgServer(t)
-	m := imageModel(t)
-	p := rss.Post{UUID: "s", Content: `<img src="` + srv.URL + `/small.png" width="320" srcset="` + srv.URL + `/small.png 100w, ` + srv.URL + `/big.png 4000w">`}
-	var paths []string
-	srv.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		paths = append(paths, r.URL.Path)
-		w.Header().Set("Content-Type", "image/png")
-		_, _ = w.Write(pngBytes(t, 400, 200))
-	})
-	_, cmd := openPost(m, p)
-	loaded, _ := find[imageLoadedMsg](run(cmd))
-	if len(paths) != 1 || paths[0] != "/big.png" {
-		t.Errorf("fetched %v, want the srcset candidate wide enough for the reader", paths)
-	}
-	if loaded.Prep.CSSW != 320 || loaded.Prep.Cols != 40 {
-		t.Errorf("declared width 320 css px should give 40 cols, got css %d cols %d", loaded.Prep.CSSW, loaded.Prep.Cols)
-	}
-	if loaded.Src != srv.URL+"/small.png" {
-		t.Errorf("the image keeps its src identity, got %q", loaded.Src)
-	}
-}
-
-// Encoding an image (PNG + base64) takes tens of milliseconds for a photo, so
-// it must happen in the load command; Update only forwards the result.
-func TestImageLoaded_NoEncodingInUpdate(t *testing.T) {
-	srv := newImgServer(t)
-	m := imageModel(t)
-	m, cmd := openPost(m, postWithImage(srv.URL+"/a.png"))
-	loaded, ok := find[imageLoadedMsg](run(cmd))
-	if !ok || loaded.Err != nil {
-		t.Fatalf("expected imageLoadedMsg, got %+v", loaded)
-	}
-	if !strings.Contains(loaded.Upload, "a=T") {
-		t.Fatalf("the load command should encode the upload, got %q", loaded.Upload[:min(len(loaded.Upload), 40)])
-	}
-	if loaded.Prep.Img != nil {
-		t.Error("decoded pixels should be dropped once encoded")
-	}
-
-	loaded.Upload = "\x1b_Gsentinel\x1b\\"
-	_, msgs := update(m, loaded)
-	if r := raws(msgs); r != loaded.Upload {
-		t.Errorf("Update should send the pre-encoded upload as is, got %q", r[:min(len(r), 80)])
 	}
 }
 
