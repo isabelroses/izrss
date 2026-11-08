@@ -113,7 +113,7 @@ func raws(msgs []tea.Msg) string {
 	var b strings.Builder
 	for _, m := range msgs {
 		if r, ok := m.(tea.RawMsg); ok {
-			b.WriteString(fmt.Sprint(r.Msg))
+			fmt.Fprint(&b, r.Msg)
 		}
 	}
 	return b.String()
