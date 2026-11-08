@@ -7,7 +7,6 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/ansi/kitty"
-	"golang.org/x/sys/unix"
 )
 
 // Upload returns the escape sequence that transmits p as image id with a
@@ -74,14 +73,4 @@ func Enabled(mode string, getenv func(string) string) bool {
 	term := getenv("TERM")
 	return getenv("TERM_PROGRAM") == "ghostty" || term == "xterm-ghostty" ||
 		term == "xterm-kitty" || getenv("KITTY_WINDOW_ID") != ""
-}
-
-// CellSize reads the cell size in pixels from the tty, without querying the
-// terminal. It returns the zero Cell when the size is unavailable.
-func CellSize(fd int) Cell {
-	ws, err := unix.IoctlGetWinsize(fd, unix.TIOCGWINSZ)
-	if err != nil || ws.Col == 0 || ws.Row == 0 || ws.Xpixel == 0 || ws.Ypixel == 0 {
-		return Cell{}
-	}
-	return Cell{W: int(ws.Xpixel / ws.Col), H: int(ws.Ypixel / ws.Row)}
 }
