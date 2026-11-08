@@ -261,3 +261,38 @@ func TestFetchURL_CapsBody(t *testing.T) {
 		t.Errorf("a feed at the cap should load: %v", feed.Err)
 	}
 }
+
+// ReadTrackingAt loads one feed's read state exactly as ReadTracking does,
+// leaving the other feeds alone.
+func TestReadTrackingAt_MatchesReadTracking(t *testing.T) {
+	db := testDB(t)
+	feeds := Feeds{
+		{URL: "a", Posts: []Post{{UUID: "shared"}, {Link: "https://a/1"}, {Title: "t", Date: "d"}}},
+		{URL: "b", Posts: []Post{{UUID: "shared"}, {Link: "https://a/1"}}},
+	}
+	feeds.SetRead(Loc{0, 0}, true)
+	feeds.SetRead(Loc{0, 2}, true)
+	feeds.SetRead(Loc{1, 1}, true)
+	if err := feeds.WriteTracking(db); err != nil {
+		t.Fatal(err)
+	}
+	want := reloaded(t, db, feeds)
+	for i := range feeds {
+		got := reloaded(t, db, feeds)
+		for k := range got {
+			for j := range got[k].Posts {
+				got[k].Posts[j].Read = false
+			}
+		}
+		if err := got.ReadTrackingAt(db, i); err != nil {
+			t.Fatal(err)
+		}
+		for k := range got {
+			for j, p := range got[k].Posts {
+				if w := k == i && want[k].Posts[j].Read; p.Read != w {
+					t.Errorf("feed %d: feeds[%d].Posts[%d].Read = %v, want %v", i, k, j, p.Read, w)
+				}
+			}
+		}
+	}
+}

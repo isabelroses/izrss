@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"log"
 	"net"
+	neturl "net/url"
 	"regexp"
 	"strings"
+	"unicode"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -15,8 +17,15 @@ import (
 	"github.com/isabelroses/izrss/internal/rss"
 )
 
-// notify shows a toast and records it in the log file.
+// notify shows a toast and records it in the log file. Error text can carry
+// server-supplied bytes, so control characters are dropped before display.
 func (m *Model) notify(kind toastKind, text string) tea.Cmd {
+	text = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, text)
 	log.Print(text)
 	return m.toasts.add(kind, text)
 }
@@ -26,10 +35,14 @@ func (m Model) toastTheme() toastTheme {
 	return toastTheme{text: hex(c.Text), bg: hex(c.Borders), err: lipgloss.Color("1"), warn: lipgloss.Color("3")}
 }
 
-// feedName is how toasts refer to a feed: its title, else its URL.
+// feedName is how a feed is shown: its title, else its URL's host without
+// "www.", else its URL.
 func feedName(f rss.Feed) string {
-	if f.Title != "" {
+	if strings.TrimSpace(f.Title) != "" {
 		return f.Title
+	}
+	if u, err := neturl.Parse(f.URL); err == nil && u.Host != "" {
+		return strings.TrimPrefix(u.Host, "www.")
 	}
 	return f.URL
 }

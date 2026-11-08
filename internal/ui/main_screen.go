@@ -4,7 +4,6 @@ import (
 	"log"
 	"slices"
 	"strconv"
-	"strings"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
@@ -19,15 +18,6 @@ const (
 	jumpDistance = 5
 )
 
-// postItemKey identifies a posts-pane row by feed and post, since one post
-// can be cross-posted in several feeds.
-func postItemKey(feedURL, key string) string { return feedURL + "\x00" + key }
-
-func splitItemKey(k string) (feedURL, key string) {
-	feedURL, key, _ = strings.Cut(k, "\x00")
-	return feedURL, key
-}
-
 func unreadText(n int) string {
 	if n == 0 {
 		return "·"
@@ -36,7 +26,8 @@ func unreadText(n int) string {
 }
 
 // rebuildFeeds refreshes the feeds pane (and so the posts pane), keeping the
-// selected feed and post by identity.
+// selected feed and post by identity. It also totals what every frame shows,
+// so drawing doesn't walk every post or measure every feed title.
 func (m *Model) rebuildFeeds() {
 	keep, _ := m.feedList.selected()
 	total := m.feeds.GetTotalUnreads()
@@ -44,9 +35,14 @@ func (m *Model) rebuildFeeds() {
 	items = append(items, item{key: allPostsKey, title: "All posts", right: unreadText(total), strong: total > 0})
 	for _, f := range m.feeds {
 		n := f.GetTotalUnreads()
-		items = append(items, item{key: f.URL, title: f.Title, right: unreadText(n), strong: n > 0})
+		items = append(items, item{key: f.URL, title: feedName(f), right: unreadText(n), strong: n > 0})
 	}
-	m.feedList.setItems(items, keep.key)
+	m.feedList.setItems(items, keep)
+	m.unread = total
+	m.feedTitleW = 0
+	for _, it := range items {
+		m.feedTitleW = max(m.feedTitleW, ansi.StringWidth(it.title))
+	}
 	m.rebuildPosts()
 }
 
@@ -55,49 +51,112 @@ func (m *Model) rebuildFeeds() {
 func (m *Model) rebuildPosts() {
 	feed, ok := m.feedList.selected()
 	if !ok {
-		m.postList.setItems(nil, "")
+		m.postList.setItems(nil, item{})
 		return
 	}
-	keep := ""
+	var keep item
 	if feed.key == m.postsFor {
-		sel, _ := m.postList.selected()
-		keep = sel.key
+		keep, _ = m.postList.selected()
 	} else {
 		m.postList.cursor, m.postList.offset = 0, 0
 		m.postsFor = feed.key
 	}
 
-	type ref struct{ feed, post int }
-	var refs []ref
+	var refs []postRef
 	for i, f := range m.feeds {
 		if feed.key != allPostsKey && f.URL != feed.key {
 			continue
 		}
-		for j := range f.Posts {
-			refs = append(refs, ref{i, j})
+		for j, p := range f.Posts {
+			refs = append(refs, postRef{sec: p.Published.Unix(), nsec: int32(p.Published.Nanosecond()), feed: int32(i), post: int32(j)})
 		}
 	}
 	all := feed.key == allPostsKey
 	if all {
-		slices.SortStableFunc(refs, func(a, b ref) int {
-			return m.feeds[b.feed].Posts[b.post].Published.Compare(m.feeds[a.feed].Posts[a.post].Published)
-		})
+		refs = sortNewestFirst(refs)
 	}
 
+	var names []string // the feed column of "All posts"
+	if all {
+		names = make([]string, len(m.feeds))
+		for i, f := range m.feeds {
+			names[i] = feedName(f)
+		}
+	}
 	items := make([]item, len(refs))
 	for n, r := range refs {
-		f, p := m.feeds[r.feed], m.feeds[r.feed].Posts[r.post]
-		right := p.Date
+		f, p := &m.feeds[r.feed], &m.feeds[r.feed].Posts[r.post]
+		source := ""
 		if all {
-			right = f.Title + " · " + p.Date
+			source = names[r.feed]
 		}
 		marker := " "
 		if !p.Read {
 			marker = "•"
 		}
-		items[n] = item{key: postItemKey(f.URL, p.Key()), title: p.Title, right: right, marker: marker, strong: !p.Read}
+		items[n] = item{group: f.URL, key: p.Key(), title: p.Title, source: source, right: p.Date, marker: marker, strong: !p.Read}
 	}
 	m.postList.setItems(items, keep)
+}
+
+// postRef is a post's place in m.feeds and its publish time, as Unix
+// seconds and nanoseconds, which order as time.Time.Compare does.
+type postRef struct {
+	sec              int64
+	nsec, feed, post int32
+}
+
+// newer reports whether a was published after b.
+func (a postRef) newer(b postRef) bool {
+	return a.sec > b.sec || a.sec == b.sec && a.nsec > b.nsec
+}
+
+// sortNewestFirst sorts refs newest first, stably, returning the sorted
+// slice (refs or a buffer of the same length). It is a natural merge sort:
+// each feed's posts are already newest first, so "All posts" is a merge of
+// a few long runs rather than a full sort.
+func sortNewestFirst(refs []postRef) []postRef {
+	// Split into maximal runs that are already in order.
+	bounds := []int{0}
+	for i := 1; i < len(refs); i++ {
+		if refs[i].newer(refs[i-1]) {
+			bounds = append(bounds, i)
+		}
+	}
+	bounds = append(bounds, len(refs))
+
+	// Merge adjacent runs pairwise until one is left; taking from the left
+	// run unless the right one is strictly newer keeps the sort stable.
+	src, dst := refs, make([]postRef, len(refs))
+	for len(bounds) > 2 {
+		merged := bounds[:1]
+		for k := 0; k+1 < len(bounds); k += 2 {
+			lo, mid := bounds[k], bounds[k+1]
+			if k+2 >= len(bounds) { // an odd run out: copy it over
+				copy(dst[lo:mid], src[lo:mid])
+				merged = append(merged, mid)
+				break
+			}
+			hi := bounds[k+2]
+			i, j, o := lo, mid, lo
+			for i < mid && j < hi {
+				if src[j].newer(src[i]) {
+					dst[o] = src[j]
+					j++
+				} else {
+					dst[o] = src[i]
+					i++
+				}
+				o++
+			}
+			o += copy(dst[o:], src[i:mid])
+			copy(dst[o:], src[j:hi])
+			merged = append(merged, hi)
+		}
+		bounds = merged
+		src, dst = dst, src
+	}
+	return src
 }
 
 // selectedPost locates the post under the posts-pane cursor.
@@ -106,7 +165,7 @@ func (m Model) selectedPost() (rss.Loc, bool) {
 	if !ok {
 		return rss.Loc{}, false
 	}
-	return m.feeds.Locate(splitItemKey(it.key))
+	return m.feeds.Locate(it.group, it.key)
 }
 
 // selectedFeedIndexes are the feeds the feeds-pane selection stands for.
@@ -227,10 +286,6 @@ func (m Model) paneWidths() (split bool, left, right int) {
 	if m.width < narrowWidth {
 		return false, m.width, m.width
 	}
-	longest := 0
-	for _, it := range m.feedList.items {
-		longest = max(longest, ansi.StringWidth(it.title))
-	}
-	left = min(max(longest+6, 20), m.width*30/100)
+	left = min(max(m.feedTitleW+6, 20), m.width*30/100)
 	return true, left, m.width - left - 1
 }

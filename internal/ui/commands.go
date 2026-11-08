@@ -17,7 +17,9 @@ type feedsRefreshedMsg struct {
 	errs  []string  // toast texts
 }
 
-type refreshStartedMsg struct{ total int }
+// refreshMsg asks for the feeds at the given cfg.Urls indexes to be
+// refreshed; Init sends it once the cache has painted.
+type refreshMsg struct{ indexes []int }
 
 // feedLoadedMsg is one feed's refresh result; index is its position in
 // cfg.Urls (and so in m.feeds).
@@ -53,28 +55,40 @@ func (m Model) allIndexes() []int {
 }
 
 // refreshFeeds re-fetches the feeds at the given cfg.Urls indexes, one
-// command per feed so results (and progress) arrive as each finishes.
-func (m Model) refreshFeeds(indexes []int) tea.Cmd {
+// command per feed so results (and progress) arrive as each finishes. Feeds
+// already being refreshed are skipped, so overlapping requests (r then R)
+// merge into one refresh rather than stacking.
+func (m *Model) refreshFeeds(indexes []int) tea.Cmd {
 	if len(indexes) == 0 || m.fetcher == nil {
 		return nil
 	}
 	fetcher, urls := m.fetcher, m.cfg.Urls
-	cmds := make([]tea.Cmd, 0, len(indexes))
+	var cmds []tea.Cmd
 	for _, i := range indexes {
+		if i < 0 || i >= len(urls) || m.refresh.inFlight[i] {
+			continue
+		}
+		if m.refresh.inFlight == nil {
+			m.refresh.inFlight = map[int]bool{}
+		}
+		m.refresh.inFlight[i] = true
 		url := urls[i]
 		cmds = append(cmds, func() tea.Msg {
 			return feedLoadedMsg{feed: fetcher.GetContentForURL(url, false), index: i}
 		})
 	}
-	total := len(indexes)
-	return tea.Sequence(func() tea.Msg { return refreshStartedMsg{total: total} }, tea.Batch(cmds...))
+	m.refresh.total += len(cmds)
+	return tea.Batch(cmds...)
 }
 
 // feedLoaded swaps in a refreshed feed, keeping selections by identity.
 func (m *Model) feedLoaded(msg feedLoadedMsg) tea.Cmd {
-	m.refresh.done++
 	var cmd tea.Cmd
-	if m.refresh.done >= m.refresh.total {
+	if m.refresh.inFlight[msg.index] { // a result not asked for isn't progress
+		delete(m.refresh.inFlight, msg.index)
+		m.refresh.done++
+	}
+	if m.refresh.total > 0 && m.refresh.done >= m.refresh.total {
 		m.refresh = refreshState{at: m.now()}
 		db := m.db
 		cmd = func() tea.Msg {
@@ -105,8 +119,8 @@ func (m *Model) feedLoaded(msg feedLoadedMsg) tea.Cmd {
 	default:
 		return cmd
 	}
-	m.feedsChanged()
-	if err := m.feeds.ReadTracking(m.db); err != nil {
+	m.feedChanged(msg.index)
+	if err := m.feeds.ReadTrackingAt(m.db, msg.index); err != nil {
 		log.Printf("reading read status: %v", err)
 		cmd = tea.Batch(cmd, m.notify(toastError, "couldn't load read status"))
 	}
@@ -120,7 +134,8 @@ func (m *Model) feedLoaded(msg feedLoadedMsg) tea.Cmd {
 // refreshState tracks a network refresh across its per-feed results.
 type refreshState struct {
 	total, done int
-	at          time.Time // when the last full refresh finished
+	inFlight    map[int]bool // cfg.Urls indexes being fetched
+	at          time.Time    // when the last full refresh finished
 }
 
 type minuteTickMsg struct{}

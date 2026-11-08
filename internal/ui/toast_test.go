@@ -110,3 +110,12 @@ func TestToasts_Prefix(t *testing.T) {
 		t.Error("no toasts should render nothing")
 	}
 }
+
+func TestNotify_StripsControlChars(t *testing.T) {
+	m := newTestModel(t)
+	m.notify(toastError, "feed: bad \x1b]52;c;aGk=\x07\nthing")
+	got := m.toasts.items[0].text
+	if strings.ContainsAny(got, "\x1b\x07\n") {
+		t.Fatalf("control characters reached the toast: %q", got)
+	}
+}

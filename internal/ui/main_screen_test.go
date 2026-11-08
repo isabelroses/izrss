@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"math/rand/v2"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -43,8 +45,8 @@ func TestAllPostsFirstAndMixed(t *testing.T) {
 			t.Errorf("row %d = %q, want %q (newest first)", i, m.postList.items[i].title, w)
 		}
 	}
-	if !strings.Contains(m.postList.items[1].right, "Beta") {
-		t.Errorf("All posts rows should name the feed: %q", m.postList.items[1].right)
+	if r := m.postList.items[1].rightText(); r != "Beta · 04/11/2026" {
+		t.Errorf("All posts rows should name the feed: %q", r)
 	}
 	if m.feedList.items[0].right != "3" {
 		t.Errorf("All posts unread count = %q, want 3", m.feedList.items[0].right)
@@ -129,13 +131,11 @@ func TestKeys_JumpRefreshOpen(t *testing.T) {
 	}
 
 	m.fetcher = rss.NewFetcher(m.db, "02/01/2006")
-	_, msgs := update(m, press("r"))
-	if started, ok := find[refreshStartedMsg](msgs); !ok || started.total != 1 {
-		t.Errorf("r on a feed should refresh 1 feed, got %+v", started)
+	if r, _ := update(m, press("r")); r.refresh.total != 1 {
+		t.Errorf("r on a feed should refresh 1 feed, got %d", r.refresh.total)
 	}
-	_, msgs = update(m, press("R"))
-	if started, _ := find[refreshStartedMsg](msgs); started.total != 3 {
-		t.Errorf("R should refresh all 3, got %d", started.total)
+	if r, _ := update(m, press("R")); r.refresh.total != 3 {
+		t.Errorf("R should refresh all 3, got %d", r.refresh.total)
 	}
 }
 
@@ -143,7 +143,7 @@ func TestRefresh_KeepsSelectionByKey(t *testing.T) {
 	m, _ := keys(newTestModel(t), "l", "j", "j") // Alpha post 2
 	f := sampleFeeds()[0]
 	f.Posts = append([]rss.Post{{UUID: "new1", Title: "new 1", Published: t0.Add(time.Hour)}, {UUID: "new2", Title: "new 2", Published: t0.Add(time.Hour)}}, f.Posts...)
-	m, _ = update(m, refreshStartedMsg{total: 1})
+	m.refresh = refreshing(0)
 	m, _ = update(m, feedLoadedMsg{feed: f, index: 0})
 	if selectedTitle(m.postList) != "Alpha post 2" {
 		t.Errorf("selection moved to %q", selectedTitle(m.postList))
@@ -154,7 +154,7 @@ func TestRefresh_SelectedPostRemoved(t *testing.T) {
 	m, _ := keys(newTestModel(t), "l", "J")
 	f := sampleFeeds()[0]
 	f.Posts = f.Posts[:1]
-	m, _ = update(m, refreshStartedMsg{total: 1})
+	m.refresh = refreshing(0)
 	m, _ = update(m, feedLoadedMsg{feed: f, index: 0})
 	if m.postList.cursor != 0 || selectedTitle(m.postList) != "Alpha post 0" {
 		t.Errorf("cursor should clamp, got %d %q", m.postList.cursor, selectedTitle(m.postList))
@@ -227,5 +227,162 @@ func TestMainView_FitsWidth(t *testing.T) {
 func TestQuit(t *testing.T) {
 	if _, msgs := keys(newTestModel(t), "q"); !quits(msgs) {
 		t.Error("q on the main screen should quit")
+	}
+}
+
+// The status line's unread total follows read-state changes and refreshes.
+func TestStatusLine_UnreadTracksChanges(t *testing.T) {
+	m := newTestModel(t)
+	status := func() string {
+		lines := strings.Split(ansi.Strip(m.View().Content), "\n")
+		return lines[len(lines)-1]
+	}
+	if s := status(); !strings.Contains(s, "3 unread") {
+		t.Fatalf("status %q, want 3 unread", s)
+	}
+	m, _ = keys(m, "l", "x") // Alpha's first post, unread, becomes read
+	if s := status(); !strings.Contains(s, "2 unread") {
+		t.Errorf("after toggle: status %q, want 2 unread", s)
+	}
+	fresh := sampleFeeds()[1]
+	fresh.Posts[1].Read = false // not saved read, so the refresh leaves it unread
+	m, _ = update(m, feedLoadedMsg{feed: fresh, index: 1})
+	if s := status(); !strings.Contains(s, "3 unread") {
+		t.Errorf("after refresh: status %q, want 3 unread", s)
+	}
+}
+
+// "All posts" lists posts published at the same moment in feed order, then
+// post order, as a stable sort by date does.
+func TestAllPosts_TiesKeepFeedOrder(t *testing.T) {
+	m := newTestModel(t)
+	fs := sampleFeeds()
+	for i := range fs {
+		for j := range fs[i].Posts {
+			fs[i].Posts[j].Published = t0
+		}
+	}
+	m, _ = update(m, feedsRefreshedMsg{feeds: fs})
+	m.feedList.move(-m.feedList.cursor)
+	m.rebuildPosts()
+	var got []string
+	for _, it := range m.postList.items {
+		got = append(got, it.title)
+	}
+	var want []string
+	for _, f := range fs {
+		for _, p := range f.Posts {
+			want = append(want, p.Title)
+		}
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("rows = %q, want %q", got, want)
+	}
+}
+
+// sortNewestFirst orders exactly as a stable sort by descending time does,
+// whether the input is in runs (as feeds are) or not.
+func TestSortNewestFirst_MatchesStableSort(t *testing.T) {
+	rng := rand.New(rand.NewPCG(1, 2))
+	for n := range 200 {
+		refs := make([]postRef, n)
+		for i := range refs {
+			// Few distinct times so ties are common; some zero times.
+			ts := time.Time{}
+			if rng.IntN(5) > 0 {
+				ts = t0.Add(time.Duration(rng.IntN(8)) * time.Second / 2)
+			}
+			refs[i] = postRef{sec: ts.Unix(), nsec: int32(ts.Nanosecond()), feed: int32(i)}
+		}
+		if n%2 == 0 { // feed-like: sorted runs
+			for lo := 0; lo < n; lo += 7 {
+				run := refs[lo:min(lo+7, n)]
+				slices.SortStableFunc(run, func(a, b postRef) int { return cmpRef(b, a) })
+			}
+		}
+		want := slices.Clone(refs)
+		slices.SortStableFunc(want, func(a, b postRef) int { return cmpRef(b, a) })
+		if got := sortNewestFirst(slices.Clone(refs)); !slices.Equal(got, want) {
+			t.Fatalf("n=%d:\n got %v\nwant %v", n, got, want)
+		}
+	}
+}
+
+func cmpRef(a, b postRef) int {
+	switch {
+	case a.newer(b):
+		return 1
+	case b.newer(a):
+		return -1
+	}
+	return 0
+}
+
+// A refresh requested while one is running only adds feeds not already in
+// flight, so progress never counts past the number of feeds.
+func TestRefresh_NoStacking(t *testing.T) {
+	m := newTestModel(t)
+	m.fetcher = rss.NewFetcher(m.db, "02/01/2006")
+	m, first := update(m, press("r"))  // Alpha
+	m, second := update(m, press("R")) // adds Beta and Gamma
+	if m.refresh.total != len(m.feeds) {
+		t.Fatalf("r then R: total %d, want %d", m.refresh.total, len(m.feeds))
+	}
+	if n := len(first) + len(second); n != len(m.feeds) {
+		t.Errorf("r then R fetched %d feeds, want %d", n, len(m.feeds))
+	}
+	m, again := update(m, press("R"))
+	if m.refresh.total != len(m.feeds) || len(again) != 0 {
+		t.Errorf("R while all are in flight: total %d, %d fetches", m.refresh.total, len(again))
+	}
+
+	f := sampleFeeds()
+	m, _ = update(m, feedLoadedMsg{feed: f[0], index: 0})
+	m, _ = update(m, feedLoadedMsg{feed: f[0], index: 0}) // a late duplicate
+	if m.refresh.done != 1 {
+		t.Errorf("a duplicate result was counted: done %d", m.refresh.done)
+	}
+	if s := statusText(m.unread, m.refresh, m.now()); s != "refreshing 1/3…" {
+		t.Errorf("status %q", s)
+	}
+	m, _ = update(m, feedLoadedMsg{feed: f[1], index: 1})
+	m, _ = update(m, feedLoadedMsg{feed: f[2], index: 2})
+	if m.refresh.total != 0 || m.refresh.at.IsZero() {
+		t.Errorf("refresh should be finished: %+v", m.refresh)
+	}
+	m, msgs := update(m, press("r"))
+	if m.refresh.total != 1 || len(msgs) != 1 {
+		t.Errorf("r after the refresh finished: total %d, %d fetches", m.refresh.total, len(msgs))
+	}
+}
+
+// A feed with no title is named by its URL's host, without "www.", wherever
+// it is shown.
+func TestUntitledFeed_NamedByHost(t *testing.T) {
+	m := newTestModel(t)
+	noTicks(&m)
+	feeds := sampleFeeds()
+	feeds[1].Title = ""
+	feeds[1].URL = "https://www.danluu.com/atom.xml"
+	m, _ = update(m, feedsRefreshedMsg{feeds: feeds})
+
+	if got := m.feedList.items[2].title; got != "danluu.com" {
+		t.Errorf("feeds pane: %q, want danluu.com", got)
+	}
+	m, _ = keys(m, "k") // All posts
+	if got := m.postList.items[1].source; got != "danluu.com" {
+		t.Errorf("All posts feed column: %q, want danluu.com", got)
+	}
+	m, _ = keys(m, "/")
+	m = typeText(m, "beta post 0")
+	if view := ansi.Strip(m.View().Content); !strings.Contains(view, "danluu.com") {
+		t.Error("palette rows should name the feed by host")
+	}
+	m, _ = keys(m, "esc")
+
+	m.refresh = refreshing(1)
+	m, _ = update(m, feedLoadedMsg{feed: rss.Feed{URL: feeds[1].URL, Err: timeoutErr()}, index: 1})
+	if got := toastTexts(m); len(got) != 1 || got[0] != "danluu.com: timed out" {
+		t.Errorf("toasts = %q", got)
 	}
 }

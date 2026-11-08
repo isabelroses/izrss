@@ -23,7 +23,7 @@ func items(n int) []item {
 
 func TestList_MoveAndScroll(t *testing.T) {
 	l := list{height: 5}
-	l.setItems(items(20), "")
+	l.setItems(items(20), item{})
 	l.move(7)
 	if l.cursor != 7 || l.offset != 3 {
 		t.Errorf("cursor %d offset %d, want 7 and 3", l.cursor, l.offset)
@@ -40,14 +40,14 @@ func TestList_MoveAndScroll(t *testing.T) {
 
 func TestList_SetItemsKeepsKey(t *testing.T) {
 	l := list{height: 10}
-	l.setItems(items(6), "")
+	l.setItems(items(6), item{})
 	l.move(2)
 	moved := append([]item{{key: "x"}, {key: "y"}, {key: "z"}}, items(6)...)
-	l.setItems(moved, "2")
+	l.setItems(moved, item{key: "2"})
 	if sel, _ := l.selected(); sel.key != "2" || l.cursor != 5 {
 		t.Errorf("cursor should follow key 2 to row 5, got row %d key %q", l.cursor, sel.key)
 	}
-	l.setItems(items(3), "gone")
+	l.setItems(items(3), item{key: "gone"})
 	if l.cursor != 2 {
 		t.Errorf("missing key should clamp the cursor, got %d", l.cursor)
 	}
@@ -62,7 +62,7 @@ func TestList_TinyAndWide(t *testing.T) {
 	for _, h := range []int{0, 1, 3} {
 		for _, w := range []int{1, 5, 20, 80} {
 			l := list{height: h}
-			l.setItems(its, "")
+			l.setItems(its, item{})
 			for _, focused := range []bool{true, false} {
 				lines := l.view(w, focused, testListTheme())
 				if len(lines) != h {
@@ -91,7 +91,7 @@ func TestList_Empty(t *testing.T) {
 
 func TestList_RowLayout(t *testing.T) {
 	l := list{height: 2}
-	l.setItems([]item{{key: "a", title: "Title", right: "12", marker: "•"}, {key: "b", title: "Feed", right: "3"}}, "")
+	l.setItems([]item{{key: "a", title: "Title", right: "12", marker: "•"}, {key: "b", title: "Feed", right: "3"}}, item{})
 	lines := l.view(20, false, testListTheme())
 	if got := ansi.Strip(lines[0]); got != " • Title         12 " {
 		t.Errorf("row with marker: %q", got)
@@ -106,7 +106,7 @@ func TestList_RowLayout(t *testing.T) {
 func TestList_SelectionBars(t *testing.T) {
 	th := testListTheme()
 	l := list{height: 2}
-	l.setItems(items(2), "")
+	l.setItems(items(2), item{})
 	focused := l.view(20, true, th)
 	if !strings.HasPrefix(focused[0], th.sel) {
 		t.Errorf("focused selection should open with the accent bar: %q", focused[0])
@@ -126,7 +126,7 @@ func TestList_SelectionBars(t *testing.T) {
 
 func BenchmarkListView(b *testing.B) {
 	l := list{height: 40}
-	l.setItems(items(400), "")
+	l.setItems(items(400), item{})
 	l.move(200)
 	b.ReportAllocs()
 	for b.Loop() {

@@ -176,8 +176,8 @@ func readerWidth(size any, width int) int {
 // position on the right.
 func (m Model) readerHeader() string {
 	meta := []string{}
-	if loc, ok := m.openLoc(); ok && m.feeds[loc.Feed].Title != "" {
-		meta = append(meta, m.feeds[loc.Feed].Title)
+	if loc, ok := m.openLoc(); ok {
+		meta = append(meta, feedName(m.feeds[loc.Feed]))
 	}
 	if m.post.Date != "" {
 		meta = append(meta, m.post.Date)

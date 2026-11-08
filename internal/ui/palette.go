@@ -87,11 +87,30 @@ func (m *Model) paletteKey(msg tea.KeyPressMsg) tea.Cmd {
 // palette re-runs its query on a fresh index, a closed one drops the index.
 func (m *Model) feedsChanged() {
 	m.palette.index = nil
+	m.researchPalette()
+}
+
+// feedChanged is feedsChanged when only m.feeds[i] changed (or was
+// appended): an open palette's index re-indexes just that feed.
+func (m *Model) feedChanged(i int) {
+	if m.overlay != overlayPalette || m.palette.index == nil {
+		m.feedsChanged()
+		return
+	}
+	m.palette.index.update(m.feeds, i)
+	m.researchPalette()
+}
+
+// researchPalette re-runs an open palette's query over m.feeds.
+func (m *Model) researchPalette() {
 	if m.overlay != overlayPalette {
+		m.palette.index = nil
 		return
 	}
 	if q := m.palette.input.Value(); q != "" {
-		m.palette.index = newSearchIndex(m.feeds)
+		if m.palette.index == nil {
+			m.palette.index = newSearchIndex(m.feeds)
+		}
 		m.palette.hits = m.palette.index.search(q)
 	} else {
 		m.palette.hits = nil
@@ -126,12 +145,14 @@ func (p palette) view(feeds rss.Feeds, width int, th listTheme, st *Styles) stri
 	// Show a window of rows that keeps the cursor visible.
 	first := max(min(p.cursor-paletteRows+1, len(p.hits)-paletteRows), 0)
 	first = min(first, p.cursor)
-	items := make([]item, len(p.hits))
-	for i, loc := range p.hits {
+	// Only the visible rows are built; a broad query can hit every post.
+	visible := p.hits[first:min(first+paletteRows, len(p.hits))]
+	items := make([]item, len(visible))
+	for i, loc := range visible {
 		post := feeds[loc.Feed].Posts[loc.Post]
-		items[i] = item{key: fmt.Sprint(i), title: post.Title, right: feeds[loc.Feed].Title, strong: !post.Read}
+		items[i] = item{title: post.Title, right: feedName(feeds[loc.Feed]), strong: !post.Read}
 	}
-	rows := list{items: items, cursor: p.cursor, offset: first, height: min(paletteRows, len(p.hits))}
+	rows := list{items: items, cursor: p.cursor - first, height: min(paletteRows, len(p.hits))}
 	lines = append(lines, rows.view(inner, true, th)...)
 
 	var foot string

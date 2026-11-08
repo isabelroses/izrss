@@ -166,6 +166,21 @@ func (f Feeds) ReadTracking(db *storage.DB) error {
 	return nil
 }
 
+// ReadTrackingAt reads the tracking state of the feed at index i alone from
+// the database, as ReadTracking would set it.
+func (f Feeds) ReadTrackingAt(db *storage.DB, i int) error {
+	statuses, err := db.LoadFeedReadStatuses(f[i].URL)
+	if err != nil {
+		return err
+	}
+	for j, post := range f[i].Posts {
+		if read, ok := statuses[post.Key()]; ok {
+			f[i].Posts[j].Read = read
+		}
+	}
+	return nil
+}
+
 // Fetcher handles RSS feed fetching. Its fetches share one concurrency
 // limit, however many callers there are.
 type Fetcher struct {
@@ -290,11 +305,20 @@ func (f *Fetcher) loadFeed(url string, preferCache bool) (feed *gofeed.Feed, cac
 	return feed, cacheErr, err
 }
 
+// newParser is a gofeed parser that skips the RSS translator's search of
+// every item's HTML for a first <img>: a full HTML parse per item, for an
+// Item.Image izrss never reads.
+func newParser() *gofeed.Parser {
+	p := gofeed.NewParser()
+	p.RSSTranslator = &gofeed.DefaultRSSTranslator{DisableContentImageScan: true}
+	return p
+}
+
 func parseFeed(url string, data []byte) (*gofeed.Feed, error) {
 	if len(data) == 0 {
 		return nil, fmt.Errorf("%s returned an empty feed", url)
 	}
-	feed, err := gofeed.NewParser().Parse(bytes.NewReader(data))
+	feed, err := newParser().Parse(bytes.NewReader(data))
 	if err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", url, err)
 	}

@@ -104,3 +104,21 @@ func quits(msgs []tea.Msg) bool {
 	_, ok := find[tea.QuitMsg](msgs)
 	return ok
 }
+
+// refreshing is a refresh in progress of the feeds at cfg.Urls indexes idx.
+func refreshing(idx ...int) refreshState {
+	r := refreshState{total: len(idx), inFlight: make(map[int]bool, len(idx))}
+	for _, i := range idx {
+		r.inFlight[i] = true
+	}
+	return r
+}
+
+// upTo is 0..n-1.
+func upTo(n int) []int {
+	idx := make([]int, n)
+	for i := range idx {
+		idx[i] = i
+	}
+	return idx
+}

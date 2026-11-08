@@ -73,7 +73,7 @@ const statusMargin = 1
 // statusLine shows key hints on the left and the feed status on the right,
 // margin cells in from each edge.
 func (m Model) statusLine(margin int) string {
-	status := statusText(m.feeds.GetTotalUnreads(), m.refresh, m.now())
+	status := statusText(m.unread, m.refresh, m.now())
 	h := m.help
 	h.SetWidth(max(m.width-2*margin-ansi.StringWidth(status)-2, 0))
 	left := h.ShortHelpView(bindings.shortHelp(m.screen, m.focus))

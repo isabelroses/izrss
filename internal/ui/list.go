@@ -8,9 +8,12 @@ import (
 )
 
 // item is one row of a list: an optional marker, a title, and a right column.
+// A row is identified by group and key together; posts are grouped by feed
+// URL, since one post can be cross-posted in several feeds.
 type item struct {
-	key, title, right, marker string
-	strong                    bool // bold title (e.g. unread)
+	group, key, title, right, marker string
+	source                           string // shown before right, as "source · right"
+	strong                           bool   // bold title (e.g. unread)
 }
 
 // listTheme holds the list colours and the escape sequences built from them
@@ -45,13 +48,21 @@ type list struct {
 	cursor, offset, height int
 }
 
-// setItems replaces the rows, keeping the cursor on keepKey when present and
-// otherwise clamping it.
-func (l *list) setItems(items []item, keepKey string) {
+// rightText is the right column's text.
+func (it item) rightText() string {
+	if it.source == "" {
+		return it.right
+	}
+	return it.source + " · " + it.right
+}
+
+// setItems replaces the rows, keeping the cursor on the row identified as
+// keep is when present and otherwise clamping it.
+func (l *list) setItems(items []item, keep item) {
 	l.items = items
-	if keepKey != "" {
+	if keep.key != "" {
 		for i, it := range items {
-			if it.key == keepKey {
+			if it.key == keep.key && it.group == keep.group {
 				l.cursor = i
 				l.scroll()
 				return
@@ -120,7 +131,7 @@ func (l list) row(it item, cursor bool, width int, focused bool, th listTheme) s
 	if it.marker != "" && inner >= 4 {
 		marker = it.marker + " "
 	}
-	right := it.right
+	right := it.rightText()
 	titleW := inner - ansi.StringWidth(marker)
 	if rw := ansi.StringWidth(right); rw > 0 && titleW-rw-1 >= 4 {
 		titleW -= rw + 1

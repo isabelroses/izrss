@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -117,5 +118,20 @@ func TestLoad_EmptyPath(t *testing.T) {
 	}
 	if cfg != nil && cfg.Home != "home" {
 		t.Errorf("Expected default Home if config loaded, got %q", cfg.Home)
+	}
+}
+
+func TestLoad_DedupesUrls(t *testing.T) {
+	cfg, err := Load(writeConfig(t, `urls = ["https://a.example/feed", "https://b.example/feed", "https://a.example/feed", "https://c.example/feed", "https://b.example/feed"]`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"https://a.example/feed", "https://b.example/feed", "https://c.example/feed"}
+	if !slices.Equal(cfg.Urls, want) {
+		t.Errorf("Urls = %q, want %q (first occurrence kept, order preserved)", cfg.Urls, want)
+	}
+	wantW := []string{"duplicate feed url https://a.example/feed", "duplicate feed url https://b.example/feed"}
+	if w := cfg.Warnings(); !slices.Equal(w, wantW) {
+		t.Errorf("Warnings = %q, want %q", w, wantW)
 	}
 }

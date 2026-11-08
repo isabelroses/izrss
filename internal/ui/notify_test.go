@@ -45,7 +45,7 @@ func timeoutErr() error {
 func TestFeedError_Toast(t *testing.T) {
 	m := newTestModel(t)
 	noTicks(&m)
-	m, _ = update(m, refreshStartedMsg{total: 1})
+	m.refresh = refreshing(1)
 	m, _ = update(m, feedLoadedMsg{feed: rss.Feed{URL: "https://Beta.example/feed", Title: "Beta.example", Err: timeoutErr()}, index: 1})
 	if got := toastTexts(m); len(got) != 1 || got[0] != "Beta: timed out" {
 		t.Errorf("toasts = %q, want [Beta: timed out]", got)
@@ -62,7 +62,7 @@ func TestRefreshFailures_ToastBurst(t *testing.T) {
 	for i := range 11 {
 		m.feeds = append(m.feeds, rss.Feed{Title: fmt.Sprintf("F%d", i), URL: fmt.Sprintf("https://f%d.example", i)})
 	}
-	m, _ = update(m, refreshStartedMsg{total: 11})
+	m.refresh = refreshing(upTo(14)[3:]...)
 	for i := range 11 {
 		f := rss.Feed{URL: fmt.Sprintf("https://f%d.example", i), Err: timeoutErr()}
 		m, _ = update(m, feedLoadedMsg{feed: f, index: 3 + i})

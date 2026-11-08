@@ -46,18 +46,20 @@ type Model struct {
 	ready         bool
 	started       bool // initial feed selection has been made
 
-	screen   screen
-	overlay  overlay
-	palette  palette
-	focus    pane
-	postsFor string // the feed key the posts pane was built for
-	feeds    rss.Feeds
-	feedList list
-	postList list
-	refresh  refreshState
-	toasts   toasts
-	now      func() time.Time
-	openURL  func(string) error
+	screen     screen
+	overlay    overlay
+	palette    palette
+	focus      pane
+	postsFor   string // the feed key the posts pane was built for
+	feeds      rss.Feeds
+	feedList   list
+	postList   list
+	unread     int // unread posts in all feeds, as of rebuildFeeds
+	feedTitleW int // the widest feeds-pane title, as of rebuildFeeds
+	refresh    refreshState
+	toasts     toasts
+	now        func() time.Time
+	openURL    func(string) error
 
 	// reader
 	viewport viewport.Model
@@ -114,7 +116,7 @@ func (m Model) Init() tea.Cmd {
 		tea.RequestBackgroundColor,
 		minuteTick(),
 		m.warningsCmd(),
-		tea.Sequence(m.loadCachedFeeds(), m.refreshFeeds(m.allIndexes())),
+		tea.Sequence(m.loadCachedFeeds(), func() tea.Msg { return refreshMsg{indexes: m.allIndexes()} }),
 	)
 }
 
@@ -186,8 +188,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.rebuildFeeds()
 		m.selectInitialFeed()
-	case refreshStartedMsg:
-		m.refresh.total += msg.total
+	case refreshMsg:
+		cmds = append(cmds, m.refreshFeeds(msg.indexes))
 	case feedLoadedMsg:
 		cmds = append(cmds, m.feedLoaded(msg))
 	case minuteTickMsg:

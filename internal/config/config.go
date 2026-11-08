@@ -4,6 +4,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"slices"
 
 	"github.com/adrg/xdg"
 	"github.com/pelletier/go-toml/v2"
@@ -15,6 +16,8 @@ type Config struct {
 	Urls       []string `toml:"urls"`
 	Reader     Reader   `toml:"reader"`
 	Colors     Colors   `toml:"colors"`
+
+	duplicates []string // urls listed more than once, dropped by Load
 }
 
 type Reader struct {
@@ -70,6 +73,9 @@ func (c *Config) Warnings() []string {
 	if c.Reader.Theme != "" {
 		w = append(w, "reader.theme is no longer supported; see example.toml for reader colours")
 	}
+	for _, u := range c.duplicates {
+		w = append(w, "duplicate feed url "+u)
+	}
 	return w
 }
 
@@ -93,6 +99,25 @@ func Load(path string) (*Config, error) {
 	if err := toml.Unmarshal(configRaw, cfg); err != nil {
 		return nil, fmt.Errorf("parsing config file: %w", err)
 	}
+	cfg.dedupeUrls()
 
 	return cfg, nil
+}
+
+// dedupeUrls drops repeated urls, keeping the first of each in order, and
+// remembers them for Warnings.
+func (c *Config) dedupeUrls() {
+	seen := make(map[string]bool, len(c.Urls))
+	urls := c.Urls[:0]
+	for _, u := range c.Urls {
+		if seen[u] {
+			if !slices.Contains(c.duplicates, u) {
+				c.duplicates = append(c.duplicates, u)
+			}
+			continue
+		}
+		seen[u] = true
+		urls = append(urls, u)
+	}
+	c.Urls = urls
 }
