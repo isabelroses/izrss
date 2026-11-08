@@ -2,6 +2,7 @@ package reader
 
 import (
 	"image/color"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -321,7 +322,7 @@ func (r *renderer) pre(n *html.Node) block {
 		lines = strings.Split(code, "\n")
 	}
 	if title != "" {
-		lines = append([]string{style{fg: r.o.Theme.Subtle}.open() + title + ansi.ResetStyle}, lines...)
+		lines = slices.Insert(lines, 0, style{fg: r.o.Theme.Subtle}.open()+title+ansi.ResetStyle)
 	}
 	return block{lines: codeBox(lines, r.width, r.codeBg)}
 }

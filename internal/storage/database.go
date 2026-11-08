@@ -4,6 +4,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -192,7 +193,7 @@ func (db *DB) SavePostReadStatuses(statuses []PostReadStatus) error {
 	}
 	defer func() {
 		err := tx.Rollback()
-		if err != nil && err != sql.ErrTxDone {
+		if err != nil && !errors.Is(err, sql.ErrTxDone) {
 			log.Printf("transaction rollback error: %v", err)
 		}
 	}()
@@ -268,7 +269,7 @@ func (db *DB) LoadFeedReadStatuses(feedURL string) (map[string]bool, error) {
 func (db *DB) GetCacheTime() (*time.Time, error) {
 	var value string
 	err := db.conn.QueryRow(`SELECT value FROM cache_metadata WHERE key = 'last_fetch_time'`).Scan(&value)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
@@ -307,7 +308,7 @@ func (db *DB) SaveFeedCache(url string, content []byte) error {
 func (db *DB) LoadFeedCache(url string) ([]byte, error) {
 	var content []byte
 	err := db.conn.QueryRow(`SELECT content FROM feed_cache WHERE url = ?`, url).Scan(&content)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {

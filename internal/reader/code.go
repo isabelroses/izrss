@@ -24,7 +24,7 @@ func codeLanguage(pre *html.Node) string {
 		}
 	}
 	for _, n := range nodes {
-		for _, class := range strings.Fields(attr(n, "class")) {
+		for class := range strings.FieldsSeq(attr(n, "class")) {
 			for _, p := range []string{"language-", "lang-"} {
 				if lang, ok := strings.CutPrefix(class, p); ok {
 					return lang

@@ -87,7 +87,7 @@ func TestToasts_ViewFitsWidth(t *testing.T) {
 	var ts toasts
 	recordTicks(&ts)
 	ts.add(toastError, strings.Repeat("long ", 60))
-	for _, l := range strings.Split(ts.view(40, testToastTheme()), "\n") {
+	for l := range strings.SplitSeq(ts.view(40, testToastTheme()), "\n") {
 		if w := ansi.StringWidth(l); w > 40 {
 			t.Errorf("toast %d wide: %q", w, ansi.Strip(l))
 		}

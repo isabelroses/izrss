@@ -101,7 +101,7 @@ func (m Model) pageView() string {
 	}
 	first := vp.YOffset()
 	visible := m.docWidth[min(first, len(m.docWidth)):min(first+height, len(m.docWidth))]
-	if slices.Max(append([]int{0}, visible...)) > width {
+	if slices.ContainsFunc(visible, func(w int) bool { return w > width }) {
 		return vp.View()
 	}
 

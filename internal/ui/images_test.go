@@ -89,7 +89,7 @@ func run(cmd tea.Cmd) []tea.Msg {
 		return nil
 	}
 	v := reflect.ValueOf(msg)
-	if v.Kind() == reflect.Slice && v.Type().Elem() == reflect.TypeOf(tea.Cmd(nil)) {
+	if v.Kind() == reflect.Slice && v.Type().Elem() == reflect.TypeFor[tea.Cmd]() {
 		var out []tea.Msg
 		for i := range v.Len() {
 			out = append(out, run(v.Index(i).Interface().(tea.Cmd))...)
@@ -287,7 +287,7 @@ func TestResize_RePlacesWithoutRefetch(t *testing.T) {
 	if srv.hits.Load() != hits {
 		t.Error("resize must not re-fetch")
 	}
-	for _, line := range strings.Split(m.viewport.GetContent(), "\n") {
+	for line := range strings.SplitSeq(m.viewport.GetContent(), "\n") {
 		if w := ansi.StringWidth(line); w > 40 {
 			t.Errorf("line wider than the new width: %d", w)
 		}
@@ -316,7 +316,7 @@ func TestResizeOnMain_ReopenRefits(t *testing.T) {
 	if !strings.Contains(r, "a=p") || !strings.Contains(r, "i="+strconv.Itoa(pi.id)) {
 		t.Errorf("reopen should re-place image %d, got %q", pi.id, r)
 	}
-	for _, line := range strings.Split(m.viewport.GetContent(), "\n") {
+	for line := range strings.SplitSeq(m.viewport.GetContent(), "\n") {
 		if w := ansi.StringWidth(line); w > 40 {
 			t.Errorf("line wider than the new width: %d", w)
 		}
@@ -343,7 +343,7 @@ func TestView_PlaceholderKeepsIDColour(t *testing.T) {
 	sgr := "38;5;" + strconv.Itoa(id)
 
 	found := false
-	for _, line := range strings.Split(m.View().Content, "\n") {
+	for line := range strings.SplitSeq(m.View().Content, "\n") {
 		i := strings.Index(line, placeholder)
 		if i < 0 {
 			continue

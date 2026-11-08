@@ -124,7 +124,7 @@ func TestReader_SideMargin(t *testing.T) {
 func TestReader_DocumentMargin(t *testing.T) {
 	m, _ := keys(newTestModel(t), "l", "enter")
 	var body string
-	for _, line := range strings.Split(ansi.Strip(m.View().Content), "\n") {
+	for line := range strings.SplitSeq(ansi.Strip(m.View().Content), "\n") {
 		if strings.Contains(line, "Alpha body 0") {
 			body = line
 		}

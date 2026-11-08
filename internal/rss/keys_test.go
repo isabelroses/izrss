@@ -129,11 +129,9 @@ func TestFetcher_BoundedConcurrency(t *testing.T) {
 	f := NewFetcher(testDB(t), "02/01/2006")
 	var wg sync.WaitGroup
 	for i := range 20 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			f.GetContentForURL(srv.URL+"/"+string(rune('a'+i)), false)
-		}()
+		})
 	}
 	wg.Wait()
 	if p := peak.Load(); p > maxConcurrentFetches {

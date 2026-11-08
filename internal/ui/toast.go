@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"image/color"
+	"slices"
 	"strings"
 	"time"
 
@@ -83,7 +84,7 @@ func (t *toasts) timer(item toast) tea.Cmd {
 func (t *toasts) expire(msg toastExpiredMsg) {
 	for i, item := range t.items {
 		if item.id == msg.id && item.gen == msg.gen {
-			t.items = append(t.items[:i], t.items[i+1:]...)
+			t.items = slices.Delete(t.items, i, i+1)
 			return
 		}
 	}

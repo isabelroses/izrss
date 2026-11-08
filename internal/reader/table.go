@@ -62,7 +62,7 @@ func (r *renderer) table(n *html.Node) block {
 		out = build().Width(r.width).String()
 	}
 	var b block
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		b.lines = append(b.lines, ansi.Truncate(line, r.width, "…"))
 	}
 	return b

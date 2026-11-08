@@ -55,7 +55,7 @@ func (r *renderer) image(n *html.Node) (block, bool) {
 // Density descriptors ("2x") are skipped: they say nothing about pixel width.
 func (r *renderer) srcset(s string) []Candidate {
 	var out []Candidate
-	for _, entry := range strings.Split(s, ",") {
+	for entry := range strings.SplitSeq(s, ",") {
 		fields := strings.Fields(entry)
 		if len(fields) != 2 || !strings.HasSuffix(fields[1], "w") {
 			continue
