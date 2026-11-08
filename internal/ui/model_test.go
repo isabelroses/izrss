@@ -25,7 +25,7 @@ func TestBackgroundColorMsg_SetsReaderStyle(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := NewModel(&config.Config{}, nil, nil, nil, nil)
+			m := NewModel(&config.Config{}, nil, nil, nil)
 			if textFg(*m) != wantFg(true) {
 				t.Fatalf("expected dark default before the reply")
 			}

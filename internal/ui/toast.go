@@ -23,34 +23,17 @@ const (
 	maxToasts = 3
 )
 
-type toastKind int
-
-const (
-	toastError toastKind = iota
-	toastWarn
-)
-
-// notifyMsg asks the UI to show a toast; commands return it on failure.
-type notifyMsg struct {
-	kind toastKind
-	text string
-}
-
-func notifyErr(text string) tea.Msg  { return notifyMsg{kind: toastError, text: text} }
-func notifyWarn(text string) tea.Msg { return notifyMsg{kind: toastWarn, text: text} }
-
 // toastExpiredMsg ends a toast. gen changes when a toast's timer restarts, so
 // an older timer can't remove it early.
 type toastExpiredMsg struct{ id, gen int }
 
 type toast struct {
 	id, gen int
-	kind    toastKind
 	text    string
 	count   int
 }
 
-type toastTheme struct{ text, bg, err, warn color.Color }
+type toastTheme struct{ text, bg, err color.Color }
 
 // toasts is a short stack of transient notifications, newest first.
 type toasts struct {
@@ -61,16 +44,16 @@ type toasts struct {
 
 // add shows a toast, merging it into an identical visible one, and returns
 // the command that expires it.
-func (t *toasts) add(kind toastKind, text string) tea.Cmd {
+func (t *toasts) add(text string) tea.Cmd {
 	for i := range t.items {
-		if t.items[i].kind == kind && t.items[i].text == text {
+		if t.items[i].text == text {
 			t.items[i].count++
 			t.items[i].gen++
 			return t.timer(t.items[i])
 		}
 	}
 	t.next++
-	item := toast{id: t.next, kind: kind, text: text, count: 1}
+	item := toast{id: t.next, text: text, count: 1}
 	t.items = append([]toast{item}, t.items...)
 	if len(t.items) > maxToasts {
 		t.items = t.items[:maxToasts]
@@ -103,16 +86,12 @@ func (t toasts) view(maxWidth int, th toastTheme) string {
 	}
 	lines := make([]string, len(t.items))
 	for i, item := range t.items {
-		prefix, fg := "✗", th.err
-		if item.kind == toastWarn {
-			prefix, fg = "!", th.warn
-		}
 		text := item.text
 		if item.count > 1 {
 			text = fmt.Sprintf("%s ×%d", text, item.count)
 		}
 		body := ansi.Truncate(text, maxWidth-4, "…") // " ✗ " + text + " "
-		lines[i] = lipgloss.NewStyle().Background(th.bg).Foreground(fg).Render(" "+prefix+" ") +
+		lines[i] = lipgloss.NewStyle().Background(th.bg).Foreground(th.err).Render(" ✗ ") +
 			lipgloss.NewStyle().Background(th.bg).Foreground(th.text).Render(body+" ")
 	}
 	return strings.Join(lines, "\n")
@@ -120,7 +99,7 @@ func (t toasts) view(maxWidth int, th toastTheme) string {
 
 // notify shows a toast and records it in the log file. Error text can carry
 // server-supplied bytes, so control characters are dropped before display.
-func (m *Model) notify(kind toastKind, text string) tea.Cmd {
+func (m *Model) notify(text string) tea.Cmd {
 	text = strings.Map(func(r rune) rune {
 		if unicode.IsControl(r) {
 			return ' '
@@ -128,12 +107,7 @@ func (m *Model) notify(kind toastKind, text string) tea.Cmd {
 		return r
 	}, text)
 	log.Print(text)
-	return m.toasts.add(kind, text)
-}
-
-func (m Model) toastTheme() toastTheme {
-	c := m.cfg.Colors
-	return toastTheme{text: hex(c.Text), bg: hex(c.Borders), err: lipgloss.Color("1"), warn: lipgloss.Color("3")}
+	return m.toasts.add(text)
 }
 
 var httpStatus = regexp.MustCompile(`: (\d{3}) [A-Z]`)

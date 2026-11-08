@@ -74,61 +74,48 @@ func TestSameGUIDInTwoFeedsIsIndependent(t *testing.T) {
 	}
 }
 
-// countingStore records what is written, to see that only changes are.
-type countingStore struct {
-	Store
-	rows []storage.PostReadStatus
-}
-
-func (c *countingStore) SavePostReadStatus(feedURL, key string, read bool) error {
-	c.rows = append(c.rows, storage.PostReadStatus{FeedURL: feedURL, Key: key, Read: read})
-	return c.Store.SavePostReadStatus(feedURL, key, read)
-}
-
-func (c *countingStore) SavePostReadStatuses(rows []storage.PostReadStatus) error {
-	c.rows = append(c.rows, rows...)
-	return c.Store.SavePostReadStatuses(rows)
+// rowCount is how many read rows db holds.
+func rowCount(t *testing.T, db *storage.DB) int {
+	t.Helper()
+	saved, err := db.LoadPostReadStatuses()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return len(saved)
 }
 
 func TestOnlyChangedRowsAreWritten(t *testing.T) {
 	db := testDB(t)
-	cs := &countingStore{Store: db}
-	s := New(cs)
+	s := New(db)
 	a := feed("a", rss.Post{UUID: "1"}, rss.Post{UUID: "2"}, rss.Post{UUID: "3"})
 	b := feed("b", rss.Post{UUID: "1"}, rss.Post{UUID: "2"})
 
 	if err := s.Set(a.Posts[0].Ref("a"), true); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Set(a.Posts[0].Ref("a"), true); err != nil { // no change
+	// A repeated mark must not write: with the database closed, a write fails.
+	if err := db.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if len(cs.rows) != 1 {
-		t.Fatalf("a repeated mark wrote %d rows, want 1", len(cs.rows))
+	if err := s.Set(a.Posts[0].Ref("a"), true); err != nil {
+		t.Errorf("a repeated mark wrote: %v", err)
 	}
-
-	cs.rows = nil
+	db = testDB(t)
+	s = New(db)
 	if err := s.MarkFeedRead(a); err != nil {
 		t.Fatal(err)
 	}
-	if len(cs.rows) != 2 {
-		t.Errorf("marking a feed read wrote %v, want its 2 unread posts only (nothing of feed b)", cs.rows)
-	}
-	for _, r := range cs.rows {
-		if r.FeedURL != "a" || !r.Read {
-			t.Errorf("unexpected row %+v", r)
-		}
+	if n := rowCount(t, db); n != 3 {
+		t.Errorf("marking a feed read wrote %d rows, want its 3 posts only (nothing of feed b)", n)
 	}
 	if s.Unread(a) != 0 || s.Unread(b) != 2 {
 		t.Errorf("unread a %d b %d, want 0, 2", s.Unread(a), s.Unread(b))
 	}
-
-	cs.rows = nil
-	if err := s.MarkFeedRead(a); err != nil || len(cs.rows) != 0 {
-		t.Errorf("marking a read feed wrote %v (err %v)", cs.rows, err)
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
 	}
-	if !reopened(t, db).IsRead("a", "3") {
-		t.Error("the feed's marks should be saved")
+	if err := s.MarkFeedRead(a); err != nil {
+		t.Errorf("marking a read feed wrote: %v", err)
 	}
 }
 
@@ -150,7 +137,7 @@ func TestSnapshotRestoreKeepsLaterMarks(t *testing.T) {
 	if err := New(db).Set(rss.PostRef{FeedURL: "a", Key: "old"}, true); err != nil {
 		t.Fatal(err)
 	}
-	snap, err := Read(db)
+	saved, err := db.LoadPostReadStatuses()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +145,7 @@ func TestSnapshotRestoreKeepsLaterMarks(t *testing.T) {
 	if err := s.Set(rss.PostRef{FeedURL: "a", Key: "new"}, true); err != nil {
 		t.Fatal(err)
 	}
-	s.Restore(snap)
+	s.Restore(saved)
 	if !s.IsRead("a", "old") || !s.IsRead("a", "new") {
 		t.Error("restoring should add the saved marks and keep newer ones")
 	}

@@ -60,11 +60,6 @@ func (db *DB) Close() error {
 
 func (db *DB) createTables() error {
 	_, err := db.conn.Exec(`
-		CREATE TABLE IF NOT EXISTS cache_metadata (
-			key TEXT PRIMARY KEY,
-			value TEXT NOT NULL
-		);
-
 		CREATE TABLE IF NOT EXISTS feed_cache (
 			url TEXT PRIMARY KEY,
 			content BLOB NOT NULL,
@@ -168,9 +163,6 @@ type PostReadStatus struct {
 	Read    bool
 }
 
-// ReadKey identifies a post's read state: the feed it is in and its key.
-type ReadKey struct{ FeedURL, Key string }
-
 // upsertReadStatus saves one post's read status; go-sqlite3 stores bools as
 // INTEGER 1 or 0.
 const upsertReadStatus = `
@@ -179,13 +171,7 @@ const upsertReadStatus = `
 	ON CONFLICT(feed_url, key) DO UPDATE SET read = excluded.read
 `
 
-// SavePostReadStatus saves the read status for a single post
-func (db *DB) SavePostReadStatus(feedURL, key string, read bool) error {
-	_, err := db.conn.Exec(upsertReadStatus, feedURL, key, read)
-	return err
-}
-
-// SavePostReadStatuses saves multiple read statuses in a single transaction
+// SavePostReadStatuses saves read statuses in a single transaction
 func (db *DB) SavePostReadStatuses(statuses []PostReadStatus) error {
 	tx, err := db.conn.Begin()
 	if err != nil {
@@ -217,21 +203,20 @@ func (db *DB) SavePostReadStatuses(statuses []PostReadStatus) error {
 }
 
 // LoadPostReadStatuses returns every saved read status
-func (db *DB) LoadPostReadStatuses() (map[ReadKey]bool, error) {
+func (db *DB) LoadPostReadStatuses() ([]PostReadStatus, error) {
 	rows, err := db.conn.Query(`SELECT feed_url, key, read FROM post_read_status`)
 	if err != nil {
 		return nil, fmt.Errorf("querying read statuses: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
-	statuses := make(map[ReadKey]bool)
+	var statuses []PostReadStatus
 	for rows.Next() {
-		var k ReadKey
-		var read bool
-		if err := rows.Scan(&k.FeedURL, &k.Key, &read); err != nil {
+		var st PostReadStatus
+		if err := rows.Scan(&st.FeedURL, &st.Key, &st.Read); err != nil {
 			return nil, fmt.Errorf("scanning row: %w", err)
 		}
-		statuses[k] = read
+		statuses = append(statuses, st)
 	}
 
 	if err := rows.Err(); err != nil {
@@ -241,33 +226,26 @@ func (db *DB) LoadPostReadStatuses() (map[ReadKey]bool, error) {
 	return statuses, nil
 }
 
-// GetCacheTime retrieves the last fetch time from the database
-func (db *DB) GetCacheTime() (*time.Time, error) {
-	var value string
-	err := db.conn.QueryRow(`SELECT value FROM cache_metadata WHERE key = 'last_fetch_time'`).Scan(&value)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
-	}
+// LastFetched is when a feed was last fetched and cached, the zero time if
+// none was.
+func (db *DB) LastFetched() (time.Time, error) {
+	rows, err := db.conn.Query(`SELECT fetched_at FROM feed_cache`)
 	if err != nil {
-		return nil, fmt.Errorf("querying cache time: %w", err)
+		return time.Time{}, fmt.Errorf("querying fetch times: %w", err)
 	}
+	defer func() { _ = rows.Close() }()
 
-	t, err := time.Parse(time.RFC3339, value)
-	if err != nil {
-		return nil, fmt.Errorf("parsing cache time: %w", err)
+	var last time.Time
+	for rows.Next() {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			return time.Time{}, fmt.Errorf("scanning row: %w", err)
+		}
+		if t, err := time.Parse(time.RFC3339, v); err == nil && t.After(last) {
+			last = t
+		}
 	}
-
-	return &t, nil
-}
-
-// SetCacheTime stores the current time as the last fetch time
-func (db *DB) SetCacheTime() error {
-	_, err := db.conn.Exec(`
-		INSERT INTO cache_metadata (key, value)
-		VALUES ('last_fetch_time', ?)
-		ON CONFLICT(key) DO UPDATE SET value = excluded.value
-	`, time.Now().Format(time.RFC3339))
-	return err
+	return last, rows.Err()
 }
 
 // SaveFeedCache stores the fetched feed content in the database

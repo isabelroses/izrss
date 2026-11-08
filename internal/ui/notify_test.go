@@ -9,10 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/isabelroses/izrss/internal/config"
 	"github.com/isabelroses/izrss/internal/imgsession"
 	"github.com/isabelroses/izrss/internal/rss"
 )
@@ -80,8 +78,7 @@ func TestTrackingError_Toast(t *testing.T) {
 	m := newTestModel(t)
 	noTicks(&m)
 	_ = m.db.Close()
-	m, msgs := keys(m, "l", "x")
-	m = applyNotifies(t, m, msgs)
+	m, _ = keys(m, "l", "x")
 	if got := toastTexts(m); len(got) != 1 || got[0] != "couldn't save read status" {
 		t.Errorf("toasts = %q", got)
 	}
@@ -91,8 +88,7 @@ func TestOpenLinkError_Toast(t *testing.T) {
 	m := newTestModel(t)
 	noTicks(&m)
 	m.openURL = func(string) error { return errors.New("no browser") }
-	m, msgs := keys(m, "l", "o")
-	m = applyNotifies(t, m, msgs)
+	m, _ = keys(m, "l", "o")
 	if got := toastTexts(m); len(got) != 1 || got[0] != "couldn't open link: no browser" {
 		t.Errorf("toasts = %q", got)
 	}
@@ -104,20 +100,9 @@ func TestImageFailures_OneToastPerPost(t *testing.T) {
 	p := rss.Post{UUID: "imgs", Link: "https://example.com/p", Content: `<img src="https://example.invalid/a.png"><img src="https://example.invalid/b.png">`}
 	m, _ = openPost(m, p)
 	for _, src := range []string{"https://example.invalid/a.png", "https://example.invalid/b.png"} {
-		var msgs []tea.Msg
-		m, msgs = update(m, imageLoadedMsg{imgsession.Result{Post: sessionKey(m.open), Src: src, Err: errors.New("404")}})
-		m = applyNotifies(t, m, msgs)
+		m, _ = update(m, imageLoadedMsg{imgsession.Result{Post: sessionKey(m.open), Src: src, Err: errors.New("404")}})
 	}
 	if got := toastTexts(m); len(got) != 1 || got[0] != "2 images in this post couldn't be loaded" {
-		t.Errorf("toasts = %q", got)
-	}
-}
-
-func TestConfigWarnings_ToastOnStart(t *testing.T) {
-	m := *NewModel(config.Default(), testDB(t), nil, nil, []string{"reader.theme is no longer supported"})
-	noTicks(&m)
-	m = applyNotifies(t, m, run(m.warningsCmd()))
-	if got := toastTexts(m); len(got) != 1 || got[0] != "reader.theme is no longer supported" || m.toasts.items[0].kind != toastWarn {
 		t.Errorf("toasts = %q", got)
 	}
 }
@@ -125,7 +110,7 @@ func TestConfigWarnings_ToastOnStart(t *testing.T) {
 func TestToastsRenderedTopRight(t *testing.T) {
 	m := newTestModel(t)
 	noTicks(&m)
-	m, _ = update(m, notifyErr("something broke"))
+	m.notify("something broke")
 	first := strings.TrimRight(ansi.Strip(strings.Split(m.View().Content, "\n")[0]), " ")
 	if !strings.HasSuffix(first, "something broke") {
 		t.Errorf("toast should sit at the top right: %q", first)
@@ -137,21 +122,9 @@ func TestToastOverReaderKeepsPlaceholders(t *testing.T) {
 	m := imageModel(t)
 	noTicks(&m)
 	m, _ = loadAndShow(t, m, postWithImage(srv.URL+"/a.png"))
-	m, _ = update(m, notifyErr("boom"))
-	id := imageInfo(m, srv.URL+"/a.png").ID
+	m.notify("boom")
 	view := m.View().Content
-	if !strings.Contains(view, placeholder) || !strings.Contains(view, fmt.Sprintf("38;5;%d", id)) {
+	if !strings.Contains(view, placeholder) || !strings.Contains(view, "38;5;1") {
 		t.Error("composing a toast over the reader lost the image placeholders")
 	}
-}
-
-// applyNotifies feeds any notifyMsg in msgs back through Update.
-func applyNotifies(t *testing.T, m Model, msgs []tea.Msg) Model {
-	t.Helper()
-	for _, msg := range msgs {
-		if n, ok := msg.(notifyMsg); ok {
-			m, _ = update(m, n)
-		}
-	}
-	return m
 }

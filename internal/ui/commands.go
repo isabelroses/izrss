@@ -7,17 +7,17 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/isabelroses/izrss/internal/readstate"
 	"github.com/isabelroses/izrss/internal/refresh"
 	"github.com/isabelroses/izrss/internal/rss"
+	"github.com/isabelroses/izrss/internal/storage"
 )
 
 // feedsRefreshedMsg delivers the cached feeds at startup.
 type feedsRefreshedMsg struct {
-	feeds rss.Feeds
-	read  readstate.Snapshot // saved read state; nil if not loaded
-	at    time.Time          // last network refresh, if known
-	errs  []string           // toast texts
+	feeds []rss.Feed
+	read  []storage.PostReadStatus // saved read state; nil if not loaded
+	at    time.Time                // last feed fetch, if known
+	errs  []string                 // toast texts
 }
 
 // refreshMsg asks for the feeds with the given URLs to be refreshed; Init
@@ -34,14 +34,16 @@ func (m Model) loadCachedFeeds() tea.Cmd {
 	return func() tea.Msg {
 		feeds := fetcher.GetCachedContent(urls)
 		msg := feedsRefreshedMsg{feeds: feeds}
-		if snap, err := readstate.Read(db); err != nil {
+		if saved, err := db.LoadPostReadStatuses(); err != nil {
 			log.Printf("reading read status: %v", err)
 			msg.errs = append(msg.errs, "couldn't load read status")
 		} else {
-			msg.read = snap
+			msg.read = saved
 		}
-		if at, err := db.GetCacheTime(); err == nil && at != nil {
-			msg.at = *at
+		if at, err := db.LastFetched(); err != nil {
+			log.Printf("reading fetch time: %v", err)
+		} else {
+			msg.at = at
 		}
 		return msg
 	}
@@ -69,30 +71,21 @@ func (m *Model) refreshFeeds(urls []string) tea.Cmd {
 func (m *Model) feedLoaded(msg feedLoadedMsg) tea.Cmd {
 	var cmd tea.Cmd
 	res := m.refresh.Finish(msg.feed, m.now())
-	if res.Finished {
-		db := m.db
-		cmd = func() tea.Msg {
-			if err := db.SetCacheTime(); err != nil {
-				log.Printf("writing refresh time: %v", err)
-				return notifyErr("couldn't save refresh time")
-			}
-			return nil
-		}
-	}
 	if res.Err != nil {
 		log.Printf("refreshing %s: %v", msg.feed.URL, res.Err)
-		return tea.Batch(cmd, m.notify(toastError, res.Name+": "+shortReason(res.Err)))
+		return m.notify(res.Name + ": " + shortReason(res.Err))
 	}
 	if res.CacheErr != nil {
 		log.Printf("%v", res.CacheErr)
-		cmd = tea.Batch(cmd, m.notify(toastError, "couldn't cache "+res.Name+" feed"))
+		cmd = m.notify("couldn't cache " + res.Name + " feed")
 	}
 	if _, running := m.refresh.Progress(); running == 0 { // once per round: each search scans every post
 		m.researchPalette()
 	}
 	m.rebuildFeeds()
-	if m.screen == screenReader {
-		m.reopen()
+	if p, ok := m.feeds.Post(m.open); ok && m.screen == screenReader { // the feeds changed underneath the reader
+		m.post = p
+		m.rerenderReader()
 	}
 	return cmd
 }

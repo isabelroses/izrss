@@ -21,13 +21,13 @@ func recordTicks(t *toasts) *[]time.Duration {
 }
 
 func testToastTheme() toastTheme {
-	return toastTheme{text: lipgloss.Color("#ffffff"), bg: lipgloss.Color("#313244"), err: lipgloss.Color("#f38ba8"), warn: lipgloss.Color("#f9e2af")}
+	return toastTheme{text: lipgloss.Color("#ffffff"), bg: lipgloss.Color("#313244"), err: lipgloss.Color("#f38ba8")}
 }
 
 func TestToasts_AddAndExpire(t *testing.T) {
 	var ts toasts
 	recordTicks(&ts)
-	cmd := ts.add(toastError, "boom")
+	cmd := ts.add("boom")
 	if len(ts.items) != 1 {
 		t.Fatalf("items = %d", len(ts.items))
 	}
@@ -44,7 +44,7 @@ func TestToasts_AddAndExpire(t *testing.T) {
 func TestToasts_TTL(t *testing.T) {
 	var ts toasts
 	ds := recordTicks(&ts)
-	ts.add(toastError, "x")
+	ts.add("x")
 	if len(*ds) != 1 || (*ds)[0] != 3*time.Second || toastTTL != 3*time.Second {
 		t.Errorf("toast should last 3s, ticks %v", *ds)
 	}
@@ -53,8 +53,8 @@ func TestToasts_TTL(t *testing.T) {
 func TestToasts_MergeDuplicates(t *testing.T) {
 	var ts toasts
 	recordTicks(&ts)
-	first := ts.add(toastError, "same")
-	second := ts.add(toastError, "same")
+	first := ts.add("same")
+	second := ts.add("same")
 	if len(ts.items) != 1 || !strings.Contains(ansi.Strip(ts.view(80, testToastTheme())), "×2") {
 		t.Fatalf("duplicates should merge with a count: %q", ansi.Strip(ts.view(80, testToastTheme())))
 	}
@@ -72,7 +72,7 @@ func TestToasts_Cap(t *testing.T) {
 	var ts toasts
 	recordTicks(&ts)
 	for _, s := range []string{"a", "b", "c", "d", "e"} {
-		ts.add(toastError, s)
+		ts.add(s)
 	}
 	lines := strings.Split(ansi.Strip(ts.view(80, testToastTheme())), "\n")
 	if len(ts.items) != maxToasts || maxToasts != 3 || len(lines) != 3 {
@@ -86,7 +86,7 @@ func TestToasts_Cap(t *testing.T) {
 func TestToasts_ViewFitsWidth(t *testing.T) {
 	var ts toasts
 	recordTicks(&ts)
-	ts.add(toastError, strings.Repeat("long ", 60))
+	ts.add(strings.Repeat("long ", 60))
 	for l := range strings.SplitSeq(ts.view(40, testToastTheme()), "\n") {
 		if w := ansi.StringWidth(l); w > 40 {
 			t.Errorf("toast %d wide: %q", w, ansi.Strip(l))
@@ -100,10 +100,9 @@ func TestToasts_ViewFitsWidth(t *testing.T) {
 func TestToasts_Prefix(t *testing.T) {
 	var ts toasts
 	recordTicks(&ts)
-	ts.add(toastError, "e")
-	ts.add(toastWarn, "w")
+	ts.add("e")
 	v := ansi.Strip(ts.view(80, testToastTheme()))
-	if !strings.Contains(v, "✗ e") || !strings.Contains(v, "! w") {
+	if !strings.Contains(v, "✗ e") {
 		t.Errorf("prefixes missing: %q", v)
 	}
 	if (toasts{}).view(80, testToastTheme()) != "" {
@@ -113,7 +112,7 @@ func TestToasts_Prefix(t *testing.T) {
 
 func TestNotify_StripsControlChars(t *testing.T) {
 	m := newTestModel(t)
-	m.notify(toastError, "feed: bad \x1b]52;c;aGk=\x07\nthing")
+	m.notify("feed: bad \x1b]52;c;aGk=\x07\nthing")
 	got := m.toasts.items[0].text
 	if strings.ContainsAny(got, "\x1b\x07\n") {
 		t.Fatalf("control characters reached the toast: %q", got)

@@ -74,12 +74,10 @@ type Model struct {
 
 	images *imgsession.Session // the open post's images
 	cell   images.Cell         // the terminal's cell size, when images are on
-
-	warnings []string // config warnings, toasted at startup
 }
 
 // NewModel creates a model; nothing touches the terminal or network here.
-func NewModel(cfg *config.Config, db *storage.DB, fetcher *rss.Fetcher, imgFetcher *images.Fetcher, warnings []string) *Model {
+func NewModel(cfg *config.Config, db *storage.DB, fetcher *rss.Fetcher, imgFetcher *images.Fetcher) *Model {
 	styles := NewStyles(cfg)
 	feeds := rss.NewFeedSet()
 	var loader imgsession.Loader // a nil *Fetcher must not become a non-nil interface
@@ -100,8 +98,7 @@ func NewModel(cfg *config.Config, db *storage.DB, fetcher *rss.Fetcher, imgFetch
 		now:      time.Now,
 		openURL:  openURL,
 
-		images:   imgsession.New(loader, loader != nil && images.Enabled(cfg.Reader.Images, os.Getenv)),
-		warnings: warnings,
+		images: imgsession.New(loader, loader != nil && images.Enabled(cfg.Reader.Images, os.Getenv)),
 	}
 	// Assume a dark background until the terminal answers asynchronously; a
 	// synchronous query blocks startup for up to 4s on some terminals.
@@ -116,18 +113,8 @@ func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		tea.RequestBackgroundColor,
 		minuteTick(),
-		m.warningsCmd(),
 		tea.Sequence(m.loadCachedFeeds(), func() tea.Msg { return refreshMsg{urls: m.cfg.Urls} }),
 	)
-}
-
-// warningsCmd turns config warnings into toasts.
-func (m Model) warningsCmd() tea.Cmd {
-	cmds := make([]tea.Cmd, len(m.warnings))
-	for i, w := range m.warnings {
-		cmds[i] = func() tea.Msg { return notifyWarn(w) }
-	}
-	return tea.Batch(cmds...)
 }
 
 // setBackground applies the styles that depend on the terminal background.
@@ -186,7 +173,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case feedsRefreshedMsg:
 		for _, e := range msg.errs {
-			cmds = append(cmds, m.notify(toastError, e))
+			cmds = append(cmds, m.notify(e))
 		}
 		m.feeds.Reset(msg.feeds)
 		if msg.read != nil {
@@ -210,8 +197,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case toastExpiredMsg:
 		m.toasts.expire(msg)
-	case notifyMsg:
-		cmds = append(cmds, m.notify(msg.kind, msg.text))
 	}
 	return m, tea.Batch(cmds...)
 }

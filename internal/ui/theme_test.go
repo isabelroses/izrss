@@ -10,7 +10,7 @@ import (
 
 func TestReaderTheme_FallsBackToPalette(t *testing.T) {
 	cfg := config.Default()
-	th := readerTheme(cfg)
+	th := NewStyles(cfg).Reader
 
 	tests := []struct {
 		name string
@@ -34,7 +34,7 @@ func TestReaderTheme_FallsBackToPalette(t *testing.T) {
 	}
 
 	cfg.Reader.Heading = "#ff0000"
-	if got := readerTheme(cfg).Heading; got != lipgloss.Color("#ff0000") {
+	if got := NewStyles(cfg).Reader.Heading; got != lipgloss.Color("#ff0000") {
 		t.Errorf("Heading override = %v, want #ff0000", got)
 	}
 }

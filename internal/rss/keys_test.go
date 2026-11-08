@@ -143,7 +143,7 @@ func TestGetCachedContent(t *testing.T) {
 	}
 }
 
-func TestFetchURL_CapsBody(t *testing.T) {
+func TestFetch_CapsBody(t *testing.T) {
 	prev := maxFeedBytes
 	maxFeedBytes = int64(len(rssBody))
 	t.Cleanup(func() { maxFeedBytes = prev })
@@ -154,7 +154,7 @@ func TestFetchURL_CapsBody(t *testing.T) {
 	t.Cleanup(big.Close)
 	db := testDB(t)
 	f := NewFetcher(db, "02/01/2006")
-	if _, _, err := f.FetchURL(big.URL, false); err == nil || !strings.Contains(err.Error(), "larger than") {
+	if err := f.GetContentForURL(big.URL, false).Err; err == nil || !strings.Contains(err.Error(), "larger than") {
 		t.Errorf("want a too-large error, got %v", err)
 	}
 	if c, _ := db.LoadFeedCache(big.URL); c != nil {

@@ -50,7 +50,7 @@ func TestAllPostsFirstAndMixed(t *testing.T) {
 func TestHomeMixedSelectsAllPosts(t *testing.T) {
 	cfg := config.Default()
 	cfg.Home = "mixed"
-	m := *NewModel(cfg, testDB(t), nil, nil, nil)
+	m := *NewModel(cfg, testDB(t), nil, nil)
 	m, _ = update(m, tea.WindowSizeMsg{Width: 120, Height: 40})
 	m, _ = update(m, feedsRefreshedMsg{feeds: sampleFeeds()})
 	if selectedTitle(m.feedList) != "All posts" {
@@ -159,13 +159,13 @@ func TestRefresh_SelectedPostRemoved(t *testing.T) {
 
 func TestEmptyStates(t *testing.T) {
 	cfg := config.Default()
-	m := *NewModel(cfg, testDB(t), nil, nil, nil)
+	m := *NewModel(cfg, testDB(t), nil, nil)
 	m, _ = update(m, tea.WindowSizeMsg{Width: 120, Height: 40})
 	if !strings.Contains(ansi.Strip(m.View().Content), "No feeds loaded yet") {
 		t.Error("empty model should say no feeds")
 	}
 	m, _ = keys(m, "j", "k", "x", "X", "enter", "l", "enter", "o")
-	empty := rss.Feeds{{Title: "Empty", URL: "https://e.example/feed", Posts: nil}}
+	empty := []rss.Feed{{Title: "Empty", URL: "https://e.example/feed", Posts: nil}}
 	m, _ = update(m, feedsRefreshedMsg{feeds: empty})
 	if !strings.Contains(ansi.Strip(m.View().Content), "No posts") {
 		t.Error("empty feed should say no posts")

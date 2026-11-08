@@ -7,7 +7,6 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/ansi/kitty"
-	"github.com/hashicorp/golang-lru/v2/simplelru"
 	"golang.org/x/sys/unix"
 )
 
@@ -85,30 +84,4 @@ func CellSize(fd int) Cell {
 		return Cell{}
 	}
 	return Cell{W: int(ws.Xpixel / ws.Col), H: int(ws.Ypixel / ws.Row)}
-}
-
-// maxIDs is the number of image ids that fit a 256-colour foreground.
-const maxIDs = 255
-
-// IDs hands out kitty image ids 1..255, recycling the least recently used.
-type IDs struct{ lru *simplelru.LRU[string, int] }
-
-func NewIDs() *IDs {
-	lru, _ := simplelru.NewLRU[string, int](maxIDs, nil) // only fails for size <= 0
-	return &IDs{lru: lru}
-}
-
-// Acquire returns key's id, reusing the least recently used one when all are
-// taken; that id is also returned as evicted (else 0) for deletion.
-func (i *IDs) Acquire(key string) (id, evicted int) {
-	if id, ok := i.lru.Get(key); ok {
-		return id, 0
-	}
-	id = i.lru.Len() + 1
-	if i.lru.Len() == maxIDs {
-		_, id, _ = i.lru.RemoveOldest()
-		evicted = id
-	}
-	i.lru.Add(key, id)
-	return id, evicted
 }

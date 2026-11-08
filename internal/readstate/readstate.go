@@ -11,45 +11,26 @@ import (
 	"github.com/isabelroses/izrss/internal/storage"
 )
 
-// Store is where read state is kept; *storage.DB is the SQLite adapter.
-type Store interface {
-	LoadPostReadStatuses() (map[storage.ReadKey]bool, error)
-	SavePostReadStatus(feedURL, key string, read bool) error
-	SavePostReadStatuses([]storage.PostReadStatus) error
-}
-
 // State is the read flag of every post that has ever been marked.
 // A post never marked is unread.
 type State struct {
-	store Store
-	read  map[string]map[string]bool // feed URL -> post key -> read
+	db   *storage.DB
+	read map[string]map[string]bool // feed URL -> post key -> read
 }
 
-// New is an empty State saving to store.
-func New(store Store) *State {
-	return &State{store: store, read: map[string]map[string]bool{}}
+// New is an empty State saving to db.
+func New(db *storage.DB) *State {
+	return &State{db: db, read: map[string]map[string]bool{}}
 }
 
-// Snapshot is the saved state, as read off the main loop by Read.
-type Snapshot map[storage.ReadKey]bool
-
-// Read loads everything saved. It touches no State, so it can run in a
-// command; hand the result to Restore on the main loop.
-func Read(store Store) (Snapshot, error) {
-	saved, err := store.LoadPostReadStatuses()
-	return Snapshot(saved), err
-}
-
-// Restore makes snap the state. Marks made since it was read are kept.
-func (s *State) Restore(snap Snapshot) {
+// Restore adds saved marks to the state; marks made since they were read win.
+func (s *State) Restore(saved []storage.PostReadStatus) {
 	read := make(map[string]map[string]bool)
-	for k, v := range snap {
-		m := read[k.FeedURL]
-		if m == nil {
-			m = map[string]bool{}
-			read[k.FeedURL] = m
+	for _, st := range saved {
+		if read[st.FeedURL] == nil {
+			read[st.FeedURL] = map[string]bool{}
 		}
-		m[k.Key] = v
+		read[st.FeedURL][st.Key] = st.Read
 	}
 	for url, m := range s.read {
 		for key, v := range m {
@@ -62,13 +43,13 @@ func (s *State) Restore(snap Snapshot) {
 	s.read = read
 }
 
-// Load is Read then Restore, for callers off the main loop.
+// Load restores everything saved.
 func (s *State) Load() error {
-	snap, err := Read(s.store)
+	saved, err := s.db.LoadPostReadStatuses()
 	if err != nil {
 		return err
 	}
-	s.Restore(snap)
+	s.Restore(saved)
 	return nil
 }
 
@@ -94,7 +75,7 @@ func (s *State) Set(ref rss.PostRef, read bool) error {
 		return nil
 	}
 	s.mark(ref.FeedURL, ref.Key, read)
-	if err := s.store.SavePostReadStatus(ref.FeedURL, ref.Key, read); err != nil {
+	if err := s.db.SavePostReadStatuses([]storage.PostReadStatus{{FeedURL: ref.FeedURL, Key: ref.Key, Read: read}}); err != nil {
 		return fmt.Errorf("saving read status: %w", err)
 	}
 	return nil
@@ -114,7 +95,7 @@ func (s *State) MarkFeedRead(f rss.Feed) error {
 	if len(changed) == 0 {
 		return nil
 	}
-	if err := s.store.SavePostReadStatuses(changed); err != nil {
+	if err := s.db.SavePostReadStatuses(changed); err != nil {
 		return fmt.Errorf("saving read status: %w", err)
 	}
 	return nil

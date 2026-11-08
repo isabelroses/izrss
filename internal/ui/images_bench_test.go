@@ -48,7 +48,7 @@ func loadedPhoto(tb testing.TB) (Model, imageLoadedMsg) {
 	cfg := config.Default()
 	cfg.Reader.Images = "on"
 	cfg.Reader.Size = "full"
-	m := *NewModel(cfg, db, nil, images.NewFetcher(tb.TempDir(), 16<<20, 5*time.Second), nil)
+	m := *NewModel(cfg, db, nil, images.NewFetcher(tb.TempDir(), 16<<20, 5*time.Second))
 	m, _ = update(m, tea.WindowSizeMsg{Width: 160, Height: 50})
 	m, cmd := openPost(m, postWithImage(srv.URL+"/photo.png"))
 	loaded, ok := find[imageLoadedMsg](run(cmd))

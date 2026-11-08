@@ -25,6 +25,27 @@ func must(t *testing.T, err error) {
 	}
 }
 
+// ReadKey names a post's read flag in test comparisons.
+type ReadKey struct{ FeedURL, Key string }
+
+// save marks one post.
+func save(t *testing.T, db *DB, feedURL, key string, read bool) {
+	t.Helper()
+	must(t, db.SavePostReadStatuses([]PostReadStatus{{FeedURL: feedURL, Key: key, Read: read}}))
+}
+
+// load is every saved read flag.
+func load(t *testing.T, db *DB) map[ReadKey]bool {
+	t.Helper()
+	saved, err := db.LoadPostReadStatuses()
+	must(t, err)
+	out := map[ReadKey]bool{}
+	for _, st := range saved {
+		out[ReadKey{st.FeedURL, st.Key}] = st.Read
+	}
+	return out
+}
+
 func TestNew(t *testing.T) {
 	if db := setupTestDB(t); db.conn == nil {
 		t.Error("Expected non-nil connection")
@@ -50,9 +71,8 @@ func TestClose(t *testing.T) {
 
 func TestSaveAndLoadPostReadStatus(t *testing.T) {
 	db := setupTestDB(t)
-	must(t, db.SavePostReadStatus("http://example.com/feed", "uuid-1", true))
-	statuses, err := db.LoadPostReadStatuses()
-	must(t, err)
+	save(t, db, "http://example.com/feed", "uuid-1", true)
+	statuses := load(t, db)
 	if len(statuses) != 1 || !statuses[ReadKey{"http://example.com/feed", "uuid-1"}] {
 		t.Errorf("Expected only uuid-1, read; got %v", statuses)
 	}
@@ -60,10 +80,9 @@ func TestSaveAndLoadPostReadStatus(t *testing.T) {
 
 func TestSavePostReadStatus_Update(t *testing.T) {
 	db := setupTestDB(t)
-	must(t, db.SavePostReadStatus("http://example.com/feed", "uuid-1", true))
-	must(t, db.SavePostReadStatus("http://example.com/feed", "uuid-1", false))
-	statuses, err := db.LoadPostReadStatuses()
-	must(t, err)
+	save(t, db, "http://example.com/feed", "uuid-1", true)
+	save(t, db, "http://example.com/feed", "uuid-1", false)
+	statuses := load(t, db)
 	if read, ok := statuses[ReadKey{"http://example.com/feed", "uuid-1"}]; !ok || read {
 		t.Errorf("Expected uuid-1 to be unread after update, got %v", statuses)
 	}
@@ -76,8 +95,7 @@ func TestSavePostReadStatuses_Batch(t *testing.T) {
 		{FeedURL: "http://example.com/feed1", Key: "uuid-2", Read: false},
 		{FeedURL: "http://example.com/feed2", Key: "uuid-3", Read: true},
 	}))
-	loaded, err := db.LoadPostReadStatuses()
-	must(t, err)
+	loaded := load(t, db)
 	if len(loaded) != 3 || !loaded[ReadKey{"http://example.com/feed1", "uuid-1"}] ||
 		loaded[ReadKey{"http://example.com/feed1", "uuid-2"}] || !loaded[ReadKey{"http://example.com/feed2", "uuid-3"}] {
 		t.Errorf("Expected uuid-1 and uuid-3 read, uuid-2 unread; got %v", loaded)
@@ -86,10 +104,9 @@ func TestSavePostReadStatuses_Batch(t *testing.T) {
 
 func TestSavePostReadStatus_SameKeyInTwoFeeds(t *testing.T) {
 	db := setupTestDB(t)
-	must(t, db.SavePostReadStatus("a", "shared", true))
-	must(t, db.SavePostReadStatus("b", "shared", false))
-	loaded, err := db.LoadPostReadStatuses()
-	must(t, err)
+	save(t, db, "a", "shared", true)
+	save(t, db, "b", "shared", false)
+	loaded := load(t, db)
 	if !loaded[ReadKey{"a", "shared"}] || loaded[ReadKey{"b", "shared"}] {
 		t.Errorf("feeds should be tracked apart, got %v", loaded)
 	}
@@ -125,8 +142,7 @@ func TestMigration_PreservesReadFlags(t *testing.T) {
 	for range 2 { // a second open must be a no-op
 		db, err := New(path)
 		must(t, err)
-		loaded, err := db.LoadPostReadStatuses()
-		must(t, err)
+		loaded := load(t, db)
 		want := map[ReadKey]bool{
 			{"https://a/feed", "g1"}: true,
 			{"https://a/feed", "g2"}: false,
@@ -143,14 +159,16 @@ func TestMigration_PreservesReadFlags(t *testing.T) {
 		if c, err := db.LoadFeedCache("https://a/feed"); err != nil || string(c) != "<rss>" {
 			t.Errorf("feed cache lost: %q %v", c, err)
 		}
+		if at, err := db.LastFetched(); err != nil || !at.Equal(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)) {
+			t.Errorf("fetch time lost: %v %v", at, err)
+		}
 		must(t, db.Close())
 	}
 	db, err := New(path)
 	must(t, err)
 	defer func() { _ = db.Close() }()
-	must(t, db.SavePostReadStatus("https://c/feed", "g1", true)) // the new key works
-	loaded, err := db.LoadPostReadStatuses()
-	must(t, err)
+	save(t, db, "https://c/feed", "g1", true) // the new key works
+	loaded := load(t, db)
 	if !loaded[ReadKey{"https://c/feed", "g1"}] || !loaded[ReadKey{"https://a/feed", "g1"}] {
 		t.Errorf("g1 should be read in both feeds: %v", loaded)
 	}
@@ -179,45 +197,18 @@ func TestLoadPostReadStatuses_Empty(t *testing.T) {
 	}
 }
 
-func TestGetCacheTime_NotSet(t *testing.T) {
-	cacheTime, err := setupTestDB(t).GetCacheTime()
-	must(t, err)
-	if cacheTime != nil {
-		t.Error("Expected nil cache time when not set")
-	}
-}
-
-func TestSetAndGetCacheTime(t *testing.T) {
+func TestLastFetched(t *testing.T) {
 	db := setupTestDB(t)
+	if at, err := db.LastFetched(); err != nil || !at.IsZero() {
+		t.Fatalf("empty cache: %v, %v", at, err)
+	}
 	before := time.Now().Add(-time.Second)
-	must(t, db.SetCacheTime())
-	after := time.Now().Add(time.Second)
-
-	cacheTime, err := db.GetCacheTime()
+	must(t, db.SaveFeedCache("a", []byte("<rss>")))
+	must(t, db.SaveFeedCache("b", []byte("<rss>")))
+	at, err := db.LastFetched()
 	must(t, err)
-	if cacheTime == nil {
-		t.Fatal("Expected non-nil cache time")
-	}
-	if cacheTime.Before(before) || cacheTime.After(after) {
-		t.Errorf("Cache time %v not in expected range [%v, %v]", cacheTime, before, after)
-	}
-}
-
-func TestSetCacheTime_Update(t *testing.T) {
-	db := setupTestDB(t)
-	get := func() time.Time {
-		t.Helper()
-		must(t, db.SetCacheTime())
-		at, err := db.GetCacheTime()
-		must(t, err)
-		if at == nil {
-			t.Fatal("Expected non-nil cache time after set")
-		}
-		return *at
-	}
-	first, second := get(), get()
-	if second.Before(first) {
-		t.Errorf("Expected second cache time %v to not be before first %v", second, first)
+	if at.Before(before) || at.After(time.Now().Add(time.Second)) {
+		t.Errorf("last fetched %v, want about now", at)
 	}
 }
 

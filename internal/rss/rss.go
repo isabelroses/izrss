@@ -47,8 +47,6 @@ type Feed struct {
 	CacheErr error // the feed loaded but could not be cached
 }
 
-type Feeds []Feed
-
 // Key identifies a post: its GUID, else its link, else title and date.
 func (p Post) Key() string {
 	switch {
@@ -58,11 +56,6 @@ func (p Post) Key() string {
 		return p.Link
 	}
 	return p.Title + "\x00" + p.Date
-}
-
-// SortPosts sorts posts by publish date in descending order
-func SortPosts(posts []Post) {
-	slices.SortStableFunc(posts, func(a, b Post) int { return b.Published.Compare(a.Published) })
 }
 
 // Fetcher handles RSS feed fetching. Its fetches share one concurrency
@@ -81,9 +74,9 @@ func NewFetcher(db *storage.DB, dateFormat string) *Fetcher {
 	}
 }
 
-// FetchURL fetches the content of a URL. cacheErr reports a failure to cache
-// a successful fetch, which does not stop the feed from loading.
-func (f *Fetcher) FetchURL(url string, preferCache bool) (data []byte, cacheErr, err error) {
+// fetch fetches the content of a URL. cacheErr reports a failure to cache a
+// successful fetch, which does not stop the feed from loading.
+func (f *Fetcher) fetch(url string, preferCache bool) (data []byte, cacheErr, err error) {
 	if preferCache {
 		if data, err := f.db.LoadFeedCache(url); err == nil && data != nil {
 			return data, nil, nil
@@ -119,7 +112,17 @@ func (f *Fetcher) FetchURL(url string, preferCache bool) (data []byte, cacheErr,
 // GetContentForURL fetches and parses a feed. It never fails outright: a
 // feed that can't be loaded comes back empty with Err set.
 func (f *Fetcher) GetContentForURL(url string, preferCache bool) Feed {
-	feed, cacheErr, err := f.loadFeed(url, preferCache)
+	data, cacheErr, err := f.fetch(url, preferCache)
+	return f.parsed(url, data, cacheErr, err)
+}
+
+// parsed is the Feed for data got from url, or for err if that failed;
+// cacheErr is as for fetch.
+func (f *Fetcher) parsed(url string, data []byte, cacheErr, err error) Feed {
+	var feed *gofeed.Feed
+	if err == nil {
+		feed, err = parseFeed(url, data)
+	}
 	if err != nil {
 		return Feed{URL: url, Posts: []Post{}, Err: err, CacheErr: cacheErr}
 	}
@@ -158,7 +161,7 @@ func (f *Fetcher) sortedPosts(feed *gofeed.Feed) []Post {
 	for _, item := range feed.Items {
 		posts = append(posts, f.createPost(item))
 	}
-	SortPosts(posts)
+	slices.SortStableFunc(posts, func(a, b Post) int { return b.Published.Compare(a.Published) })
 	return posts
 }
 
@@ -181,16 +184,6 @@ func (f *Fetcher) createPost(item *gofeed.Item) Post {
 		Published: published,
 		UUID:      item.GUID,
 	}
-}
-
-// loadFeed fetches and parses a feed; cacheErr is as for FetchURL.
-func (f *Fetcher) loadFeed(url string, preferCache bool) (feed *gofeed.Feed, cacheErr, err error) {
-	data, cacheErr, err := f.FetchURL(url, preferCache)
-	if err != nil {
-		return nil, cacheErr, err
-	}
-	feed, err = parseFeed(url, data)
-	return feed, cacheErr, err
 }
 
 // newParser is a gofeed parser that skips the RSS translator's search of
@@ -216,38 +209,28 @@ func parseFeed(url string, data []byte) (*gofeed.Feed, error) {
 // GetCachedContent returns the feeds from the cache alone, never touching the
 // network, in URL order. A feed with nothing cached comes back empty and
 // named by its host, without Err, for a later refresh to fill in.
-func (f *Fetcher) GetCachedContent(urls []string) Feeds {
-	feeds := make(Feeds, len(urls))
-	var wg sync.WaitGroup
-	for i, url := range urls {
-		wg.Go(func() { feeds[i] = f.cachedFeed(url) })
-	}
-	wg.Wait()
-	return feeds
-}
-
-func (f *Fetcher) cachedFeed(url string) Feed {
-	data, err := f.db.LoadFeedCache(url)
-	if err == nil && data == nil {
-		return Feed{URL: url, Posts: []Post{}}
-	}
-	var feed *gofeed.Feed
-	if err == nil {
-		feed, err = parseFeed(url, data)
-	}
-	if err != nil {
-		return Feed{URL: url, Posts: []Post{}, Err: err}
-	}
-	return Feed{Title: cleanText(feed.Title), URL: url, Posts: f.sortedPosts(feed)}
+func (f *Fetcher) GetCachedContent(urls []string) []Feed {
+	return fetchAll(urls, func(url string) Feed {
+		data, err := f.db.LoadFeedCache(url)
+		if err == nil && data == nil {
+			return Feed{URL: url, Posts: []Post{}}
+		}
+		return f.parsed(url, data, nil, err)
+	})
 }
 
 // GetAllContent fetches every URL concurrently (bounded by the Fetcher)
 // and returns the feeds in URL order. Failed feeds carry Err.
-func (f *Fetcher) GetAllContent(urls []string, preferCache bool) Feeds {
-	feeds := make(Feeds, len(urls))
+func (f *Fetcher) GetAllContent(urls []string, preferCache bool) []Feed {
+	return fetchAll(urls, func(url string) Feed { return f.GetContentForURL(url, preferCache) })
+}
+
+// fetchAll runs get for every url concurrently, keeping URL order.
+func fetchAll(urls []string, get func(url string) Feed) []Feed {
+	feeds := make([]Feed, len(urls))
 	var wg sync.WaitGroup
 	for i, url := range urls {
-		wg.Go(func() { feeds[i] = f.GetContentForURL(url, preferCache) })
+		wg.Go(func() { feeds[i] = get(url) })
 	}
 	wg.Wait()
 	return feeds

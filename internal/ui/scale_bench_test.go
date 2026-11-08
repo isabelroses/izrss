@@ -25,7 +25,7 @@ const (
 var readerSink string
 
 // thirdsUnread is a read status for every post of feeds: one in three unread.
-func thirdsUnread(feeds rss.Feeds) []storage.PostReadStatus {
+func thirdsUnread(feeds []rss.Feed) []storage.PostReadStatus {
 	var out []storage.PostReadStatus
 	for _, f := range feeds {
 		for j, p := range f.Posts {
@@ -83,7 +83,7 @@ func scaleModel(b *testing.B) Model {
 	b.Helper()
 	cfg, db := scaleSetup(b)
 	fetcher := rss.NewFetcher(db, cfg.DateFormat)
-	m := *NewModel(cfg, db, fetcher, nil, nil)
+	m := *NewModel(cfg, db, fetcher, nil)
 	m.now = func() time.Time { return t0 }
 	m, _ = update(m, tea.WindowSizeMsg{Width: 120, Height: 40})
 	m, _ = update(m, m.loadCachedFeeds()())
@@ -97,7 +97,7 @@ func BenchmarkStartup250(b *testing.B) {
 	fetcher := rss.NewFetcher(db, cfg.DateFormat)
 	b.ReportAllocs()
 	for b.Loop() {
-		m := *NewModel(cfg, db, fetcher, nil, nil)
+		m := *NewModel(cfg, db, fetcher, nil)
 		m, _ = update(m, tea.WindowSizeMsg{Width: 120, Height: 40})
 		m, _ = update(m, m.loadCachedFeeds()())
 		readerSink = m.View().Content

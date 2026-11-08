@@ -16,9 +16,9 @@ var t0 = time.Date(2026, 11, 4, 12, 0, 0, 0, time.UTC)
 
 // sampleFeeds: three feeds of four posts; post j of feed i is j+3*i hours
 // old, so "All posts" interleaves them. Post 0 of each feed is unread: newTestModel marks the rest read.
-func sampleFeeds() rss.Feeds {
+func sampleFeeds() []rss.Feed {
 	names := []string{"Alpha", "Beta", "Gamma"}
-	fs := make(rss.Feeds, len(names))
+	fs := make([]rss.Feed, len(names))
 	for i, name := range names {
 		url := fmt.Sprintf("https://%s.example/feed", name)
 		posts := make([]rss.Post, 4)
@@ -55,7 +55,7 @@ func newTestModel(t *testing.T) Model {
 	for _, f := range sampleFeeds() {
 		cfg.Urls = append(cfg.Urls, f.URL)
 	}
-	m := *NewModel(cfg, testDB(t), nil, nil, nil)
+	m := *NewModel(cfg, testDB(t), nil, nil)
 	m.now = func() time.Time { return t0 }
 	m, _ = update(m, tea.WindowSizeMsg{Width: 120, Height: 40})
 	for _, f := range sampleFeeds() {

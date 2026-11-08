@@ -87,7 +87,7 @@ func TestPalette_WidthAndCap(t *testing.T) {
 	m, _ = update(m, tea.WindowSizeMsg{Width: 200, Height: 40})
 	m, _ = keys(m, "/")
 	m = typeText(m, "match")
-	box := m.palette.view(m.feeds, m.read, m.width, m.listTheme(), m.styles)
+	box := m.palette.view(m.feeds, m.read, m.width, m.styles)
 	lines := strings.Split(box, "\n")
 	if w := ansi.StringWidth(lines[0]); w != 80 {
 		t.Errorf("box width %d, want 80", w)

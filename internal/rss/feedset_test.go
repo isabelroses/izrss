@@ -2,8 +2,8 @@ package rss
 
 import "testing"
 
-func twoFeeds() Feeds {
-	return Feeds{
+func twoFeeds() []Feed {
+	return []Feed{
 		{URL: "a", Posts: []Post{{UUID: "a1"}, {UUID: "shared"}}},
 		{URL: "b", Posts: []Post{{UUID: "b1"}, {UUID: "shared"}}},
 	}

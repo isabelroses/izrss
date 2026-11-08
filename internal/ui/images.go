@@ -60,9 +60,9 @@ func (m *Model) imageOutcome(o imgsession.Outcome) tea.Cmd {
 	}
 	switch {
 	case o.Failed == 1:
-		cmds = append(cmds, m.notify(toastError, "1 image in this post couldn't be loaded"))
+		cmds = append(cmds, m.notify("1 image in this post couldn't be loaded"))
 	case o.Failed > 1:
-		cmds = append(cmds, m.notify(toastError, fmt.Sprintf("%d images in this post couldn't be loaded", o.Failed)))
+		cmds = append(cmds, m.notify(fmt.Sprintf("%d images in this post couldn't be loaded", o.Failed)))
 	}
 	return tea.Batch(cmds...)
 }

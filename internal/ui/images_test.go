@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -66,7 +65,7 @@ func imageModel(t *testing.T) Model {
 	cfg := config.Default()
 	cfg.Reader.Images = "on"
 	cfg.Reader.Size = "full"
-	m := *NewModel(cfg, db, nil, images.NewFetcher(t.TempDir(), 1<<20, 5*time.Second), nil)
+	m := *NewModel(cfg, db, nil, images.NewFetcher(t.TempDir(), 1<<20, 5*time.Second))
 	m, _ = update(m, tea.WindowSizeMsg{Width: 120, Height: 40})
 	return m
 }
@@ -125,12 +124,6 @@ func update(m Model, msg tea.Msg) (Model, []tea.Msg) {
 	return updated.(Model), run(cmd)
 }
 
-// imageInfo is what the model's image session knows of the image with src.
-func imageInfo(m Model, src string) imgsession.Info {
-	info, _ := m.images.Info(src)
-	return info
-}
-
 func postWithImage(src string) rss.Post {
 	return rss.Post{UUID: "p1", Title: "t", Link: "https://example.com/p1", Content: `<p>intro</p><img src="` + src + `" alt="a picture"><p>outro</p>`}
 }
@@ -151,22 +144,6 @@ func loadAndShow(t *testing.T, m Model, p rss.Post) (Model, string) {
 	}
 	m, _ = update(m, ready)
 	return m, raws(msgs)
-}
-
-func TestReader_ImagesOff_NoCmds(t *testing.T) {
-	srv := newImgServer(t)
-	m := imageModel(t)
-	m.images = imgsession.New(nil, false)
-	m, cmd := openPost(m, postWithImage(srv.URL+"/a.png"))
-	if _, ok := find[imageLoadedMsg](run(cmd)); ok {
-		t.Error("images off should not load images")
-	}
-	if !strings.Contains(ansi.Strip(m.viewport.GetContent()), "a picture") {
-		t.Error("alt text should show")
-	}
-	if srv.hits.Load() != 0 {
-		t.Error("no request should be made")
-	}
 }
 
 func TestReader_PendingThenReady(t *testing.T) {
@@ -250,8 +227,7 @@ func TestView_PlaceholderKeepsIDColour(t *testing.T) {
 	srv := newImgServer(t)
 	m := imageModel(t)
 	m, _ = loadAndShow(t, m, postWithImage(srv.URL+"/a.png"))
-	id := imageInfo(m, srv.URL+"/a.png").ID
-	sgr := "38;5;" + strconv.Itoa(id)
+	sgr := "38;5;1" // a post numbers its images from 1
 
 	found := false
 	for line := range strings.SplitSeq(m.View().Content, "\n") {

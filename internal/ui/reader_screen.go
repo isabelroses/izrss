@@ -31,14 +31,6 @@ func (m *Model) openReader(ref rss.PostRef) tea.Cmd {
 	return tea.Batch(place, imageJobs(m.images.Fetch(m.doc.Images, m.imageLayout())), m.markReadIfScrolled())
 }
 
-// reopen refreshes the reader after the feeds changed underneath it.
-func (m *Model) reopen() {
-	if p, ok := m.feeds.Post(m.open); ok {
-		m.post = p
-		m.rerenderReader()
-	}
-}
-
 func (m *Model) readerKey(msg tea.KeyPressMsg) tea.Cmd {
 	k := bindings
 	switch {
@@ -48,10 +40,7 @@ func (m *Model) readerKey(msg tea.KeyPressMsg) tea.Cmd {
 	case key.Matches(msg, k.ForceQuit):
 		return tea.Quit
 	case key.Matches(msg, k.Toggle):
-		if _, ok := m.feeds.Post(m.open); ok {
-			return m.setRead(m.open, !m.read.IsRead(m.open.FeedURL, m.open.Key))
-		}
-		return nil
+		return m.setRead(m.open, !m.read.IsRead(m.open.FeedURL, m.open.Key))
 	case key.Matches(msg, k.Browser):
 		return m.openLink(m.post.Link)
 	}
@@ -66,7 +55,7 @@ func (m *Model) markReadIfScrolled() tea.Cmd {
 	if m.viewport.ScrollPercent() < m.cfg.Reader.ReadThreshold {
 		return nil
 	}
-	if _, ok := m.feeds.Post(m.open); !ok || m.read.IsRead(m.open.FeedURL, m.open.Key) {
+	if m.read.IsRead(m.open.FeedURL, m.open.Key) {
 		return nil
 	}
 	return m.setRead(m.open, true)
@@ -119,7 +108,7 @@ func (m *Model) readerOpts() reader.Options {
 	return reader.Options{
 		Width:      m.textWidth(),
 		Margin:     docMargin,
-		Theme:      readerTheme(m.cfg),
+		Theme:      m.styles.Reader,
 		BaseURL:    m.post.Link,
 		ShowImages: m.images.Enabled(),
 		Ready:      ready,

@@ -126,15 +126,15 @@ func TestStaleResultIgnored(t *testing.T) {
 func TestReopenAfterResizeRefits(t *testing.T) {
 	s, _ := newSession(t)
 	shown(t, s, "p", "a", wide)
-	before, _ := s.Info("a")
+	before := s.imgs["a"].prep.Cols
 
 	place := s.Open("p", narrow) // reopened at another width
-	after, _ := s.Info("a")
-	if after.Cols >= before.Cols {
-		t.Errorf("cols %d not re-fitted from %d", after.Cols, before.Cols)
+	after := s.imgs["a"]
+	if after.prep.Cols >= before {
+		t.Errorf("cols %d not re-fitted from %d", after.prep.Cols, before)
 	}
-	if !strings.Contains(place, "a=p") || !strings.Contains(place, "i="+strconv.Itoa(after.ID)) {
-		t.Errorf("reopen should re-place image %d, got %q", after.ID, place)
+	if !strings.Contains(place, "a=p") || !strings.Contains(place, "i="+strconv.Itoa(after.id)) {
+		t.Errorf("reopen should re-place image %d, got %q", after.id, place)
 	}
 	if again := s.Open("p", narrow); again != "" {
 		t.Errorf("an unchanged fit should place nothing, got %q", again)
@@ -183,42 +183,55 @@ func TestOneFailureReportPerPost(t *testing.T) {
 	}
 }
 
-func TestEvictedIDDeletedBeforeUpload(t *testing.T) {
+// Each post numbers its images from 1, and leaving a post deletes its images
+// from the terminal before the next post's ids are handed out again.
+func TestSwitchingPostsDeletesAndRenumbers(t *testing.T) {
 	s, _ := newSession(t)
-	for i := range 255 {
-		s.ids.Acquire("filler" + strconv.Itoa(i))
+	shown(t, s, "p", "a", wide)
+	if id := s.imgs["a"].id; id != 1 {
+		t.Fatalf("first image of a post has id %d, want 1", id)
 	}
-	s.Open("p", wide)
-	s.FrameDrawn()
-	o := s.Loaded(s.Fetch(imgs("a"), wide)[0].Run())
-	del, put := strings.Index(o.Write, "a=d"), strings.Index(o.Write, "a=T")
-	if del < 0 || put < 0 || del > put {
-		t.Errorf("evicted image must be deleted before the upload: %q", o.Write[:min(len(o.Write), 120)])
+	if again := s.Open("p", wide); strings.Contains(again, "a=d") {
+		t.Errorf("reopening the same post must keep its images: %q", again)
+	}
+	if del := s.Open("q", wide); !strings.Contains(del, "a=d") || !strings.Contains(del, "i=1") {
+		t.Errorf("leaving a post should delete its image 1, got %q", del)
+	}
+	s.Fetch(imgs("b"), wide)
+	if id := s.imgs["b"].id; id != 1 {
+		t.Errorf("the next post's first image has id %d, want 1", id)
 	}
 }
 
-func TestIDsAreRecycledWithinRange(t *testing.T) {
+func TestIDsStayWithinRange(t *testing.T) {
 	s, _ := newSession(t)
 	s.Open("p", wide)
 	var all []reader.Image
 	for i := range 300 {
 		all = append(all, reader.Image{Src: "img" + strconv.Itoa(i)})
 	}
-	s.Fetch(all, wide)
-	for i := range 300 {
-		info, _ := s.Info("img" + strconv.Itoa(i))
-		if info.ID < 1 || info.ID > 255 {
-			t.Fatalf("image %d got id %d, outside 1..255", i, info.ID)
+	jobs := s.Fetch(all, wide)
+	if len(jobs) != maxIDs {
+		t.Errorf("%d jobs, want one per id (%d)", len(jobs), maxIDs)
+	}
+	seen := map[int]bool{}
+	for src, e := range s.imgs {
+		if e.failed {
+			continue
 		}
+		if e.id < 1 || e.id > maxIDs || seen[e.id] {
+			t.Fatalf("image %s got id %d, outside 1..255 or reused", src, e.id)
+		}
+		seen[e.id] = true
 	}
 }
 
 func TestResumeReuploads(t *testing.T) {
 	s, _ := newSession(t)
 	shown(t, s, "p", "a", wide)
-	info, _ := s.Info("a")
-	if r := s.Resume(); !strings.Contains(r, "a=T") || !strings.Contains(r, "i="+strconv.Itoa(info.ID)) {
-		t.Errorf("resume should re-upload image %d, got %q", info.ID, r[:min(len(r), 80)])
+	id := s.imgs["a"].id
+	if r := s.Resume(); !strings.Contains(r, "a=T") || !strings.Contains(r, "i="+strconv.Itoa(id)) {
+		t.Errorf("resume should re-upload image %d, got %q", id, r[:min(len(r), 80)])
 	}
 }
 
@@ -232,9 +245,8 @@ func TestDisplayHasPlaceholdersOnceUploaded(t *testing.T) {
 	}
 	s.Uploaded(o.Post, o.Src)
 	ready, _ := s.Display()
-	info, _ := s.Info("a")
-	if len(ready["a"]) != info.Rows {
-		t.Errorf("want %d placeholder rows, got %d", info.Rows, len(ready["a"]))
+	if rows := s.imgs["a"].prep.Rows; len(ready["a"]) != rows {
+		t.Errorf("want %d placeholder rows, got %d", rows, len(ready["a"]))
 	}
 }
 

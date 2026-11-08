@@ -98,7 +98,7 @@ func (m *Model) closePalette() {
 func paletteWidth(width int) int { return min(paletteMaxWidth, width*8/10) }
 
 // view renders the palette box, paletteWidth(width) cells wide.
-func (p palette) view(feeds *rss.FeedSet, read *readstate.State, width int, th listTheme, st *Styles) string {
+func (p palette) view(feeds *rss.FeedSet, read *readstate.State, width int, st *Styles) string {
 	boxW := paletteWidth(width)
 	inner := max(boxW-4, 1) // rounded border and one cell of padding each side
 	// Text lines are indented one cell to line up with the result rows,
@@ -119,7 +119,7 @@ func (p palette) view(feeds *rss.FeedSet, read *readstate.State, width int, th l
 		items[i] = item{title: post.Title, right: feed.Name(), strong: !read.IsRead(ref.FeedURL, ref.Key)}
 	}
 	rows := list{items: items, cursor: p.cursor - first, height: min(paletteRows, len(p.hits))}
-	lines = append(lines, rows.view(inner, true, th)...)
+	lines = append(lines, rows.view(inner, true, st.List)...)
 
 	var foot string
 	switch {
@@ -133,7 +133,7 @@ func (p palette) view(feeds *rss.FeedSet, read *readstate.State, width int, th l
 		foot = fmt.Sprintf("%d results", len(p.hits))
 	}
 	lines = append(lines, " "+st.Hint.Render(ansi.Truncate(foot, max(inner-2, 0), "…")))
-	return box(strings.Join(lines, "\n"), boxW, th.accent)
+	return box(strings.Join(lines, "\n"), boxW, st.List.accent)
 }
 
 // box frames content in a rounded border exactly width cells wide.

@@ -7,15 +7,16 @@ import (
 	"github.com/mmcdole/gofeed"
 )
 
-func TestSortPosts(t *testing.T) {
+func TestSortedPosts_NewestFirst(t *testing.T) {
 	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	posts := []Post{
-		{Title: "old", Published: base},
-		{Title: "new", Published: base.Add(48 * time.Hour)},
-		{Title: "mid", Published: base.Add(24 * time.Hour)},
+	item := func(title string, at time.Time) *gofeed.Item {
+		return &gofeed.Item{Title: title, PublishedParsed: &at}
 	}
+	feed := &gofeed.Feed{Items: []*gofeed.Item{
+		item("old", base), item("new", base.Add(48*time.Hour)), item("mid", base.Add(24*time.Hour)),
+	}}
 
-	SortPosts(posts)
+	posts := NewFetcher(nil, "02/01/2006").sortedPosts(feed)
 
 	want := []string{"new", "mid", "old"}
 	for i, w := range want {

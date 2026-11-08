@@ -101,15 +101,14 @@ func run(cli *CLI) error {
 		return nil
 	}
 
-	warnings := cfg.Warnings()
 	var imgFetcher *images.Fetcher
 	if dir, err := images.DefaultCacheDir(); err != nil {
-		warnings = append(warnings, "images are off: "+err.Error())
+		log.Printf("images are off: %v", err)
 	} else {
 		imgFetcher = images.NewFetcher(dir, 10<<20, 15*time.Second)
 	}
 
-	_, err = tea.NewProgram(ui.NewModel(cfg, db, fetcher, imgFetcher, warnings)).Run()
+	_, err = tea.NewProgram(ui.NewModel(cfg, db, fetcher, imgFetcher)).Run()
 	if errors.Is(err, tea.ErrProgramPanic) {
 		log.Printf("izrss crashed: %v", err)
 		fmt.Fprintf(os.Stderr, "izrss crashed; details were written to %s\n", logPath)

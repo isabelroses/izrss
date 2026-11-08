@@ -3,8 +3,8 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
-	"slices"
 
 	"github.com/adrg/xdg"
 	"github.com/pelletier/go-toml/v2"
@@ -16,8 +16,6 @@ type Config struct {
 	Urls       []string `toml:"urls"`
 	Reader     Reader   `toml:"reader"`
 	Colors     Colors   `toml:"colors"`
-
-	duplicates []string // urls listed more than once, dropped by Load
 }
 
 type Reader struct {
@@ -67,18 +65,6 @@ func Default() *Config {
 	}
 }
 
-// Warnings describes settings that load but no longer do anything.
-func (c *Config) Warnings() []string {
-	var w []string
-	if c.Reader.Theme != "" {
-		w = append(w, "reader.theme is no longer supported; see example.toml for reader colours")
-	}
-	for _, u := range c.duplicates {
-		w = append(w, "duplicate feed url "+u)
-	}
-	return w
-}
-
 // Load loads configuration from the specified path, or the default location if empty
 func Load(path string) (*Config, error) {
 	cfg := Default()
@@ -100,20 +86,21 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("parsing config file: %w", err)
 	}
 	cfg.dedupeUrls()
+	if cfg.Reader.Theme != "" {
+		log.Print("reader.theme is no longer supported; see example.toml for reader colours")
+	}
 
 	return cfg, nil
 }
 
 // dedupeUrls drops repeated urls, keeping the first of each in order, and
-// remembers them for Warnings.
+// logs them.
 func (c *Config) dedupeUrls() {
 	seen := make(map[string]bool, len(c.Urls))
 	urls := c.Urls[:0]
 	for _, u := range c.Urls {
 		if seen[u] {
-			if !slices.Contains(c.duplicates, u) {
-				c.duplicates = append(c.duplicates, u)
-			}
+			log.Print("duplicate feed url ", u)
 			continue
 		}
 		seen[u] = true

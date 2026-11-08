@@ -208,12 +208,12 @@ func (m *Model) readStatusSaved(err error) tea.Cmd {
 		return nil
 	}
 	log.Printf("saving read status: %v", err)
-	return m.notify(toastError, "couldn't save read status")
+	return m.notify("couldn't save read status")
 }
 
 func (m *Model) openLink(link string) tea.Cmd {
 	if err := m.openURL(link); err != nil {
-		return m.notify(toastError, "couldn't open link: "+err.Error())
+		return m.notify("couldn't open link: " + err.Error())
 	}
 	return nil
 }

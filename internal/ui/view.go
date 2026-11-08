@@ -26,22 +26,17 @@ func (m Model) View() tea.View {
 	return v
 }
 
-func (m Model) listTheme() listTheme {
-	c := m.cfg.Colors
-	return newListTheme(hex(c.Text), hex(c.Subtext), hex(c.Accent), hex(c.Inverttext), hex(c.Borders))
-}
-
 func (m Model) mainView() string {
 	body := max(m.height-1, 0)
 	lines := make([]string, 0, m.height)
-	th := m.listTheme()
+	th := m.styles.List
 
 	switch split, left, right := m.paneWidths(); {
 	case m.feeds.Len() == 0:
 		lines = append(lines, placeholderLines("No feeds loaded yet", m.width, body, m.styles.Hint)...)
 	case split:
 		l := m.feedList.view(left, m.focus == paneFeeds, th)
-		r := m.postsPane(right, th)
+		r := m.postsPane(right)
 		sep := m.styles.Border.Render("│")
 		for i := range body {
 			lines = append(lines, l[i]+sep+r[i])
@@ -49,18 +44,18 @@ func (m Model) mainView() string {
 	case m.focus == paneFeeds:
 		lines = append(lines, m.feedList.view(m.width, true, th)...)
 	default:
-		lines = append(lines, m.postsPane(m.width, th)...)
+		lines = append(lines, m.postsPane(m.width)...)
 	}
 
 	lines = append(lines, m.statusLine(statusMargin))
 	return strings.Join(lines, "\n")
 }
 
-func (m Model) postsPane(width int, th listTheme) []string {
+func (m Model) postsPane(width int) []string {
 	if len(m.postList.items) == 0 {
 		return placeholderLines("No posts", width, m.postList.height, m.styles.Hint)
 	}
-	return m.postList.view(width, m.focus == panePosts, th)
+	return m.postList.view(width, m.focus == panePosts, m.styles.List)
 }
 
 func (m Model) readerView() string {
@@ -112,22 +107,17 @@ func (m Model) withOverlays(base string) string {
 	var layers []*lipgloss.Layer
 	switch m.overlay {
 	case overlayPalette:
-		layers = append(layers, centred(m.palette.view(m.feeds, m.read, m.width, m.listTheme(), m.styles), m.width, m.height))
+		layers = append(layers, centred(m.palette.view(m.feeds, m.read, m.width, m.styles), m.width, m.height))
 	case overlayHelp:
 		layers = append(layers, centred(m.helpView(), m.width, m.height))
 	}
-	if t := m.toasts.view(min(60, m.width), m.toastTheme()); t != "" {
+	if t := m.toasts.view(min(60, m.width), m.styles.Toast); t != "" {
 		l := lipgloss.NewLayer(t)
 		layers = append(layers, l.X(max(m.width-l.Width(), 0)).Y(0).Z(2))
 	}
 	if len(layers) == 0 {
 		return base
 	}
-	return compose(base, layers...)
-}
-
-// compose stacks layers over base.
-func compose(base string, layers ...*lipgloss.Layer) string {
 	return lipgloss.NewCompositor(append([]*lipgloss.Layer{lipgloss.NewLayer(base)}, layers...)...).Render()
 }
 

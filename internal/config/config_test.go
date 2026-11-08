@@ -1,11 +1,23 @@
 package config
 
 import (
+	"bytes"
+	"log"
 	"os"
 	"path/filepath"
 	"slices"
 	"testing"
 )
+
+// captureLog is what the package logs until the test ends.
+func captureLog(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var buf bytes.Buffer
+	prev := log.Writer()
+	log.SetOutput(&buf)
+	t.Cleanup(func() { log.SetOutput(prev) })
+	return &buf
+}
 
 // writeConfig writes content to a config.toml in a fresh temp dir.
 func writeConfig(t *testing.T, content string) string {
@@ -122,6 +134,7 @@ func TestLoad_EmptyPath(t *testing.T) {
 }
 
 func TestLoad_DedupesUrls(t *testing.T) {
+	logged := captureLog(t)
 	cfg, err := Load(writeConfig(t, `urls = ["https://a.example/feed", "https://b.example/feed", "https://a.example/feed", "https://c.example/feed", "https://b.example/feed"]`))
 	if err != nil {
 		t.Fatal(err)
@@ -130,8 +143,9 @@ func TestLoad_DedupesUrls(t *testing.T) {
 	if !slices.Equal(cfg.Urls, want) {
 		t.Errorf("Urls = %q, want %q (first occurrence kept, order preserved)", cfg.Urls, want)
 	}
-	wantW := []string{"duplicate feed url https://a.example/feed", "duplicate feed url https://b.example/feed"}
-	if w := cfg.Warnings(); !slices.Equal(w, wantW) {
-		t.Errorf("Warnings = %q, want %q", w, wantW)
+	for _, u := range []string{"duplicate feed url https://a.example/feed", "duplicate feed url https://b.example/feed"} {
+		if !bytes.Contains(logged.Bytes(), []byte(u)) {
+			t.Errorf("log %q lacks %q", logged, u)
+		}
 	}
 }

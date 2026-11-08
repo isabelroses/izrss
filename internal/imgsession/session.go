@@ -26,11 +26,16 @@ type Layout struct {
 	Cell       images.Cell
 }
 
-// Session is the images of the open post.
+// maxIDs is the number of image ids that fit a 256-colour foreground.
+const maxIDs = 255
+
+// Session is the images of the open post. Its images are numbered from 1 in
+// the order they are fetched; a different post starts again at 1, after
+// deleting the previous post's images from the terminal.
 type Session struct {
 	loader  Loader
 	on      bool
-	ids     *images.IDs
+	nextID  int  // the ids handed out so far
 	live    bool // the first frame is out, so the alt screen is active
 	post    string
 	imgs    map[string]*entry // by resolved src
@@ -41,19 +46,15 @@ type entry struct {
 	prep     images.Prepared // sizes only; pixels are dropped once encoded
 	id       int
 	upload   string // the kitty upload escape, kept for re-sending
-	del      string // the delete of the id this one displaced, sent with the upload
 	loaded   bool
 	uploaded bool
 	failed   bool
-
-	rows             []string // placeholder rows, cached for rowCols×rowRows
-	rowCols, rowRows int
 }
 
 // New is a session loading with loader. A session that is not enabled does
 // nothing and shows no images.
 func New(loader Loader, enabled bool) *Session {
-	return &Session{loader: loader, on: enabled && loader != nil, ids: images.NewIDs(), imgs: map[string]*entry{}}
+	return &Session{loader: loader, on: enabled && loader != nil, imgs: map[string]*entry{}}
 }
 
 // Enabled reports whether images are drawn at all.
@@ -67,24 +68,31 @@ type Job struct {
 
 // Result is a finished load, already decoded, scaled and encoded by its job.
 type Result struct {
-	Post, Src   string
-	ID, Evicted int
-	Prep        images.Prepared
-	Upload      string
-	Err         error
+	Post, Src string
+	Prep      images.Prepared
+	Upload    string
+	Err       error
 }
 
 // Open makes post the open one, starting afresh if it is a different post.
 // Images already uploaded are re-fitted to l, which may have changed since
-// the post was last open; the returned escapes re-place them.
+// the post was last open; the returned escapes re-place them. Opening a
+// different post first deletes the previous post's images.
 func (s *Session) Open(post string, l Layout) string {
 	if !s.on {
 		return ""
 	}
+	var b strings.Builder
 	if post != s.post {
-		s.post, s.imgs, s.toasted = post, map[string]*entry{}, false
+		for _, e := range s.imgs {
+			if e.loaded && !e.failed {
+				b.WriteString(images.Delete(e.id))
+			}
+		}
+		s.post, s.imgs, s.nextID, s.toasted = post, map[string]*entry{}, 0, false
 	}
-	return s.Resized(l)
+	b.WriteString(s.Resized(l))
+	return b.String()
 }
 
 // Resized re-fits the uploaded images to l, returning escapes that re-place
@@ -107,6 +115,7 @@ func (s *Session) Resized(l Layout) string {
 
 // Fetch starts loading those of imgs the open post has not begun on. Ids are
 // assigned here; the slow work (fetch, decode, scale, encode) is in the jobs.
+// Images past the 255th have no id to show with, and count as failed.
 func (s *Session) Fetch(imgs []reader.Image, l Layout) []Job {
 	if !s.on {
 		return nil
@@ -117,12 +126,17 @@ func (s *Session) Fetch(imgs []reader.Image, l Layout) []Job {
 		if _, known := s.imgs[img.Src]; known {
 			continue
 		}
-		id, evicted := s.ids.Acquire(img.Src)
+		if s.nextID == maxIDs {
+			s.imgs[img.Src] = &entry{loaded: true, failed: true}
+			continue
+		}
+		s.nextID++
+		id := s.nextID
 		s.imgs[img.Src] = &entry{id: id}
 		src, cssW := img.Src, img.Width
 		fetchURL := pickSource(img, l.Cols*cellWidth(l.Cell))
 		jobs = append(jobs, Job{Post: post, Src: src, Run: func() Result {
-			res := Result{Post: post, Src: src, ID: id, Evicted: evicted}
+			res := Result{Post: post, Src: src}
 			data, err := loader.Load(fetchURL)
 			if err != nil {
 				res.Err = err
@@ -165,19 +179,15 @@ func (s *Session) Loaded(r Result) Outcome {
 		return Outcome{}
 	}
 	e.loaded = true
-	var del string
-	if r.Evicted != 0 {
-		del = images.Delete(r.Evicted)
-	}
 	out := Outcome{Post: r.Post, Src: r.Src}
 	if r.Err != nil {
 		log.Printf("loading image %s: %v", r.Src, r.Err)
 		e.failed = true
-		out.Write, out.Rerender = del, true
+		out.Rerender = true
 	} else {
-		e.prep, e.id, e.upload, e.del = r.Prep, r.ID, r.Upload, del
+		e.prep, e.upload = r.Prep, r.Upload
 		if s.live {
-			out.Write, out.Confirm = del+r.Upload, true
+			out.Write, out.Confirm = r.Upload, true
 		}
 	}
 	out.Failed = s.failureReport()
@@ -195,7 +205,7 @@ func (s *Session) FrameDrawn() []Outcome {
 	var out []Outcome
 	for src, e := range s.imgs {
 		if e.loaded && !e.failed && !e.uploaded {
-			out = append(out, Outcome{Post: s.post, Src: src, Write: e.del + e.upload, Confirm: true})
+			out = append(out, Outcome{Post: s.post, Src: src, Write: e.upload, Confirm: true})
 		}
 	}
 	return out
@@ -256,36 +266,10 @@ func (s *Session) Display() (ready map[string][]string, failed map[string]bool) 
 		case e.failed:
 			failed[src] = true
 		case e.uploaded:
-			ready[src] = e.placeholders()
+			ready[src] = images.Placeholders(e.id, e.prep.Cols, e.prep.Rows)
 		}
 	}
 	return ready, failed
-}
-
-// Info is what is known of one image.
-type Info struct {
-	ID         int
-	Cols, Rows int
-	Uploaded   bool
-	Failed     bool
-}
-
-// Info reports on the image with resolved src.
-func (s *Session) Info(src string) (Info, bool) {
-	e, ok := s.imgs[src]
-	if !ok {
-		return Info{}, false
-	}
-	return Info{ID: e.id, Cols: e.prep.Cols, Rows: e.prep.Rows, Uploaded: e.uploaded, Failed: e.failed}, true
-}
-
-// placeholders returns the image's placeholder rows, rebuilt only on resize.
-func (e *entry) placeholders() []string {
-	if e.rows == nil || e.rowCols != e.prep.Cols || e.rowRows != e.prep.Rows {
-		e.rows = images.Placeholders(e.id, e.prep.Cols, e.prep.Rows)
-		e.rowCols, e.rowRows = e.prep.Cols, e.prep.Rows
-	}
-	return e.rows
 }
 
 // pickSource chooses the smallest srcset candidate at least wantPx wide, so

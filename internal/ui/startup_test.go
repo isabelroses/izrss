@@ -24,7 +24,7 @@ func TestLoadCachedFeeds_NoNetwork(t *testing.T) {
 	cfg := config.Default()
 	cfg.Urls = []string{srv.URL + "/a", srv.URL + "/b"}
 	db := testDB(t)
-	m := NewModel(cfg, db, rss.NewFetcher(db, cfg.DateFormat), nil, nil)
+	m := NewModel(cfg, db, rss.NewFetcher(db, cfg.DateFormat), nil)
 
 	msg, ok := m.loadCachedFeeds()().(feedsRefreshedMsg)
 	if !ok {

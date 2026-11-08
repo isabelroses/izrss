@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
@@ -41,15 +42,13 @@ image_max_height = 12
 	}
 }
 
-func TestWarnings_ThemeRemoved(t *testing.T) {
-	cfg := Default()
-	if w := cfg.Warnings(); len(w) != 0 {
-		t.Errorf("no theme set should give no warnings, got %q", w)
+func TestLoad_LogsRemovedTheme(t *testing.T) {
+	logged := captureLog(t)
+	if _, err := Load(writeConfig(t, "[reader]\ntheme = \"environment\"\n")); err != nil {
+		t.Fatal(err)
 	}
-	cfg.Reader.Theme = "environment"
-	want := "reader.theme is no longer supported; see example.toml for reader colours"
-	if w := cfg.Warnings(); len(w) != 1 || w[0] != want {
-		t.Errorf("got %q, want [%q]", w, want)
+	if !bytes.Contains(logged.Bytes(), []byte("reader.theme is no longer supported")) {
+		t.Errorf("log = %q", logged)
 	}
 }
 
@@ -62,8 +61,8 @@ func TestExampleConfigLoads(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cfg.Warnings()) != 0 {
-		t.Errorf("example.toml should not use removed keys: %q", cfg.Warnings())
+	if cfg.Reader.Theme != "" {
+		t.Errorf("example.toml should not use removed keys: theme %q", cfg.Reader.Theme)
 	}
 	if cfg.Reader.Images != "auto" || cfg.Reader.ImageMaxHeight != 16 {
 		t.Errorf("example reader keys not loaded: %+v", cfg.Reader)
