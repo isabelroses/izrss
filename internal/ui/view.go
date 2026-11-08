@@ -13,10 +13,10 @@ func (m Model) View() tea.View {
 	defer logPanic()
 	content := ""
 	if m.ready {
-		if m.screen == screenReader {
+		if m.page.Shown() {
 			content = m.readerView()
 		} else {
-			content = m.mainView()
+			content = m.main.View(m.styles, m.statusLine(statusMargin))
 		}
 		content = m.withOverlays(content)
 	}
@@ -26,44 +26,9 @@ func (m Model) View() tea.View {
 	return v
 }
 
-func (m Model) mainView() string {
-	body := max(m.height-1, 0)
-	lines := make([]string, 0, m.height)
-	th := m.styles.List
-
-	switch split, left, right := m.paneWidths(); {
-	case m.feeds.Len() == 0:
-		lines = append(lines, placeholderLines("No feeds loaded yet", m.width, body, m.styles.Hint)...)
-	case split:
-		l := m.feedList.view(left, m.focus == paneFeeds, th)
-		r := m.postsPane(right)
-		sep := m.styles.Border.Render("│")
-		for i := range body {
-			lines = append(lines, l[i]+sep+r[i])
-		}
-	case m.focus == paneFeeds:
-		lines = append(lines, m.feedList.view(m.width, true, th)...)
-	default:
-		lines = append(lines, m.postsPane(m.width)...)
-	}
-
-	lines = append(lines, m.statusLine(statusMargin))
-	return strings.Join(lines, "\n")
-}
-
-func (m Model) postsPane(width int) []string {
-	if len(m.postList.items) == 0 {
-		return placeholderLines("No posts", width, m.postList.height, m.styles.Hint)
-	}
-	return m.postList.view(width, m.focus == panePosts, m.styles.List)
-}
-
 func (m Model) readerView() string {
-	lines := []string{m.readerHeader(), m.pageView()}
-	if pageGap(m.height) > 0 {
-		lines = append(lines, strings.Repeat(" ", m.width))
-	}
-	return strings.Join(append(lines, m.statusLine(m.pageMargin())), "\n")
+	feed, _ := m.lib.Feed(m.page.Ref().FeedURL)
+	return m.page.View(feed.Name(), m.styles, m.statusLine(m.page.margin()))
 }
 
 // statusMargin is the main screen's edge gap, matching the list padding.
@@ -74,10 +39,10 @@ const statusMargin = 1
 // colour across the full width.
 func (m Model) statusLine(margin int) string {
 	margin = max(margin, 1)
-	status := statusText(m.unread, m.refresh, m.now())
+	status := statusText(m.main.Unread(), m.refresh, m.now())
 	h := m.help
 	h.SetWidth(max(m.width-2*margin-ansi.StringWidth(status)-2, 0))
-	left := h.ShortHelpView(bindings.shortHelp(m.screen, m.focus))
+	left := h.ShortHelpView(bindings.shortHelp(m.page.Shown(), m.main.Focus()))
 	pad := strings.Repeat(" ", margin)
 	gap := strings.Repeat(" ", max(m.width-2*margin-ansi.StringWidth(left)-ansi.StringWidth(status), 0))
 	line := ansi.Truncate(pad+left+gap+m.styles.Hint.Render(status)+pad, m.width, "")
@@ -107,7 +72,7 @@ func (m Model) withOverlays(base string) string {
 	var layers []*lipgloss.Layer
 	switch m.overlay {
 	case overlayPalette:
-		layers = append(layers, centred(m.palette.view(m.feeds, m.read, m.width, m.styles), m.width, m.height))
+		layers = append(layers, centred(m.palette.View(m.width, m.styles), m.width, m.height))
 	case overlayHelp:
 		layers = append(layers, centred(m.helpView(), m.width, m.height))
 	}

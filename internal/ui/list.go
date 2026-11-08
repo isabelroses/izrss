@@ -73,6 +73,9 @@ func (l *list) setItems(items []item, keep item) {
 	l.scroll()
 }
 
+// reset puts the cursor back on the first row.
+func (l *list) reset() { l.cursor, l.offset = 0, 0 }
+
 func (l *list) move(delta int) {
 	if len(l.items) == 0 {
 		return
@@ -157,16 +160,6 @@ func (l list) row(it item, cursor bool, width int, focused bool, th listTheme) s
 	if marker != "" && markFg != "" {
 		marker = markFg + marker + th.plain
 	}
-	var b strings.Builder
-	b.Grow(len(open) + len(title) + len(gap) + len(right) + 32)
-	b.WriteString(open)
-	b.WriteString(pad)
-	b.WriteString(marker)
-	b.WriteString(title)
-	b.WriteString(gap)
-	b.WriteString(rightFg)
-	b.WriteString(right)
-	b.WriteString(pad)
-	b.WriteString(ansi.ResetStyle)
-	return b.String()
+	// One concatenation allocates the row once.
+	return open + pad + marker + title + gap + rightFg + right + pad + ansi.ResetStyle
 }

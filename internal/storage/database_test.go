@@ -63,10 +63,6 @@ func TestClose(t *testing.T) {
 	if err := db.Close(); err != nil {
 		t.Errorf("Unexpected error closing database: %v", err)
 	}
-	db.conn = nil
-	if err := db.Close(); err != nil {
-		t.Errorf("Unexpected error closing nil connection: %v", err)
-	}
 }
 
 func TestSaveAndLoadPostReadStatus(t *testing.T) {
@@ -156,11 +152,12 @@ func TestMigration_PreservesReadFlags(t *testing.T) {
 				t.Errorf("%v: got %v (present %v), want %v", k, r, ok, v)
 			}
 		}
-		if c, err := db.LoadFeedCache("https://a/feed"); err != nil || string(c) != "<rss>" {
-			t.Errorf("feed cache lost: %q %v", c, err)
+		c, ok, err := db.LoadFeedCache("https://a/feed")
+		if err != nil || !ok || string(c.Content) != "<rss>" || c.Parsed {
+			t.Errorf("feed cache lost, or not marked as XML: %+v %v %v", c, ok, err)
 		}
-		if at, err := db.LastFetched(); err != nil || !at.Equal(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)) {
-			t.Errorf("fetch time lost: %v %v", at, err)
+		if !c.FetchedAt.Equal(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)) {
+			t.Errorf("fetch time lost: %v", c.FetchedAt)
 		}
 		must(t, db.Close())
 	}
@@ -197,21 +194,6 @@ func TestLoadPostReadStatuses_Empty(t *testing.T) {
 	}
 }
 
-func TestLastFetched(t *testing.T) {
-	db := setupTestDB(t)
-	if at, err := db.LastFetched(); err != nil || !at.IsZero() {
-		t.Fatalf("empty cache: %v, %v", at, err)
-	}
-	before := time.Now().Add(-time.Second)
-	must(t, db.SaveFeedCache("a", []byte("<rss>")))
-	must(t, db.SaveFeedCache("b", []byte("<rss>")))
-	at, err := db.LastFetched()
-	must(t, err)
-	if at.Before(before) || at.After(time.Now().Add(time.Second)) {
-		t.Errorf("last fetched %v, want about now", at)
-	}
-}
-
 func TestSaveFeedCache(t *testing.T) {
 	const url = "http://example.com/feed.xml"
 	tests := []struct {
@@ -228,19 +210,23 @@ func TestSaveFeedCache(t *testing.T) {
 			for _, content := range tt.saves {
 				must(t, db.SaveFeedCache(url, content))
 			}
-			loaded, err := db.LoadFeedCache(url)
+			before := time.Now().Add(-time.Second)
+			loaded, ok, err := db.LoadFeedCache(url)
 			must(t, err)
-			if want := tt.saves[len(tt.saves)-1]; !bytes.Equal(loaded, want) {
-				t.Errorf("Expected %q, got %q", want, loaded)
+			if want := tt.saves[len(tt.saves)-1]; !ok || !bytes.Equal(loaded.Content, want) || !loaded.Parsed {
+				t.Errorf("Expected parsed %q, got %+v", want, loaded)
+			}
+			if loaded.FetchedAt.Before(before.Add(-time.Second)) || loaded.FetchedAt.After(time.Now().Add(time.Second)) {
+				t.Errorf("fetched at %v, want about now", loaded.FetchedAt)
 			}
 		})
 	}
 }
 
 func TestLoadFeedCache_NotFound(t *testing.T) {
-	content, err := setupTestDB(t).LoadFeedCache("http://nonexistent.com/feed.xml")
+	_, ok, err := setupTestDB(t).LoadFeedCache("http://nonexistent.com/feed.xml")
 	must(t, err)
-	if content != nil {
-		t.Error("Expected nil content for non-existent cache")
+	if ok {
+		t.Error("nothing is cached for an unknown url")
 	}
 }

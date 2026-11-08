@@ -14,7 +14,8 @@ import (
 
 	"github.com/isabelroses/izrss/internal/config"
 	"github.com/isabelroses/izrss/internal/images"
-	"github.com/isabelroses/izrss/internal/readstate"
+	"github.com/isabelroses/izrss/internal/imgsession"
+	"github.com/isabelroses/izrss/internal/library"
 	"github.com/isabelroses/izrss/internal/rss"
 	"github.com/isabelroses/izrss/internal/storage"
 	"github.com/isabelroses/izrss/internal/ui"
@@ -85,30 +86,27 @@ func run(cli *CLI) error {
 	}
 	defer func() { _ = db.Close() }()
 
-	fetcher := rss.NewFetcher(db, cfg.DateFormat)
+	store := rss.NewStore(db)
+	fetcher := rss.NewFetcher(store)
+	lib := library.New(db, store)
 
 	if cli.CountUnread {
-		feeds := fetcher.GetAllContent(cfg.Urls, true)
-		state := readstate.New(db)
-		if err := state.Load(); err != nil {
-			return fmt.Errorf("reading tracking data: %w", err)
+		n, err := countUnread(lib, fetcher, cfg.Urls)
+		if err != nil {
+			return err
 		}
-		unread := 0
-		for _, f := range feeds {
-			unread += state.Unread(f)
-		}
-		fmt.Print(unread)
+		fmt.Print(n)
 		return nil
 	}
 
-	var imgFetcher *images.Fetcher
+	var imgs imgsession.Loader
 	if dir, err := images.DefaultCacheDir(); err != nil {
 		log.Printf("images are off: %v", err)
 	} else {
-		imgFetcher = images.NewFetcher(dir, 10<<20, 15*time.Second)
+		imgs = images.NewFetcher(dir, 10<<20, 15*time.Second)
 	}
 
-	_, err = tea.NewProgram(ui.NewModel(cfg, db, fetcher, imgFetcher)).Run()
+	_, err = tea.NewProgram(ui.NewModel(cfg, lib, fetcher, imgs)).Run()
 	if errors.Is(err, tea.ErrProgramPanic) {
 		log.Printf("izrss crashed: %v", err)
 		fmt.Fprintf(os.Stderr, "izrss crashed; details were written to %s\n", logPath)
@@ -118,4 +116,24 @@ func run(cli *CLI) error {
 		return fmt.Errorf("running TUI: %w", err)
 	}
 	return nil
+}
+
+// countUnread counts the unread posts of the feeds with urls, as cached;
+// feeds never fetched are fetched first.
+func countUnread(lib *library.Library, fetcher *rss.Fetcher, urls []string) (int, error) {
+	snap := lib.Load(urls)
+	if snap.MarksErr != nil {
+		return 0, fmt.Errorf("reading tracking data: %w", snap.MarksErr)
+	}
+	var cold []string
+	for _, f := range snap.Feeds {
+		if f.Fetched.IsZero() {
+			cold = append(cold, f.URL)
+		}
+	}
+	lib.Restore(snap)
+	for _, f := range fetcher.FetchAll(cold) {
+		lib.Replace(f)
+	}
+	return lib.Unread(), nil
 }

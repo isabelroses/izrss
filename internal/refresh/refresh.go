@@ -1,7 +1,7 @@
-// Package refresh is the bookkeeping of a network refresh: which feeds are
-// being fetched, how far along it is, how overlapping requests merge, and
-// what a finished fetch does to the feed set. It does the fetching nowhere:
-// the caller fetches what Start returns and hands each result to Finish.
+// Package refresh runs network refreshes: which feeds are being fetched, how
+// far along it is, how overlapping requests merge, and what a finished fetch
+// does to the feeds. Fetches come from a Source; Start returns them as jobs
+// for the caller to run off its main loop, handing each result to Finish.
 package refresh
 
 import (
@@ -10,34 +10,54 @@ import (
 	"github.com/isabelroses/izrss/internal/rss"
 )
 
-// Refresher tracks refreshing the feeds of one feed set. A round starts with
-// the first Start while idle and ends when every feed asked for in it has
-// finished; requests made meanwhile join the round.
+// Source fetches one feed. A fetch never fails outright: a feed that can't
+// be loaded comes back with Err set.
+type Source interface {
+	Fetch(url string) rss.Feed
+}
+
+// Feeds is what a refresh updates.
+type Feeds interface {
+	Feed(url string) (rss.Feed, bool)
+	Replace(rss.Feed)
+}
+
+// Job is one fetch to run off the main loop, then report with Finish.
+type Job func() rss.Feed
+
+// Refresher refreshes one set of feeds. A round starts with the first Start
+// while idle and ends when every feed asked for in it has finished; requests
+// made meanwhile join the round.
 type Refresher struct {
-	feeds    *rss.FeedSet
+	feeds    Feeds
+	src      Source
 	inFlight map[string]bool // fetches started and not yet finished
 	finished map[string]bool // feeds finished in this round
 	at       time.Time       // when the last round finished
 }
 
-// New refreshes the feeds of set.
-func New(set *rss.FeedSet) *Refresher {
-	return &Refresher{feeds: set, inFlight: map[string]bool{}, finished: map[string]bool{}}
+// New refreshes feeds from src. With no source, nothing is ever fetched.
+func New(feeds Feeds, src Source) *Refresher {
+	return &Refresher{feeds: feeds, src: src, inFlight: map[string]bool{}, finished: map[string]bool{}}
 }
 
-// Start asks for the feeds with urls to be refreshed and returns those to
-// fetch now. A feed already being fetched, or already refreshed in this
+// Start asks for the feeds with urls to be refreshed and returns the fetches
+// to run now. A feed already being fetched, or already refreshed in this
 // round, is left out, so overlapping requests (r then R) never fetch a feed
 // twice and progress never counts past the number of distinct feeds.
-func (r *Refresher) Start(urls []string) (fetch []string) {
+func (r *Refresher) Start(urls []string) (jobs []Job) {
+	if r.src == nil {
+		return nil
+	}
+	src := r.src
 	for _, url := range urls {
 		if r.inFlight[url] || r.finished[url] {
 			continue
 		}
 		r.inFlight[url] = true
-		fetch = append(fetch, url)
+		jobs = append(jobs, func() rss.Feed { return src.Fetch(url) })
 	}
-	return fetch
+	return jobs
 }
 
 // Result is what one finished fetch came to.
@@ -47,10 +67,6 @@ type Result struct {
 	Name     string
 	Err      error // the fetch failed; the feed set is unchanged
 	CacheErr error // the feed loaded but could not be cached
-	// Changed means the feed set now holds the feed's new posts.
-	Changed bool
-	// Finished means this result completed the round.
-	Finished bool
 }
 
 // Finish takes one feed's fetched result: it counts toward progress if it
@@ -66,12 +82,10 @@ func (r *Refresher) Finish(f rss.Feed, now time.Time) Result {
 		if len(r.inFlight) == 0 {
 			r.finished = map[string]bool{}
 			r.at = now
-			res.Finished = true
 		}
 	}
 	if f.Err == nil {
 		r.feeds.Replace(f)
-		res.Changed = true
 	}
 	return res
 }

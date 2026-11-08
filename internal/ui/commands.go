@@ -7,18 +7,13 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/isabelroses/izrss/internal/library"
 	"github.com/isabelroses/izrss/internal/refresh"
 	"github.com/isabelroses/izrss/internal/rss"
-	"github.com/isabelroses/izrss/internal/storage"
 )
 
-// feedsRefreshedMsg delivers the cached feeds at startup.
-type feedsRefreshedMsg struct {
-	feeds []rss.Feed
-	read  []storage.PostReadStatus // saved read state; nil if not loaded
-	at    time.Time                // last feed fetch, if known
-	errs  []string                 // toast texts
-}
+// cacheLoadedMsg delivers the cached feeds and saved read marks at startup.
+type cacheLoadedMsg struct{ snap library.Snapshot }
 
 // refreshMsg asks for the feeds with the given URLs to be refreshed; Init
 // sends it once the cache has painted.
@@ -30,44 +25,23 @@ type feedLoadedMsg struct{ feed rss.Feed }
 // loadCachedFeeds loads feeds from cache only, for a fast first paint; the
 // refresh that follows fetches whatever is missing.
 func (m Model) loadCachedFeeds() tea.Cmd {
-	fetcher, urls, db := m.fetcher, m.cfg.Urls, m.db
-	return func() tea.Msg {
-		feeds := fetcher.GetCachedContent(urls)
-		msg := feedsRefreshedMsg{feeds: feeds}
-		if saved, err := db.LoadPostReadStatuses(); err != nil {
-			log.Printf("reading read status: %v", err)
-			msg.errs = append(msg.errs, "couldn't load read status")
-		} else {
-			msg.read = saved
-		}
-		if at, err := db.LastFetched(); err != nil {
-			log.Printf("reading fetch time: %v", err)
-		} else {
-			msg.at = at
-		}
-		return msg
-	}
+	lib, urls := m.lib, m.cfg.Urls
+	return func() tea.Msg { return cacheLoadedMsg{snap: lib.Load(urls)} }
 }
 
 // refreshFeeds re-fetches the feeds with the given URLs, one command per
 // feed so results (and progress) arrive as each finishes. What the refresh
 // is already doing is left alone, so overlapping requests (r then R) merge.
 func (m *Model) refreshFeeds(urls []string) tea.Cmd {
-	if len(urls) == 0 || m.fetcher == nil {
-		return nil
-	}
-	fetcher := m.fetcher
 	var cmds []tea.Cmd
-	for _, url := range m.refresh.Start(urls) {
-		cmds = append(cmds, func() tea.Msg {
-			return feedLoadedMsg{feed: fetcher.GetContentForURL(url, false)}
-		})
+	for _, job := range m.refresh.Start(urls) {
+		cmds = append(cmds, func() tea.Msg { return feedLoadedMsg{feed: job()} })
 	}
 	return tea.Batch(cmds...)
 }
 
 // feedLoaded reacts to a refreshed feed: the refresh module has updated the
-// feeds, so this redraws what changed and reports what went wrong.
+// library, so this re-shows the open post and reports what went wrong.
 func (m *Model) feedLoaded(msg feedLoadedMsg) tea.Cmd {
 	var cmd tea.Cmd
 	res := m.refresh.Finish(msg.feed, m.now())
@@ -79,13 +53,8 @@ func (m *Model) feedLoaded(msg feedLoadedMsg) tea.Cmd {
 		log.Printf("%v", res.CacheErr)
 		cmd = m.notify("couldn't cache " + res.Name + " feed")
 	}
-	if _, running := m.refresh.Progress(); running == 0 { // once per round: each search scans every post
-		m.researchPalette()
-	}
-	m.rebuildFeeds()
-	if p, ok := m.feeds.Post(m.open); ok && m.screen == screenReader { // the feeds changed underneath the reader
-		m.post = p
-		m.rerenderReader()
+	if e, ok := m.lib.Entry(m.page.Ref()); ok && m.page.Shown() { // the feeds changed underneath the reader
+		m.page.Refresh(e.Post)
 	}
 	return cmd
 }

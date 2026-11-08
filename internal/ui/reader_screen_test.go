@@ -8,12 +8,13 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/isabelroses/izrss/internal/config"
 	"github.com/isabelroses/izrss/internal/rss"
 )
 
 func TestReader_HeaderLine(t *testing.T) {
 	m, _ := keys(newTestModel(t), "l", "enter")
-	if m.screen != screenReader {
+	if !m.page.Shown() {
 		t.Fatal("enter on a post should open the reader")
 	}
 	lines := strings.Split(m.View().Content, "\n")
@@ -39,26 +40,26 @@ func TestReader_BackPreservesSelection(t *testing.T) {
 		if quits(msgs) {
 			t.Fatalf("%s in the reader must not quit", back)
 		}
-		if m.screen != screenMain || m.focus != panePosts || selectedTitle(m.feedList) != "Beta" || selectedTitle(m.postList) != "Beta post 3" {
-			t.Errorf("%s: screen %v focus %v feed %q post %q", back, m.screen, m.focus, selectedTitle(m.feedList), selectedTitle(m.postList))
+		if m.page.Shown() || m.main.focus != panePosts || selectedTitle(m.main.feeds) != "Beta" || selectedTitle(m.main.posts) != "Beta post 3" {
+			t.Errorf("%s: reader %v focus %v feed %q post %q", back, m.page.Shown(), m.main.focus, selectedTitle(m.main.feeds), selectedTitle(m.main.posts))
 		}
 	}
 }
 
 func TestReader_ToggleReadStays(t *testing.T) {
 	m, _ := keys(newTestModel(t), "l", "enter")
-	m.viewport.SetHeight(1) // keep the threshold from auto-marking
+	m.page.viewport.SetHeight(1) // keep the threshold from auto-marking
 	before := isRead(m, 0, 0)
 	m, _ = keys(m, "x")
-	if m.screen != screenReader || isRead(m, 0, 0) == before {
-		t.Errorf("x should toggle read and stay: screen %v read %v", m.screen, isRead(m, 0, 0))
+	if !m.page.Shown() || isRead(m, 0, 0) == before {
+		t.Errorf("x should toggle read and stay: reader %v read %v", m.page.Shown(), isRead(m, 0, 0))
 	}
 }
 
 func TestReader_ThresholdMarksByKey(t *testing.T) {
 	m, _ := keys(newTestModel(t), "k", "l", "j", "j") // All posts row 2 = Gamma post 0
-	if selectedTitle(m.postList) != "Gamma post 0" {
-		t.Fatalf("selected %q", selectedTitle(m.postList))
+	if selectedTitle(m.main.posts) != "Gamma post 0" {
+		t.Fatalf("selected %q", selectedTitle(m.main.posts))
 	}
 	m, _ = keys(m, "enter") // short post: fully visible, past any threshold
 	m, _ = update(m, tea.KeyPressMsg{Code: tea.KeyDown})
@@ -72,21 +73,21 @@ func TestReader_ThresholdMarksByKey(t *testing.T) {
 
 func TestReader_ViewportHeight(t *testing.T) {
 	m, _ := keys(newTestModel(t), "l", "enter")
-	if h := m.viewport.Height(); h != 37 {
+	if h := m.page.viewport.Height(); h != 37 {
 		t.Errorf("viewport height %d, want 37", h)
 	}
 	m, _ = update(m, tea.WindowSizeMsg{Width: 100, Height: 30})
 	m, _ = keys(m, "esc", "enter")
-	if h := m.viewport.Height(); h != 27 {
+	if h := m.page.viewport.Height(); h != 27 {
 		t.Errorf("after resize and reopen: %d, want 27", h)
 	}
 }
 
 func TestOpenReader_RendersHTML(t *testing.T) {
 	m := newTestModel(t)
-	m.feeds.All()[0].Posts[0].Content = "<h2>Hi</h2><p>there</p>"
-	m.openReader(m.feeds.All()[0].Posts[0].Ref(m.feeds.All()[0].URL))
-	view := ansi.Strip(m.viewport.View())
+	feedAt(m, 0).Posts[0].Content = "<h2>Hi</h2><p>there</p>"
+	m.openReader(feedAt(m, 0).Posts[0].Ref(feedAt(m, 0).URL))
+	view := ansi.Strip(m.page.viewport.View())
 	if !strings.Contains(view, "## Hi") || !strings.Contains(view, "there") {
 		t.Errorf("reader should render HTML:\n%s", view)
 	}
@@ -96,9 +97,9 @@ func TestOpenReader_RendersHTML(t *testing.T) {
 // text column inside the page margins is what reader.size sets.
 func TestReader_SideMargin(t *testing.T) {
 	m := newTestModel(t)
-	m.cfg.Reader.Size = "full"
+	m.cfg.Reader.Width = config.Width{Percent: 100}
 	long := strings.Repeat("word ", 60)
-	m.feeds.All()[0].Posts[0].Content = "<p>" + long + "</p>"
+	feedAt(m, 0).Posts[0].Content = "<p>" + long + "</p>"
 	m, _ = keys(m, "l", "enter")
 	body := strings.Split(m.View().Content, "\n")[1:39]
 	widest := 0
@@ -115,7 +116,7 @@ func TestReader_SideMargin(t *testing.T) {
 	if widest > 116 || widest < 108 {
 		t.Errorf("text should fill the width inside both margins, widest %d", widest)
 	}
-	if got := m.readerOpts().Width; got != 116 {
+	if got := m.page.opts().Width; got != 116 {
 		t.Errorf("full size text width = %d, want 116", got)
 	}
 }
@@ -133,7 +134,7 @@ func TestReader_DocumentMargin(t *testing.T) {
 	if want := strings.Repeat(" ", readerMargin+docMargin) + "Alpha body 0"; !strings.HasPrefix(body, want) || strings.HasPrefix(body, want[:len(want)-len("Alpha body 0")]+" ") {
 		t.Errorf("body line %q should start %q", body, want)
 	}
-	if got, want := m.contentWidth(), m.textWidth()-2*docMargin; got != want {
+	if got, want := m.page.contentWidth(), m.page.textWidth()-2*docMargin; got != want {
 		t.Errorf("images fit %d columns, want %d", got, want)
 	}
 }
@@ -146,9 +147,9 @@ func TestReader_GapAboveHintLine(t *testing.T) {
 		fmt.Fprintf(&b, "<p>line %d</p>", i)
 	}
 	m, _ := openPost(newTestModel(t), rss.Post{UUID: "long", Title: "long", Content: b.String()})
-	m.viewport.GotoBottom()
-	if m.viewport.ScrollPercent() != 1 {
-		t.Fatalf("scroll percent %v at the bottom, want 1", m.viewport.ScrollPercent())
+	m.page.viewport.GotoBottom()
+	if m.page.viewport.ScrollPercent() != 1 {
+		t.Fatalf("scroll percent %v at the bottom, want 1", m.page.viewport.ScrollPercent())
 	}
 	lines := strings.Split(ansi.Strip(m.View().Content), "\n")
 	if len(lines) != 40 || !strings.Contains(lines[len(lines)-3], "line 99") || strings.TrimSpace(lines[len(lines)-2]) != "" {

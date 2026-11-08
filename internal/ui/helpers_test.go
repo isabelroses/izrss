@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/isabelroses/izrss/internal/config"
+	"github.com/isabelroses/izrss/internal/library"
 	"github.com/isabelroses/izrss/internal/rss"
 	"github.com/isabelroses/izrss/internal/storage"
 )
@@ -29,7 +30,6 @@ func sampleFeeds() []rss.Feed {
 				Link:      fmt.Sprintf("https://%s.example/%d", name, j),
 				Content:   fmt.Sprintf("<p>%s body %d</p>", name, j),
 				Published: t0.Add(-time.Duration(j*3+i) * time.Hour),
-				Date:      "04/11/2026",
 			}
 		}
 		fs[i] = rss.Feed{Title: name, URL: url, Posts: posts}
@@ -47,28 +47,67 @@ func testDB(t testing.TB) *storage.DB {
 	return db
 }
 
+// fakeSource serves sampleFeeds, so refreshes never touch the network.
+type fakeSource struct{}
+
+func (fakeSource) Fetch(url string) rss.Feed {
+	for _, f := range sampleFeeds() {
+		if f.URL == url {
+			return f
+		}
+	}
+	return rss.Feed{URL: url}
+}
+
+// newLib is an empty library over db.
+func newLib(db *storage.DB) *library.Library { return library.New(db, rss.NewStore(db)) }
+
+// loaded is the startup load delivering feeds, with the read marks m's
+// database holds.
+func loaded(m Model, feeds ...rss.Feed) cacheLoadedMsg {
+	snap := m.lib.Load(nil)
+	snap.Feeds = feeds
+	return cacheLoadedMsg{snap: snap}
+}
+
+// feedAt is the model's i'th feed.
+func feedAt(m Model, i int) rss.Feed {
+	f, _ := m.lib.Feed(m.lib.URLs()[i])
+	return f
+}
+
 // newTestModel is a ready 120x40 model showing sampleFeeds, feeds pane
 // focused on the first real feed.
 func newTestModel(t *testing.T) Model {
+	t.Helper()
+	m, _ := newTestModelDB(t)
+	return m
+}
+
+// newTestModelDB is newTestModel and the database its read state saves to.
+func newTestModelDB(t *testing.T) (Model, *storage.DB) {
 	t.Helper()
 	cfg := config.Default()
 	for _, f := range sampleFeeds() {
 		cfg.Urls = append(cfg.Urls, f.URL)
 	}
-	m := *NewModel(cfg, testDB(t), nil, nil)
-	m.now = func() time.Time { return t0 }
-	m, _ = update(m, tea.WindowSizeMsg{Width: 120, Height: 40})
+	db := testDB(t)
+	var marks []storage.PostReadStatus
 	for _, f := range sampleFeeds() {
 		for j, p := range f.Posts {
 			if j != 0 {
-				if err := m.read.Set(p.Ref(f.URL), true); err != nil {
-					t.Fatal(err)
-				}
+				marks = append(marks, storage.PostReadStatus{FeedURL: f.URL, Key: p.Key(), Read: true})
 			}
 		}
 	}
-	m, _ = update(m, feedsRefreshedMsg{feeds: sampleFeeds()})
-	return m
+	if err := db.SavePostReadStatuses(marks); err != nil {
+		t.Fatal(err)
+	}
+	m := *NewModel(cfg, newLib(db), fakeSource{}, nil)
+	m.now = func() time.Time { return t0 }
+	m, _ = update(m, tea.WindowSizeMsg{Width: 120, Height: 40})
+	m, _ = update(m, loaded(m, sampleFeeds()...))
+	return m, db
 }
 
 func press(s string) tea.KeyPressMsg {
@@ -118,6 +157,6 @@ func sampleURL(i int) string { return sampleFeeds()[i].URL }
 
 // isRead reports whether post j of the model's i'th feed is read.
 func isRead(m Model, i, j int) bool {
-	f := m.feeds.All()[i]
-	return m.read.IsRead(f.URL, f.Posts[j].Key())
+	f := feedAt(m, i)
+	return m.lib.IsRead(f.Posts[j].Ref(f.URL))
 }

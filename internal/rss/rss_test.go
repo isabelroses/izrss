@@ -16,7 +16,7 @@ func TestSortedPosts_NewestFirst(t *testing.T) {
 		item("old", base), item("new", base.Add(48*time.Hour)), item("mid", base.Add(24*time.Hour)),
 	}}
 
-	posts := NewFetcher(nil, "02/01/2006").sortedPosts(feed)
+	posts := sortedPosts(feed)
 
 	want := []string{"new", "mid", "old"}
 	for i, w := range want {
@@ -26,7 +26,7 @@ func TestSortedPosts_NewestFirst(t *testing.T) {
 	}
 }
 
-func TestParseDate(t *testing.T) {
+func TestCreatePost_Date(t *testing.T) {
 	parsed := time.Date(2026, 6, 29, 12, 0, 0, 0, time.UTC)
 
 	tests := []struct {
@@ -47,7 +47,7 @@ func TestParseDate(t *testing.T) {
 		},
 		{
 			name:        "passes through unparseable input",
-			item:        &gofeed.Item{Published: "not a date"},
+			item:        &gofeed.Item{Published: "not a\x1b date"},
 			wantDisplay: "not a date",
 			wantZero:    true,
 		},
@@ -55,12 +55,12 @@ func TestParseDate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, display := parseDate(tt.item, "2006-01-02")
-			if display != tt.wantDisplay {
+			p := createPost(tt.item)
+			if display := p.Date("2006-01-02"); display != tt.wantDisplay {
 				t.Errorf("display: expected %q, got %q", tt.wantDisplay, display)
 			}
-			if got.IsZero() != tt.wantZero {
-				t.Errorf("zero time: expected %v, got %v (%v)", tt.wantZero, got.IsZero(), got)
+			if p.Published.IsZero() != tt.wantZero {
+				t.Errorf("zero time: expected %v, got %v (%v)", tt.wantZero, p.Published.IsZero(), p.Published)
 			}
 		})
 	}

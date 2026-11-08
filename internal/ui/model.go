@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"runtime/debug"
@@ -9,25 +10,15 @@ import (
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textinput"
-	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
 	"github.com/isabelroses/izrss/internal/config"
 	"github.com/isabelroses/izrss/internal/images"
 	"github.com/isabelroses/izrss/internal/imgsession"
-	"github.com/isabelroses/izrss/internal/reader"
-	"github.com/isabelroses/izrss/internal/readstate"
+	"github.com/isabelroses/izrss/internal/library"
 	"github.com/isabelroses/izrss/internal/refresh"
 	"github.com/isabelroses/izrss/internal/rss"
-	"github.com/isabelroses/izrss/internal/storage"
-)
-
-type screen int
-
-const (
-	screenMain screen = iota
-	screenReader
 )
 
 type pane int
@@ -37,73 +28,49 @@ const (
 	panePosts
 )
 
-// Model is the application state.
+// Model is the application state. It routes messages to the screen showing
+// and the overlays over it; each owns its own state.
 type Model struct {
-	cfg     *config.Config
-	db      *storage.DB
-	fetcher *rss.Fetcher
-	styles  *Styles
-	help    help.Model
+	cfg    *config.Config
+	styles *Styles
+	help   help.Model
 
 	width, height int
 	ready         bool
-	started       bool // initial feed selection has been made
 
-	screen     screen
-	overlay    overlay
-	palette    palette
-	focus      pane
-	postsFor   string // the feed key the posts pane was built for
-	feeds      *rss.FeedSet
-	read       *readstate.State
-	feedList   list
-	postList   list
-	unread     int // unread posts in all feeds, as of rebuildFeeds
-	feedTitleW int // the widest feeds-pane title, as of rebuildFeeds
-	refresh    *refresh.Refresher
-	toasts     toasts
-	now        func() time.Time
-	openURL    func(string) error
-
-	// reader
-	viewport viewport.Model
-	open     rss.PostRef     // the post in the reader
-	post     rss.Post        // a copy of it, for rendering
-	doc      reader.Document // the open post, as last rendered
-	docWidth []int           // the cell width of each of doc.Lines
-
-	images *imgsession.Session // the open post's images
-	cell   images.Cell         // the terminal's cell size, when images are on
+	lib     *library.Library
+	refresh *refresh.Refresher
+	main    mainPage   // the feeds and their posts
+	page    readerPage // the open post
+	overlay overlay
+	palette palette
+	toasts  toasts
+	now     func() time.Time
+	openURL func(string) error
 }
 
 // NewModel creates a model; nothing touches the terminal or network here.
-func NewModel(cfg *config.Config, db *storage.DB, fetcher *rss.Fetcher, imgFetcher *images.Fetcher) *Model {
+// lib loads the cached feeds at Init and src refreshes them; with no src
+// nothing is fetched, and with no imgs images are off.
+func NewModel(cfg *config.Config, lib *library.Library, src refresh.Source, imgs imgsession.Loader) *Model {
 	styles := NewStyles(cfg)
-	feeds := rss.NewFeedSet()
-	var loader imgsession.Loader // a nil *Fetcher must not become a non-nil interface
-	if imgFetcher != nil {
-		loader = imgFetcher
-	}
 	m := &Model{
-		cfg:      cfg,
-		help:     newHelp(styles),
-		db:       db,
-		fetcher:  fetcher,
-		styles:   styles,
-		palette:  newPalette(),
-		feeds:    feeds,
-		refresh:  refresh.New(feeds),
-		read:     readstate.New(db),
-		viewport: viewport.New(),
-		now:      time.Now,
-		openURL:  openURL,
+		cfg:     cfg,
+		help:    newHelp(styles),
+		styles:  styles,
+		lib:     lib,
+		refresh: refresh.New(lib, src),
+		main:    newMainPage(lib, cfg.Home, cfg.DateFormat),
+		palette: newPalette(lib),
+		now:     time.Now,
+		openURL: openURL,
 
-		images: imgsession.New(loader, loader != nil && images.Enabled(cfg.Reader.Images, os.Getenv)),
+		page: newReaderPage(&cfg.Reader, cfg.DateFormat, styles.Reader,
+			imgsession.New(imgs, imgs != nil && images.Enabled(cfg.Reader.Images, os.Getenv))),
 	}
 	// Assume a dark background until the terminal answers asynchronously; a
 	// synchronous query blocks startup for up to 4s on some terminals.
 	m.setBackground(true)
-	m.rebuildFeeds()
 	return m
 }
 
@@ -132,57 +99,47 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		first := !m.ready
-		m.resize(msg.Width, msg.Height)
-		m.refreshCellSize()
-		if first { // the first frame follows; uploads may start
-			for _, o := range m.images.FrameDrawn() {
-				cmds = append(cmds, m.imageOutcome(o))
-			}
-		}
-		if m.screen == screenReader {
-			cmds = append(cmds, rawCmd(m.images.Resized(m.imageLayout())))
-			m.rerenderReader()
-		}
+		m.width, m.height, m.ready = msg.Width, msg.Height, true
+		m.main.Resize(msg.Width, msg.Height)
+		cmds = append(cmds, m.page.Resize(msg.Width, msg.Height))
 	case tea.BackgroundColorMsg:
 		m.setBackground(msg.IsDark())
 	case tea.ResumeMsg:
-		if m.screen == screenReader {
-			cmds = append(cmds, rawCmd(m.images.Resume()))
-		}
+		cmds = append(cmds, m.page.Resume())
 	case tea.KeyPressMsg:
 		switch {
 		case m.overlay == overlayHelp:
 			m.overlay = overlayNone // any key closes help
 		case m.overlay == overlayPalette:
-			cmds = append(cmds, m.paletteKey(msg))
+			cmd, pick, done := m.palette.Key(msg)
+			cmds = append(cmds, cmd)
+			if done {
+				m.overlay = overlayNone
+			}
+			if pick != (rss.PostRef{}) {
+				cmds = append(cmds, m.openReader(pick))
+			}
 		case key.Matches(msg, bindings.Search): // both screens
-			cmds = append(cmds, m.openPalette())
+			m.overlay = overlayPalette
+			cmds = append(cmds, m.palette.Open())
 		case key.Matches(msg, bindings.Help):
 			m.overlay = overlayHelp
-		case m.screen == screenReader:
+		case m.page.Shown():
 			cmds = append(cmds, m.readerKey(msg))
 		default:
 			cmds = append(cmds, m.mainKey(msg))
 		}
 	case tea.MouseWheelMsg:
-		if m.screen == screenReader {
-			var cmd tea.Cmd
-			m.viewport, cmd = m.viewport.Update(msg)
-			cmds = append(cmds, cmd, m.markReadIfScrolled())
+		if m.page.Shown() {
+			cmds = append(cmds, m.page.Scroll(msg), m.markReadIfScrolled())
 		}
-	case feedsRefreshedMsg:
-		for _, e := range msg.errs {
-			cmds = append(cmds, m.notify(e))
+	case cacheLoadedMsg:
+		if err := msg.snap.MarksErr; err != nil {
+			log.Printf("reading read status: %v", err)
+			cmds = append(cmds, m.notify("couldn't load read status"))
 		}
-		m.feeds.Reset(msg.feeds)
-		if msg.read != nil {
-			m.read.Restore(msg.read)
-		}
-		m.researchPalette()
-		m.refresh.SetAt(msg.at)
-		m.rebuildFeeds()
-		m.selectInitialFeed()
+		m.lib.Restore(msg.snap)
+		m.refresh.SetAt(msg.snap.Fetched())
 	case refreshMsg:
 		cmds = append(cmds, m.refreshFeeds(msg.urls))
 	case feedLoadedMsg:
@@ -190,38 +147,31 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case minuteTickMsg:
 		cmds = append(cmds, minuteTick())
 	case imageLoadedMsg:
-		cmds = append(cmds, m.imageOutcome(m.images.Loaded(msg.Result)))
+		cmd, failed := m.page.ImageLoaded(msg.Result)
+		cmds = append(cmds, cmd, m.imagesFailed(failed))
 	case imageReadyMsg:
-		if m.images.Uploaded(msg.post, msg.src) {
-			m.rerenderReader()
-		}
+		m.page.ImageReady(msg)
 	case toastExpiredMsg:
 		m.toasts.expire(msg)
+	}
+	// Whatever changed the feeds or read state, the views follow here.
+	m.main.Sync()
+	if m.overlay == overlayPalette {
+		_, running := m.refresh.Progress()
+		m.palette.Sync(running == 0)
 	}
 	return m, tea.Batch(cmds...)
 }
 
-// resize lays out both screens for a width×height terminal.
-func (m *Model) resize(width, height int) {
-	m.width, m.height = width, height
-	m.viewport.SetWidth(width)
-	m.viewport.Style = pageStyle(width)
-	m.viewport.SetHeight(max(height-2-pageGap(height), 1)) // header and hint lines, the gap above the hint; the page style pads inside
-	body := max(height-1, 0)                               // the hint/status line
-	m.feedList.setHeight(body)
-	m.postList.setHeight(body)
-	m.ready = true
-}
-
-func (m *Model) selectInitialFeed() {
-	if m.started || m.feeds.Len() == 0 {
-		return
+// imagesFailed toasts the open post's images that couldn't be loaded.
+func (m *Model) imagesFailed(n int) tea.Cmd {
+	switch {
+	case n == 1:
+		return m.notify("1 image in this post couldn't be loaded")
+	case n > 1:
+		return m.notify(fmt.Sprintf("%d images in this post couldn't be loaded", n))
 	}
-	m.started = true
-	if m.cfg.Home != "mixed" && len(m.feedList.items) > 1 {
-		m.feedList.move(1 - m.feedList.cursor)
-		m.rebuildPosts()
-	}
+	return nil
 }
 
 // logPanic records a panic and its stack in the log file, then lets it
@@ -231,4 +181,92 @@ func logPanic() {
 		log.Printf("panic: %v\n%s", r, debug.Stack())
 		panic(r)
 	}
+}
+
+// openReader shows the post ref addresses full-screen.
+func (m *Model) openReader(ref rss.PostRef) tea.Cmd {
+	e, ok := m.lib.Entry(ref)
+	if !ok {
+		return nil
+	}
+	return tea.Batch(m.page.Open(ref, e.Post), m.markReadIfScrolled())
+}
+
+func (m *Model) readerKey(msg tea.KeyPressMsg) tea.Cmd {
+	k := bindings
+	switch {
+	case key.Matches(msg, k.Back):
+		m.page.Close()
+		return nil
+	case key.Matches(msg, k.ForceQuit):
+		return tea.Quit
+	case key.Matches(msg, k.Toggle):
+		ref := m.page.Ref()
+		return m.setRead(ref, !m.lib.IsRead(ref))
+	case key.Matches(msg, k.Browser):
+		return m.openLink(m.page.Link())
+	}
+	return tea.Batch(m.page.Scroll(msg), m.markReadIfScrolled())
+}
+
+// markReadIfScrolled marks the open post read once it has been scrolled past
+// the read threshold.
+func (m *Model) markReadIfScrolled() tea.Cmd {
+	if !m.page.ReadEnough() {
+		return nil
+	}
+	return m.setRead(m.page.Ref(), true)
+}
+
+// mainKey handles a key on the main screen: the page moves itself, and the
+// rest acts on what it has selected.
+func (m *Model) mainKey(msg tea.KeyPressMsg) tea.Cmd {
+	if m.main.Key(msg) {
+		return nil
+	}
+	k := bindings
+	switch {
+	case key.Matches(msg, k.Quit):
+		return tea.Quit
+	case key.Matches(msg, k.Open):
+		if e, ok := m.main.SelectedPost(); ok {
+			return m.openReader(e.Ref)
+		}
+	case key.Matches(msg, k.Toggle):
+		if e, ok := m.main.SelectedPost(); ok {
+			return m.setRead(e.Ref, !e.Read)
+		}
+	case key.Matches(msg, k.MarkFeed):
+		return m.readStatusSaved(m.lib.MarkRead(m.main.SelectedFeeds()))
+	case key.Matches(msg, k.Refresh):
+		return m.refreshFeeds(m.main.SelectedFeeds())
+	case key.Matches(msg, k.RefreshAll):
+		return m.refreshFeeds(m.cfg.Urls)
+	case key.Matches(msg, k.Browser):
+		if e, ok := m.main.SelectedPost(); ok {
+			return m.openLink(e.Post.Link)
+		}
+	}
+	return nil
+}
+
+// setRead changes and saves one post's read state.
+func (m *Model) setRead(ref rss.PostRef, read bool) tea.Cmd {
+	return m.readStatusSaved(m.lib.SetRead(ref, read))
+}
+
+// readStatusSaved reports a failure to save read state.
+func (m *Model) readStatusSaved(err error) tea.Cmd {
+	if err == nil {
+		return nil
+	}
+	log.Printf("saving read status: %v", err)
+	return m.notify("couldn't save read status")
+}
+
+func (m *Model) openLink(link string) tea.Cmd {
+	if err := m.openURL(link); err != nil {
+		return m.notify("couldn't open link: " + err.Error())
+	}
+	return nil
 }

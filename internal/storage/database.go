@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/adrg/xdg"
@@ -51,12 +50,7 @@ func NewDefault() (*DB, error) {
 	return New(dbPath)
 }
 
-func (db *DB) Close() error {
-	if db.conn != nil {
-		return db.conn.Close()
-	}
-	return nil
-}
+func (db *DB) Close() error { return db.conn.Close() }
 
 func (db *DB) createTables() error {
 	_, err := db.conn.Exec(`
@@ -72,12 +66,18 @@ func (db *DB) createTables() error {
 	return db.migrate()
 }
 
-// schemaVersion is the PRAGMA user_version of the current schema.
+// migrations[i] brings the schema from version i to i+1, inside the
+// migration's transaction. The schema's version is its PRAGMA user_version:
 //
 //	0: post_read_status keyed by uuid (the item GUID) alone, so GUID-less
 //	   posts shared one row and a GUID in two feeds shared one read flag.
 //	1: post_read_status keyed by (feed_url, key), key being rss.Post.Key().
-const schemaVersion = 1
+//	2: feed_cache rows say whether they hold the feed's own XML or the
+//	   parsed feed, so a start no longer parses every feed.
+var migrations = []func(context.Context, *sql.Conn) error{migrateV1, migrateV2}
+
+// schemaVersion is the version of the current schema.
+var schemaVersion = len(migrations)
 
 // migrate brings the schema up to schemaVersion. It is a single PRAGMA read
 // when the database is already current.
@@ -101,12 +101,31 @@ func (db *DB) migrate() error {
 	if _, err := conn.ExecContext(ctx, `BEGIN IMMEDIATE`); err != nil {
 		return fmt.Errorf("beginning migration: %w", err)
 	}
-	if err := migrateV1(ctx, conn); err != nil {
+	if err := runMigrations(ctx, conn); err != nil {
 		_, _ = conn.ExecContext(ctx, `ROLLBACK`)
-		return fmt.Errorf("migrating schema to v1: %w", err)
+		return err
 	}
 	if _, err := conn.ExecContext(ctx, `COMMIT`); err != nil {
 		return fmt.Errorf("committing migration: %w", err)
+	}
+	return nil
+}
+
+// runMigrations runs the migrations the schema still needs. The version is
+// read again under the write lock: another instance may have got here first.
+func runMigrations(ctx context.Context, conn *sql.Conn) error {
+	var v int
+	if err := conn.QueryRowContext(ctx, `PRAGMA user_version`).Scan(&v); err != nil {
+		return fmt.Errorf("reading schema version: %w", err)
+	}
+	for ; v < schemaVersion; v++ {
+		if err := migrations[v](ctx, conn); err != nil {
+			return fmt.Errorf("migrating schema to v%d: %w", v+1, err)
+		}
+	}
+	// PRAGMA takes no bound parameters; v is an int.
+	if _, err := conn.ExecContext(ctx, fmt.Sprintf(`PRAGMA user_version = %d`, v)); err != nil {
+		return fmt.Errorf("setting schema version: %w", err)
 	}
 	return nil
 }
@@ -115,16 +134,8 @@ func (db *DB) migrate() error {
 // uuid is a GUID, which is exactly Post.Key() for that post, and its feed_url
 // is the feed it was first saved from, so rows carry over as they are. The
 // empty-uuid row, shared by every GUID-less post, is meaningless and dropped:
-// those posts start unread under their new link- or title-based keys. Must
-// run inside a transaction.
+// those posts start unread under their new link- or title-based keys.
 func migrateV1(ctx context.Context, conn *sql.Conn) error {
-	var v int
-	if err := conn.QueryRowContext(ctx, `PRAGMA user_version`).Scan(&v); err != nil {
-		return err
-	}
-	if v >= 1 { // another instance got here first
-		return nil
-	}
 	var old int
 	if err := conn.QueryRowContext(ctx,
 		`SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'post_read_status'`).Scan(&old); err != nil {
@@ -144,10 +155,17 @@ func migrateV1(ctx context.Context, conn *sql.Conn) error {
 			`DROP TABLE post_read_status`, // and its idx_feed_url; the primary key covers feed_url
 		)
 	}
-	stmts = append(stmts,
-		`ALTER TABLE post_read_status_v1 RENAME TO post_read_status`,
-		`PRAGMA user_version = 1`,
-	)
+	stmts = append(stmts, `ALTER TABLE post_read_status_v1 RENAME TO post_read_status`)
+	return execAll(ctx, conn, stmts)
+}
+
+// migrateV2 marks every cached feed as the feed's own XML, which is what
+// caches before it hold; they are re-saved parsed as they are refreshed.
+func migrateV2(ctx context.Context, conn *sql.Conn) error {
+	return execAll(ctx, conn, []string{`ALTER TABLE feed_cache ADD COLUMN parsed INTEGER NOT NULL DEFAULT 0`})
+}
+
+func execAll(ctx context.Context, conn *sql.Conn, stmts []string) error {
 	for _, q := range stmts {
 		if _, err := conn.ExecContext(ctx, q); err != nil {
 			return err
@@ -177,12 +195,7 @@ func (db *DB) SavePostReadStatuses(statuses []PostReadStatus) error {
 	if err != nil {
 		return fmt.Errorf("beginning transaction: %w", err)
 	}
-	defer func() {
-		err := tx.Rollback()
-		if err != nil && !errors.Is(err, sql.ErrTxDone) {
-			log.Printf("transaction rollback error: %v", err)
-		}
-	}()
+	defer func() { _ = tx.Rollback() }() // a no-op once committed
 
 	stmt, err := tx.Prepare(upsertReadStatus)
 	if err != nil {
@@ -226,47 +239,35 @@ func (db *DB) LoadPostReadStatuses() ([]PostReadStatus, error) {
 	return statuses, nil
 }
 
-// LastFetched is when a feed was last fetched and cached, the zero time if
-// none was.
-func (db *DB) LastFetched() (time.Time, error) {
-	rows, err := db.conn.Query(`SELECT fetched_at FROM feed_cache`)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("querying fetch times: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-
-	var last time.Time
-	for rows.Next() {
-		var v string
-		if err := rows.Scan(&v); err != nil {
-			return time.Time{}, fmt.Errorf("scanning row: %w", err)
-		}
-		if t, err := time.Parse(time.RFC3339, v); err == nil && t.After(last) {
-			last = t
-		}
-	}
-	return last, rows.Err()
+// CachedFeed is one feed as the cache holds it.
+type CachedFeed struct {
+	Content []byte
+	// Parsed says Content is the parsed feed; otherwise it is the feed's own
+	// document, as caches from before schema 2 hold.
+	Parsed    bool
+	FetchedAt time.Time // zero if unknown
 }
 
-// SaveFeedCache stores the fetched feed content in the database
+// SaveFeedCache stores a parsed feed, fetched now.
 func (db *DB) SaveFeedCache(url string, content []byte) error {
 	_, err := db.conn.Exec(`
-		INSERT INTO feed_cache (url, content, fetched_at)
-		VALUES (?, ?, ?)
-		ON CONFLICT(url) DO UPDATE SET content = excluded.content, fetched_at = excluded.fetched_at
+		INSERT INTO feed_cache (url, content, fetched_at, parsed)
+		VALUES (?, ?, ?, 1)
+		ON CONFLICT(url) DO UPDATE SET content = excluded.content, fetched_at = excluded.fetched_at, parsed = 1
 	`, url, content, time.Now().Format(time.RFC3339))
 	return err
 }
 
-// LoadFeedCache retrieves cached feed content from the database
-func (db *DB) LoadFeedCache(url string) ([]byte, error) {
-	var content []byte
-	err := db.conn.QueryRow(`SELECT content FROM feed_cache WHERE url = ?`, url).Scan(&content)
+// LoadFeedCache is the cached feed with url; ok is false when none is.
+func (db *DB) LoadFeedCache(url string) (c CachedFeed, ok bool, err error) {
+	var at string
+	err = db.conn.QueryRow(`SELECT content, parsed, fetched_at FROM feed_cache WHERE url = ?`, url).Scan(&c.Content, &c.Parsed, &at)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
+		return CachedFeed{}, false, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("querying feed cache: %w", err)
+		return CachedFeed{}, false, fmt.Errorf("querying feed cache: %w", err)
 	}
-	return content, nil
+	c.FetchedAt, _ = time.Parse(time.RFC3339, at) // an unreadable time is unknown
+	return c, true, nil
 }

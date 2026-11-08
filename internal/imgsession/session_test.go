@@ -66,7 +66,7 @@ func shown(t *testing.T, s *Session, post, src string, l Layout) {
 		t.Fatalf("want 1 job, got %d", len(jobs))
 	}
 	s.FrameDrawn()
-	o := s.Loaded(jobs[0].Run())
+	o := s.Loaded(jobs[0]())
 	if !o.Confirm || !strings.Contains(o.Write, "a=T") {
 		t.Fatalf("outcome %+v", o)
 	}
@@ -79,7 +79,7 @@ func TestUploadWaitsForFirstFrame(t *testing.T) {
 	s, _ := newSession(t)
 	s.Open("p", wide)
 	jobs := s.Fetch(imgs("a"), wide)
-	o := s.Loaded(jobs[0].Run())
+	o := s.Loaded(jobs[0]())
 	if o.Write != "" || o.Confirm {
 		t.Fatalf("no upload may be sent before the first frame, got %+v", o)
 	}
@@ -96,7 +96,7 @@ func TestUploadWaitsForFirstFrame(t *testing.T) {
 func TestEncodingHappensInTheJob(t *testing.T) {
 	s, _ := newSession(t)
 	s.Open("p", wide)
-	res := s.Fetch(imgs("a"), wide)[0].Run()
+	res := s.Fetch(imgs("a"), wide)[0]()
 	if !strings.Contains(res.Upload, "a=T") {
 		t.Fatalf("the job should encode the upload, got %q", res.Upload[:min(len(res.Upload), 40)])
 	}
@@ -113,7 +113,7 @@ func TestEncodingHappensInTheJob(t *testing.T) {
 func TestStaleResultIgnored(t *testing.T) {
 	s, _ := newSession(t)
 	s.Open("a", wide)
-	res := s.Fetch(imgs("img"), wide)[0].Run()
+	res := s.Fetch(imgs("img"), wide)[0]()
 	s.Open("b", wide)
 	s.FrameDrawn()
 	if o := s.Loaded(res); o != (Outcome{}) {
@@ -161,7 +161,7 @@ func TestOneFailureReportPerPost(t *testing.T) {
 	jobs := s.Fetch(imgs("a", "b", "c"), wide)
 	var reports []int
 	for _, j := range jobs {
-		o := s.Loaded(j.Run())
+		o := s.Loaded(j())
 		if !o.Rerender {
 			t.Error("a failure should ask for a re-render")
 		}
@@ -239,7 +239,7 @@ func TestDisplayHasPlaceholdersOnceUploaded(t *testing.T) {
 	s, _ := newSession(t)
 	s.Open("p", wide)
 	s.FrameDrawn()
-	o := s.Loaded(s.Fetch(imgs("a"), wide)[0].Run())
+	o := s.Loaded(s.Fetch(imgs("a"), wide)[0]())
 	if ready, _ := s.Display(); len(ready) != 0 {
 		t.Error("an image is not drawn before its upload is confirmed")
 	}
@@ -287,7 +287,7 @@ func TestFetchUsesSrcsetAndDeclaredWidth(t *testing.T) {
 	s, l := newSession(t)
 	s.Open("p", wide)
 	img := reader.Image{Src: "small", Width: 320, Srcset: []reader.Candidate{{URL: "small", W: 100}, {URL: "big", W: 4000}}}
-	res := s.Fetch([]reader.Image{img}, wide)[0].Run()
+	res := s.Fetch([]reader.Image{img}, wide)[0]()
 	if len(l.urls) != 1 || l.urls[0] != "big" {
 		t.Errorf("fetched %v, want the srcset candidate wide enough", l.urls)
 	}

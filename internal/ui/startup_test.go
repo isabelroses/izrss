@@ -24,19 +24,19 @@ func TestLoadCachedFeeds_NoNetwork(t *testing.T) {
 	cfg := config.Default()
 	cfg.Urls = []string{srv.URL + "/a", srv.URL + "/b"}
 	db := testDB(t)
-	m := NewModel(cfg, db, rss.NewFetcher(db, cfg.DateFormat), nil)
+	m := NewModel(cfg, newLib(db), rss.NewFetcher(rss.NewStore(db)), nil)
 
-	msg, ok := m.loadCachedFeeds()().(feedsRefreshedMsg)
+	msg, ok := m.loadCachedFeeds()().(cacheLoadedMsg)
 	if !ok {
-		t.Fatal("want feedsRefreshedMsg")
+		t.Fatal("want cacheLoadedMsg")
 	}
 	if n := hits.Load(); n != 0 {
 		t.Errorf("startup load made %d requests, want 0", n)
 	}
-	if len(msg.feeds) != 2 {
-		t.Fatalf("want a placeholder per url, got %d feeds", len(msg.feeds))
+	if len(msg.snap.Feeds) != 2 {
+		t.Fatalf("want a placeholder per url, got %d feeds", len(msg.snap.Feeds))
 	}
-	for i, f := range msg.feeds {
+	for i, f := range msg.snap.Feeds {
 		if f.URL != cfg.Urls[i] || f.Err != nil || len(f.Posts) != 0 {
 			t.Errorf("feed %d: url %q err %v posts %d", i, f.URL, f.Err, len(f.Posts))
 		}
@@ -44,7 +44,7 @@ func TestLoadCachedFeeds_NoNetwork(t *testing.T) {
 			t.Errorf("feed %d title %q name %q, want name %q", i, f.Title, f.Name(), host)
 		}
 	}
-	if len(msg.errs) != 0 {
-		t.Errorf("a cold cache is not an error: %v", msg.errs)
+	if msg.snap.MarksErr != nil || !msg.snap.Fetched().IsZero() {
+		t.Errorf("a cold cache is not an error and was never fetched: %v, %v", msg.snap.MarksErr, msg.snap.Fetched())
 	}
 }

@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/isabelroses/izrss/internal/library"
 	"github.com/isabelroses/izrss/internal/rss"
 )
 
@@ -36,28 +37,28 @@ func TestPalette_EnterOpensReader(t *testing.T) {
 	m, _ := keys(newTestModel(t), "/")
 	m = typeText(m, "gamma post 2")
 	m, _ = keys(m, "enter")
-	if m.overlay != overlayNone || m.screen != screenReader || m.post.Title != "Gamma post 2" {
-		t.Errorf("enter: overlay %v screen %v post %q", m.overlay, m.screen, m.post.Title)
+	if m.overlay != overlayNone || !m.page.Shown() || m.page.post.Title != "Gamma post 2" {
+		t.Errorf("enter: overlay %v reader %v post %q", m.overlay, m.page.Shown(), m.page.post.Title)
 	}
 }
 
 func TestPalette_EscRestores(t *testing.T) {
 	m, _ := keys(newTestModel(t), "l", "j", "j")
-	before := selectedTitle(m.postList)
+	before := selectedTitle(m.main.posts)
 	m, _ = keys(m, "/")
 	m = typeText(m, "alpha")
 	m, _ = keys(m, "down", "esc")
-	if m.overlay != overlayNone || m.screen != screenMain || selectedTitle(m.postList) != before || m.focus != panePosts {
-		t.Errorf("esc should restore: overlay %v screen %v post %q", m.overlay, m.screen, selectedTitle(m.postList))
+	if m.overlay != overlayNone || m.page.Shown() || selectedTitle(m.main.posts) != before || m.main.focus != panePosts {
+		t.Errorf("esc should restore: overlay %v reader %v post %q", m.overlay, m.page.Shown(), selectedTitle(m.main.posts))
 	}
 }
 
 func TestPalette_SwallowsKeys(t *testing.T) {
 	m, _ := keys(newTestModel(t), "/")
-	unread := m.unread
+	unread := m.main.unread
 	var msgs []tea.Msg
 	m, msgs = keys(m, "q", "?", "x")
-	if quits(msgs) || m.overlay != overlayPalette || m.unread != unread {
+	if quits(msgs) || m.overlay != overlayPalette || m.main.unread != unread {
 		t.Errorf("palette must swallow keys: quit %v overlay %v", quits(msgs), m.overlay)
 	}
 	if v := m.palette.input.Value(); v != "q?x" {
@@ -72,7 +73,7 @@ func TestPalette_NoResults(t *testing.T) {
 		t.Error("should say No results")
 	}
 	m, _ = keys(m, "enter")
-	if m.screen != screenMain || m.overlay != overlayPalette {
+	if m.page.Shown() || m.overlay != overlayPalette {
 		t.Error("enter with no results is a no-op")
 	}
 }
@@ -83,11 +84,11 @@ func TestPalette_WidthAndCap(t *testing.T) {
 	for i := range 50 {
 		many.Posts = append(many.Posts, rss.Post{UUID: fmt.Sprint(i), Title: fmt.Sprintf("match %d", i), Content: "match"})
 	}
-	m.feeds.Replace(many)
+	m.lib.Replace(many)
 	m, _ = update(m, tea.WindowSizeMsg{Width: 200, Height: 40})
 	m, _ = keys(m, "/")
 	m = typeText(m, "match")
-	box := m.palette.view(m.feeds, m.read, m.width, m.styles)
+	box := m.palette.View(m.width, m.styles)
 	lines := strings.Split(box, "\n")
 	if w := ansi.StringWidth(lines[0]); w != 80 {
 		t.Errorf("box width %d, want 80", w)
@@ -148,8 +149,8 @@ func TestPalette_FeedShrinksWhileOpen(t *testing.T) {
 	}
 	_ = m.View()
 	m, _ = keys(m, "enter")
-	if m.screen != screenReader || m.post.Title != "Gamma post 0" {
-		t.Errorf("enter: screen %v post %q", m.screen, m.post.Title)
+	if !m.page.Shown() || m.page.post.Title != "Gamma post 0" {
+		t.Errorf("enter: reader %v post %q", m.page.Shown(), m.page.post.Title)
 	}
 }
 
@@ -162,14 +163,40 @@ func TestPalette_EnterOnStaleHit(t *testing.T) {
 	hit := m.palette.hits[m.palette.cursor]
 	shrunk := sampleFeeds()[2]
 	shrunk.Posts = shrunk.Posts[:1]
-	m.feeds.Replace(shrunk) // behind the palette's back, as a refresh landing mid-keypress would
+	m.lib.Replace(shrunk) // behind the palette's back, as a refresh landing mid-keypress would
 	m.palette.hits = []rss.PostRef{hit}
 	m.palette.cursor = 0
 	m, _ = keys(m, "enter")
-	if m.screen == screenReader || m.overlay != overlayPalette {
-		t.Errorf("a stale hit should do nothing: screen %v overlay %v", m.screen, m.overlay)
+	if m.page.Shown() || m.overlay != overlayPalette {
+		t.Errorf("a stale hit should do nothing: reader %v overlay %v", m.page.Shown(), m.overlay)
 	}
-	m.feeds.Reset(nil)
+	m.lib.Restore(library.Snapshot{})
 	m, _ = keys(m, "enter")
 	_ = m.View()
+}
+
+// An open palette keeps its results current as the library changes, but
+// waits for a refresh round to finish rather than searching per feed.
+func TestPalette_FollowsLibrary(t *testing.T) {
+	lib := newLib(testDB(t))
+	lib.Restore(library.Snapshot{Feeds: sampleFeeds()})
+	p := newPalette(lib)
+	p.Open()
+	for _, r := range "alpha post" {
+		p.Key(tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	if len(p.hits) != 4 {
+		t.Fatalf("hits = %d, want Alpha's 4", len(p.hits))
+	}
+	f := sampleFeeds()[0]
+	f.Posts = f.Posts[:1]
+	lib.Replace(f)
+	p.Sync(false)
+	if len(p.hits) != 4 {
+		t.Error("mid-refresh the palette should wait")
+	}
+	p.Sync(true)
+	if len(p.hits) != 1 {
+		t.Errorf("after the refresh hits = %d, want 1", len(p.hits))
+	}
 }

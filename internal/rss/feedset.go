@@ -51,12 +51,6 @@ func (s *FeedSet) URLs() []string {
 	return urls
 }
 
-// Has reports whether the set holds the feed with url.
-func (s *FeedSet) Has(url string) bool {
-	_, ok := s.pos[url]
-	return ok
-}
-
 // Feed finds the feed with url.
 func (s *FeedSet) Feed(url string) (Feed, bool) {
 	i, ok := s.pos[url]

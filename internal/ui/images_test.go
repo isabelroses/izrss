@@ -20,6 +20,7 @@ import (
 	"github.com/isabelroses/izrss/internal/config"
 	"github.com/isabelroses/izrss/internal/images"
 	"github.com/isabelroses/izrss/internal/imgsession"
+	"github.com/isabelroses/izrss/internal/library"
 	"github.com/isabelroses/izrss/internal/rss"
 )
 
@@ -64,16 +65,15 @@ func imageModel(t *testing.T) Model {
 	db := testDB(t)
 	cfg := config.Default()
 	cfg.Reader.Images = "on"
-	cfg.Reader.Size = "full"
-	m := *NewModel(cfg, db, nil, images.NewFetcher(t.TempDir(), 1<<20, 5*time.Second))
+	cfg.Reader.Width = config.Width{Percent: 100}
+	m := *NewModel(cfg, newLib(db), nil, images.NewFetcher(t.TempDir(), 1<<20, 5*time.Second))
 	m, _ = update(m, tea.WindowSizeMsg{Width: 120, Height: 40})
 	return m
 }
 
 func openPost(m Model, p rss.Post) (Model, tea.Cmd) {
 	f := rss.Feed{Title: "feed", URL: "https://example.com/feed", Posts: []rss.Post{p}}
-	m.feeds.Reset([]rss.Feed{f})
-	m.rebuildFeeds()
+	m.lib.Restore(library.Snapshot{Feeds: []rss.Feed{f}})
 	cmd := m.openReader(p.Ref(f.URL))
 	return m, cmd
 }
@@ -150,8 +150,8 @@ func TestReader_PendingThenReady(t *testing.T) {
 	srv := newImgServer(t)
 	m := imageModel(t)
 	m, cmd := openPost(m, postWithImage(srv.URL+"/a.png"))
-	if !strings.Contains(ansi.Strip(m.viewport.GetContent()), "[image: a picture]") {
-		t.Fatalf("pending image should show a placeholder line:\n%s", ansi.Strip(m.viewport.GetContent()))
+	if !strings.Contains(ansi.Strip(m.page.viewport.GetContent()), "[image: a picture]") {
+		t.Fatalf("pending image should show a placeholder line:\n%s", ansi.Strip(m.page.viewport.GetContent()))
 	}
 	loaded, ok := find[imageLoadedMsg](run(cmd))
 	if !ok || loaded.Err != nil {
@@ -178,7 +178,7 @@ func TestReader_PendingThenReady(t *testing.T) {
 	}
 
 	m, _ = update(m, msgs[readyIdx])
-	if !strings.Contains(m.viewport.GetContent(), placeholder) {
+	if !strings.Contains(m.page.viewport.GetContent(), placeholder) {
 		t.Error("ready image should be drawn with placeholders")
 	}
 }
@@ -186,11 +186,11 @@ func TestReader_PendingThenReady(t *testing.T) {
 func TestImageLoaded_ErrorShowsAlt(t *testing.T) {
 	m := imageModel(t)
 	m, _ = openPost(m, postWithImage("https://example.invalid/a.png"))
-	m, msgs := update(m, imageLoadedMsg{imgsession.Result{Post: sessionKey(m.open), Src: "https://example.invalid/a.png", Err: fmt.Errorf("boom")}})
+	m, msgs := update(m, imageLoadedMsg{imgsession.Result{Post: sessionKey(m.page.Ref()), Src: "https://example.invalid/a.png", Err: fmt.Errorf("boom")}})
 	if raws(msgs) != "" {
 		t.Error("failed image should send nothing")
 	}
-	content := ansi.Strip(m.viewport.GetContent())
+	content := ansi.Strip(m.page.viewport.GetContent())
 	if strings.Contains(content, "[image:") || !strings.Contains(content, "a picture") {
 		t.Errorf("failed image should fall back to alt text:\n%s", content)
 	}
@@ -206,8 +206,8 @@ func TestImageReady_KeepsReadingPosition(t *testing.T) {
 	}
 	p := rss.Post{UUID: "long", Content: b.String()}
 	m, cmd := openPost(m, p)
-	m.viewport.SetYOffset(100)
-	topBefore := strings.SplitN(ansi.Strip(m.viewport.View()), "\n", 2)[0]
+	m.page.viewport.SetYOffset(100)
+	topBefore := strings.SplitN(ansi.Strip(m.page.viewport.View()), "\n", 2)[0]
 
 	loaded, _ := find[imageLoadedMsg](run(cmd))
 	m, msgs := update(m, loaded)
@@ -215,10 +215,10 @@ func TestImageReady_KeepsReadingPosition(t *testing.T) {
 	m, _ = update(m, ready)
 
 	rows := loaded.Prep.Rows
-	if got := m.viewport.YOffset(); got != 100+rows-1 {
+	if got := m.page.viewport.YOffset(); got != 100+rows-1 {
 		t.Errorf("YOffset = %d, want %d", got, 100+rows-1)
 	}
-	if topAfter := strings.SplitN(ansi.Strip(m.viewport.View()), "\n", 2)[0]; topAfter != topBefore {
+	if topAfter := strings.SplitN(ansi.Strip(m.page.viewport.View()), "\n", 2)[0]; topAfter != topBefore {
 		t.Errorf("top line moved: %q -> %q", topBefore, topAfter)
 	}
 }
@@ -250,11 +250,11 @@ func TestImageMaxRows_DefaultsToReaderHeight(t *testing.T) {
 	m.cfg.Reader.ImageMaxHeight = 0
 	m, _ = openPost(m, postWithImage("https://example.com/a.png"))
 	// 40 rows less the header, hint line, the gap above it and the blank row under the header.
-	if got, want := m.imageMaxRows(), 36; got != want {
+	if got, want := m.page.imageMaxRows(), 36; got != want {
 		t.Errorf("imageMaxRows = %d, want the visible reader height %d", got, want)
 	}
 	m.cfg.Reader.ImageMaxHeight = 7
-	if got := m.imageMaxRows(); got != 7 {
+	if got := m.page.imageMaxRows(); got != 7 {
 		t.Errorf("configured height ignored: %d", got)
 	}
 }

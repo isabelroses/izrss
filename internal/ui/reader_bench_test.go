@@ -32,8 +32,8 @@ func BenchmarkReaderView(b *testing.B) {
 			b.Cleanup(srv.Close)
 			cfg := config.Default()
 			cfg.Reader.Images = "on"
-			cfg.Reader.Size = "full"
-			m := *NewModel(cfg, testDB(b), nil, images.NewFetcher(b.TempDir(), 1<<20, 5*time.Second))
+			cfg.Reader.Width = config.Width{Percent: 100}
+			m := *NewModel(cfg, newLib(testDB(b)), nil, images.NewFetcher(b.TempDir(), 1<<20, 5*time.Second))
 			m, _ = update(m, tea.WindowSizeMsg{Width: 120, Height: 40})
 			content := text
 			if withImage {

@@ -1,6 +1,10 @@
 package ui
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -8,6 +12,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/isabelroses/izrss/internal/rss"
 )
 
 // recordTicks swaps tea.Tick for a recorder so tests can fire expiries.
@@ -116,5 +122,24 @@ func TestNotify_StripsControlChars(t *testing.T) {
 	got := m.toasts.items[0].text
 	if strings.ContainsAny(got, "\x1b\x07\n") {
 		t.Fatalf("control characters reached the toast: %q", got)
+	}
+}
+
+// A fetch failure is put in a few words from its type, not its wording.
+func TestShortReason(t *testing.T) {
+	tests := []struct {
+		err  error
+		want string
+	}{
+		{fmt.Errorf("fetching u: %w", &rss.StatusError{Code: 404, Status: "404 Not Found"}), "HTTP 404"},
+		{fmt.Errorf("parsing u: %w", &rss.ParseError{Err: errors.New("EOF")}), "couldn't parse feed"},
+		{fmt.Errorf("fetching u: %w", &net.DNSError{Err: "no such host", Name: "u", IsNotFound: true}), "couldn't find host"},
+		{fmt.Errorf("fetching u: %w", context.DeadlineExceeded), "timed out"},
+		{errors.New("reading u: feed is larger than 32 MiB"), "feed is larger than 32 MiB"},
+	}
+	for _, tt := range tests {
+		if got := shortReason(tt.err); got != tt.want {
+			t.Errorf("shortReason(%v) = %q, want %q", tt.err, got, tt.want)
+		}
 	}
 }

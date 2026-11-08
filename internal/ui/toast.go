@@ -7,8 +7,8 @@ import (
 	"image/color"
 	"log"
 	"net"
-	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -16,6 +16,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/isabelroses/izrss/internal/rss"
 )
 
 const (
@@ -110,23 +112,25 @@ func (m *Model) notify(text string) tea.Cmd {
 	return m.toasts.add(text)
 }
 
-var httpStatus = regexp.MustCompile(`: (\d{3}) [A-Z]`)
-
 // shortReason turns a fetch error into a few words for a toast.
 func shortReason(err error) string {
-	var ne net.Error
-	msg := err.Error()
+	var (
+		ne     net.Error
+		dns    *net.DNSError
+		parse  *rss.ParseError
+		status *rss.StatusError
+	)
 	switch {
 	case errors.Is(err, context.DeadlineExceeded), errors.As(err, &ne) && ne.Timeout():
 		return "timed out"
-	case strings.Contains(msg, "no such host"):
+	case errors.As(err, &dns) && dns.IsNotFound:
 		return "couldn't find host"
-	case strings.HasPrefix(msg, "parsing "):
+	case errors.As(err, &parse):
 		return "couldn't parse feed"
+	case errors.As(err, &status):
+		return "HTTP " + strconv.Itoa(status.Code)
 	}
-	if s := httpStatus.FindStringSubmatch(msg); s != nil {
-		return "HTTP " + s[1]
-	}
+	msg := err.Error()
 	if i := strings.LastIndex(msg, ": "); i >= 0 {
 		return msg[i+2:]
 	}

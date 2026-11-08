@@ -67,13 +67,13 @@ func TestFeedName(t *testing.T) {
 
 func TestFeedName_SameForFailedAndColdFeeds(t *testing.T) {
 	db := testDB(t)
-	f := NewFetcher(db, "02/01/2006")
+	store := NewStore(db)
 	url := "https://www.example.invalid:8080/feed.xml"
-	cold := f.GetCachedContent([]string{url})[0]
+	cold := store.Load([]string{url})[0]
 	if err := db.SaveFeedCache(url, []byte("not a feed")); err != nil {
 		t.Fatal(err)
 	}
-	broken := f.GetCachedContent([]string{url})[0]
+	broken := store.Load([]string{url})[0]
 	for name, feed := range map[string]Feed{"cold": cold, "broken cache": broken} {
 		if feed.Title != "" || feed.Name() != "example.invalid:8080" {
 			t.Errorf("%s: title %q name %q", name, feed.Title, feed.Name())

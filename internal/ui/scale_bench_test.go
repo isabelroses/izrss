@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -35,7 +37,7 @@ func thirdsUnread(feeds []rss.Feed) []storage.PostReadStatus {
 	return out
 }
 
-// scaleFeedXML is an RSS 2.0 document as the feed cache stores it: 40 items
+// scaleFeedXML is an RSS 2.0 document as a feed server sends it: 40 items
 // of ~2KB HTML each, published an hour apart and offset per feed so "All
 // posts" interleaves them.
 func scaleFeedXML(i int) string {
@@ -51,24 +53,26 @@ func scaleFeedXML(i int) string {
 	return b.String()
 }
 
-// scaleSetup fills a database with 250 cached feeds and read state for every
-// post (two in three read), returning a config listing them.
+// scaleSetup fills a database with 250 feeds, fetched and cached, and read
+// state for every post (two in three read), returning a config listing them.
 func scaleSetup(b *testing.B) (*config.Config, *storage.DB) {
 	b.Helper()
 	log.SetOutput(io.Discard)
 	b.Cleanup(func() { log.SetOutput(os.Stderr) })
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var i int
+		_, _ = fmt.Sscanf(r.URL.Path, "/f%d.xml", &i)
+		_, _ = io.WriteString(w, scaleFeedXML(i))
+	}))
+	b.Cleanup(srv.Close)
 	db := testDB(b)
 	cfg := config.Default()
 	for i := range scaleFeeds {
-		url := fmt.Sprintf("https://f%d.example/feed.xml", i)
-		cfg.Urls = append(cfg.Urls, url)
-		if err := db.SaveFeedCache(url, []byte(scaleFeedXML(i))); err != nil {
-			b.Fatal(err)
-		}
+		cfg.Urls = append(cfg.Urls, fmt.Sprintf("%s/f%d.xml", srv.URL, i))
 	}
-	feeds := rss.NewFetcher(db, cfg.DateFormat).GetCachedContent(cfg.Urls)
+	feeds := rss.NewFetcher(rss.NewStore(db)).FetchAll(cfg.Urls)
 	for i := range feeds {
-		if feeds[i].Err != nil || len(feeds[i].Posts) != scalePosts {
+		if feeds[i].Err != nil || feeds[i].CacheErr != nil || len(feeds[i].Posts) != scalePosts {
 			b.Fatalf("feed %d: %d posts, err %v", i, len(feeds[i].Posts), feeds[i].Err)
 		}
 	}
@@ -82,8 +86,9 @@ func scaleSetup(b *testing.B) (*config.Config, *storage.DB) {
 func scaleModel(b *testing.B) Model {
 	b.Helper()
 	cfg, db := scaleSetup(b)
-	fetcher := rss.NewFetcher(db, cfg.DateFormat)
-	m := *NewModel(cfg, db, fetcher, nil)
+	// A real source, so refresh.Start runs a round; the benchmark delivers
+	// the results itself and never runs the fetches.
+	m := *NewModel(cfg, newLib(db), rss.NewFetcher(rss.NewStore(db)), nil)
 	m.now = func() time.Time { return t0 }
 	m, _ = update(m, tea.WindowSizeMsg{Width: 120, Height: 40})
 	m, _ = update(m, m.loadCachedFeeds()())
@@ -94,10 +99,9 @@ func scaleModel(b *testing.B) Model {
 // model, the cache-only load with read state, and the first View.
 func BenchmarkStartup250(b *testing.B) {
 	cfg, db := scaleSetup(b)
-	fetcher := rss.NewFetcher(db, cfg.DateFormat)
 	b.ReportAllocs()
 	for b.Loop() {
-		m := *NewModel(cfg, db, fetcher, nil)
+		m := *NewModel(cfg, newLib(db), nil, nil)
 		m, _ = update(m, tea.WindowSizeMsg{Width: 120, Height: 40})
 		m, _ = update(m, m.loadCachedFeeds()())
 		readerSink = m.View().Content
@@ -120,14 +124,15 @@ func benchRefreshAll(b *testing.B, query string) {
 			m, _ = update(m, tea.KeyPressMsg{Code: r, Text: string(r)})
 		}
 	}
-	fresh := make([]rss.Feed, m.feeds.Len())
-	for i, f := range m.feeds.All() {
+	fresh := make([]rss.Feed, m.lib.Len())
+	for i := range fresh {
+		f := feedAt(m, i)
 		fresh[i] = f
 		fresh[i].Posts = append([]rss.Post(nil), f.Posts...)
 	}
 	b.ReportAllocs()
 	for b.Loop() {
-		m.refresh.Start(m.feeds.URLs())
+		m.refresh.Start(m.lib.URLs())
 		for _, f := range fresh {
 			f.Posts = append([]rss.Post(nil), f.Posts...)
 			m, _ = update(m, feedLoadedMsg{feed: f})
@@ -145,8 +150,8 @@ func BenchmarkMainView250(b *testing.B) {
 	}{{"feed", 1}, {"all", 0}} {
 		b.Run(tc.name, func(b *testing.B) {
 			m := scaleModel(b)
-			m.feedList.move(tc.row - m.feedList.cursor)
-			m.rebuildPosts()
+			m.main.feeds.move(tc.row - m.main.feeds.cursor)
+			m.main.rebuildPosts()
 			b.ReportAllocs()
 			for b.Loop() {
 				readerSink = m.View().Content

@@ -61,10 +61,7 @@ func New(loader Loader, enabled bool) *Session {
 func (s *Session) Enabled() bool { return s.on }
 
 // Job is one image load to run off the main loop, then report with Loaded.
-type Job struct {
-	Post, Src string
-	Run       func() Result
-}
+type Job func() Result
 
 // Result is a finished load, already decoded, scaled and encoded by its job.
 type Result struct {
@@ -135,7 +132,7 @@ func (s *Session) Fetch(imgs []reader.Image, l Layout) []Job {
 		s.imgs[img.Src] = &entry{id: id}
 		src, cssW := img.Src, img.Width
 		fetchURL := pickSource(img, l.Cols*cellWidth(l.Cell))
-		jobs = append(jobs, Job{Post: post, Src: src, Run: func() Result {
+		jobs = append(jobs, func() Result {
 			res := Result{Post: post, Src: src}
 			data, err := loader.Load(fetchURL)
 			if err != nil {
@@ -152,7 +149,7 @@ func (s *Session) Fetch(imgs []reader.Image, l Layout) []Job {
 			}
 			res.Prep.Img = nil // only the encoded upload is needed from here on
 			return res
-		}})
+		})
 	}
 	return jobs
 }

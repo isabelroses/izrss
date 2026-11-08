@@ -49,7 +49,7 @@ func TestFeedError_Toast(t *testing.T) {
 	if got := toastTexts(m); len(got) != 1 || got[0] != "Beta: timed out" {
 		t.Errorf("toasts = %q, want [Beta: timed out]", got)
 	}
-	if len(m.feeds.All()[1].Posts) != 4 {
+	if len(feedAt(m, 1).Posts) != 4 {
 		t.Error("a failed refresh must keep the cached posts")
 	}
 }
@@ -59,9 +59,9 @@ func TestRefreshFailures_ToastBurst(t *testing.T) {
 	m := newTestModel(t)
 	noTicks(&m)
 	for i := range 11 {
-		m.feeds.Replace(rss.Feed{Title: fmt.Sprintf("F%d", i), URL: fmt.Sprintf("https://f%d.example", i)})
+		m.lib.Replace(rss.Feed{Title: fmt.Sprintf("F%d", i), URL: fmt.Sprintf("https://f%d.example", i)})
 	}
-	m.refresh.Start(m.feeds.URLs()[3:])
+	m.refresh.Start(m.lib.URLs()[3:])
 	for i := range 11 {
 		f := rss.Feed{URL: fmt.Sprintf("https://f%d.example", i), Err: timeoutErr()}
 		m, _ = update(m, feedLoadedMsg{feed: f})
@@ -75,9 +75,9 @@ func TestRefreshFailures_ToastBurst(t *testing.T) {
 }
 
 func TestTrackingError_Toast(t *testing.T) {
-	m := newTestModel(t)
+	m, db := newTestModelDB(t)
 	noTicks(&m)
-	_ = m.db.Close()
+	_ = db.Close()
 	m, _ = keys(m, "l", "x")
 	if got := toastTexts(m); len(got) != 1 || got[0] != "couldn't save read status" {
 		t.Errorf("toasts = %q", got)
@@ -100,7 +100,7 @@ func TestImageFailures_OneToastPerPost(t *testing.T) {
 	p := rss.Post{UUID: "imgs", Link: "https://example.com/p", Content: `<img src="https://example.invalid/a.png"><img src="https://example.invalid/b.png">`}
 	m, _ = openPost(m, p)
 	for _, src := range []string{"https://example.invalid/a.png", "https://example.invalid/b.png"} {
-		m, _ = update(m, imageLoadedMsg{imgsession.Result{Post: sessionKey(m.open), Src: src, Err: errors.New("404")}})
+		m, _ = update(m, imageLoadedMsg{imgsession.Result{Post: sessionKey(m.page.Ref()), Src: src, Err: errors.New("404")}})
 	}
 	if got := toastTexts(m); len(got) != 1 || got[0] != "2 images in this post couldn't be loaded" {
 		t.Errorf("toasts = %q", got)

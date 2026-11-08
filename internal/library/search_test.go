@@ -1,4 +1,4 @@
-package ui
+package library
 
 import (
 	"slices"
@@ -11,6 +11,7 @@ import (
 // Matching ignores case; title matches at a word start rank above ones
 // mid-word, above content-only ones; within a rank, newer posts come first.
 func TestSearchPosts(t *testing.T) {
+	t0 := time.Date(2026, 11, 4, 12, 0, 0, 0, time.UTC)
 	at := func(h int) time.Time { return t0.Add(-time.Duration(h) * time.Hour) }
 	feeds := []rss.Feed{
 		{URL: "a", Posts: []rss.Post{

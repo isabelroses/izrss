@@ -10,7 +10,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/isabelroses/izrss/internal/readstate"
+	"github.com/isabelroses/izrss/internal/library"
 	"github.com/isabelroses/izrss/internal/rss"
 )
 
@@ -27,78 +27,80 @@ const (
 	paletteMaxWidth = 80
 )
 
-// palette is the pop-up search box: live results across every feed.
+// palette is the pop-up search box: live results across every feed. It
+// searches the library itself and keeps its results current as the library
+// changes (Sync); Model shows it, passes it keys, and opens what it picks.
 type palette struct {
-	input  textinput.Model
-	hits   []rss.PostRef
-	cursor int
+	lib        *library.Library
+	input      textinput.Model
+	hits       []rss.PostRef
+	cursor     int
+	searchedAt int // the library version hits were searched in
 }
 
-func newPalette() palette {
+func newPalette(lib *library.Library) palette {
 	in := textinput.New()
 	in.Prompt = "/ "
 	in.Placeholder = "search every post"
-	return palette{input: in}
+	return palette{lib: lib, input: in}
 }
 
-func (m *Model) openPalette() tea.Cmd {
-	m.overlay = overlayPalette
-	m.palette.input.Reset()
-	m.palette.hits, m.palette.cursor = nil, 0
-	return m.palette.input.Focus()
+// Open empties the palette for a new search.
+func (p *palette) Open() tea.Cmd {
+	p.input.Reset()
+	p.hits, p.cursor, p.searchedAt = nil, 0, p.lib.Version()
+	return p.input.Focus()
 }
 
-func (m *Model) paletteKey(msg tea.KeyPressMsg) tea.Cmd {
+// Key handles a key while the palette is open. done reports that it closed,
+// and pick is the post chosen then, if one was.
+func (p *palette) Key(msg tea.KeyPressMsg) (cmd tea.Cmd, pick rss.PostRef, done bool) {
 	switch msg.String() {
 	case "esc":
-		m.closePalette()
-		return nil
+		done = true
 	case "enter":
-		if m.palette.cursor >= len(m.palette.hits) {
-			return nil
+		if p.cursor < len(p.hits) {
+			if _, ok := p.lib.Entry(p.hits[p.cursor]); ok { // else gone in a refresh not yet searched
+				pick, done = p.hits[p.cursor], true
+			}
 		}
-		ref := m.palette.hits[m.palette.cursor]
-		if _, ok := m.feeds.Post(ref); !ok { // the feed was refreshed since
-			return nil
-		}
-		m.closePalette()
-		return m.openReader(ref)
 	case "up", "ctrl+p":
-		m.palette.cursor = max(m.palette.cursor-1, 0)
-		return nil
+		p.cursor = max(p.cursor-1, 0)
 	case "down", "ctrl+n":
-		m.palette.cursor = min(m.palette.cursor+1, max(len(m.palette.hits)-1, 0))
-		return nil
+		p.cursor = min(p.cursor+1, max(len(p.hits)-1, 0))
+	default:
+		before := p.input.Value()
+		p.input, cmd = p.input.Update(msg)
+		if p.input.Value() != before {
+			p.search()
+			p.cursor = 0
+		}
 	}
-	before := m.palette.input.Value()
-	var cmd tea.Cmd
-	m.palette.input, cmd = m.palette.input.Update(msg)
-	if q := m.palette.input.Value(); q != before {
-		m.palette.hits = searchPosts(m.feeds.All(), q)
-		m.palette.cursor = 0
+	if done {
+		p.input.Blur()
 	}
-	return cmd
+	return cmd, pick, done
 }
 
-// researchPalette re-runs an open palette's query after the feeds changed.
-func (m *Model) researchPalette() {
-	if m.overlay != overlayPalette {
+// Sync re-runs the query if the library changed since it last ran. While a
+// refresh is under way (settled is false) it waits: each feed arriving would
+// otherwise search every post again.
+func (p *palette) Sync(settled bool) {
+	if !settled || p.lib.Version() == p.searchedAt {
 		return
 	}
-	m.palette.hits = searchPosts(m.feeds.All(), m.palette.input.Value())
-	m.palette.cursor = min(m.palette.cursor, max(len(m.palette.hits)-1, 0))
+	p.search()
+	p.cursor = min(p.cursor, max(len(p.hits)-1, 0))
 }
 
-// closePalette hides the palette and frees its search index.
-func (m *Model) closePalette() {
-	m.overlay = overlayNone
-	m.palette.input.Blur()
+func (p *palette) search() {
+	p.hits, p.searchedAt = p.lib.Search(p.input.Value()), p.lib.Version()
 }
 
 func paletteWidth(width int) int { return min(paletteMaxWidth, width*8/10) }
 
-// view renders the palette box, paletteWidth(width) cells wide.
-func (p palette) view(feeds *rss.FeedSet, read *readstate.State, width int, st *Styles) string {
+// View draws the palette box, paletteWidth(width) cells wide.
+func (p *palette) View(width int, st *Styles) string {
 	boxW := paletteWidth(width)
 	inner := max(boxW-4, 1) // rounded border and one cell of padding each side
 	// Text lines are indented one cell to line up with the result rows,
@@ -114,9 +116,8 @@ func (p palette) view(feeds *rss.FeedSet, read *readstate.State, width int, st *
 	visible := p.hits[first:min(first+paletteRows, len(p.hits))]
 	items := make([]item, len(visible))
 	for i, ref := range visible {
-		feed, _ := feeds.Feed(ref.FeedURL)
-		post, _ := feeds.Post(ref)
-		items[i] = item{title: post.Title, right: feed.Name(), strong: !read.IsRead(ref.FeedURL, ref.Key)}
+		e, _ := p.lib.Entry(ref)
+		items[i] = item{title: e.Post.Title, right: e.Feed, strong: !e.Read}
 	}
 	rows := list{items: items, cursor: p.cursor - first, height: min(paletteRows, len(p.hits))}
 	lines = append(lines, rows.view(inner, true, st.List)...)
@@ -144,10 +145,10 @@ func box(content string, width int, border color.Color) string {
 // helpView is the help overlay: every key of the current screen, in columns.
 func (m Model) helpView() string {
 	title, foot := "Keys", "h j k l work too · any key closes"
-	if m.screen == screenReader {
+	if m.page.Shown() {
 		title, foot = "Reader keys", "any key closes"
 	}
-	body := m.help.FullHelpView(bindings.fullHelp(m.screen))
+	body := m.help.FullHelpView(bindings.fullHelp(m.page.Shown()))
 	content := strings.Join([]string{m.styles.Header.Render(title), "", body, "", m.styles.Hint.Render(foot)}, "\n")
 	width := min(lipgloss.Width(content)+4, m.width) // border and padding
 	return box(content, width, hex(m.cfg.Colors.Accent))

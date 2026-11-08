@@ -90,9 +90,7 @@ func (in *inline) text(s string) {
 	}
 }
 
-func isSpace(r rune) bool {
-	return r == ' ' || r == '\t' || r == '\n' || r == '\r' || r == '\f'
-}
+func isSpace(r rune) bool { return strings.ContainsRune(" \t\n\r\f", r) }
 
 func (in *inline) addWord(word string, st style) {
 	in.writeSpace(st)

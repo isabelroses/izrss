@@ -53,10 +53,10 @@ var bindings = keyMap{
 	Page:      bind([]string{"pgup", "pgdown", "space"}, "pgup pgdn", "page"),
 }
 
-// shortHelp is the hint line for a screen and focus.
-func (k keyMap) shortHelp(s screen, focus pane) []key.Binding {
+// shortHelp is the hint line for the reader, or the main screen with focus.
+func (k keyMap) shortHelp(reader bool, focus pane) []key.Binding {
 	switch {
-	case s == screenReader:
+	case reader:
 		return []key.Binding{k.Scroll, k.Back, k.Browser, k.Toggle, k.Help}
 	case focus == panePosts:
 		return []key.Binding{k.Move, k.Pane, k.Open, k.Toggle, k.Search, k.Help}
@@ -64,9 +64,9 @@ func (k keyMap) shortHelp(s screen, focus pane) []key.Binding {
 	return []key.Binding{k.Move, k.Pane, k.Open, k.Search, k.Help}
 }
 
-// fullHelp is the help overlay for a screen, in columns.
-func (k keyMap) fullHelp(s screen) [][]key.Binding {
-	if s == screenReader {
+// fullHelp is the help overlay for the reader or the main screen, in columns.
+func (k keyMap) fullHelp(reader bool) [][]key.Binding {
+	if reader {
 		return [][]key.Binding{
 			{k.Scroll, k.Page, k.Back},
 			{k.Toggle, k.Browser, k.Search, k.ForceQuit},

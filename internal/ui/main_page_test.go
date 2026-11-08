@@ -11,84 +11,85 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/isabelroses/izrss/internal/config"
+	"github.com/isabelroses/izrss/internal/library"
 	"github.com/isabelroses/izrss/internal/refresh"
 	"github.com/isabelroses/izrss/internal/rss"
 )
 
 func TestStartsOnFirstFeed(t *testing.T) {
 	m := newTestModel(t)
-	if m.screen != screenMain || m.focus != paneFeeds || selectedTitle(m.feedList) != "Alpha" {
-		t.Errorf("start: screen %v focus %v feed %q", m.screen, m.focus, selectedTitle(m.feedList))
+	if m.page.Shown() || m.main.focus != paneFeeds || selectedTitle(m.main.feeds) != "Alpha" {
+		t.Errorf("start: reader %v focus %v feed %q", m.page.Shown(), m.main.focus, selectedTitle(m.main.feeds))
 	}
-	if selectedTitle(m.postList) != "Alpha post 0" || len(m.postList.items) != 4 {
-		t.Errorf("posts pane should show Alpha's posts, got %q (%d)", selectedTitle(m.postList), len(m.postList.items))
+	if selectedTitle(m.main.posts) != "Alpha post 0" || len(m.main.posts.items) != 4 {
+		t.Errorf("posts pane should show Alpha's posts, got %q (%d)", selectedTitle(m.main.posts), len(m.main.posts.items))
 	}
 }
 
 func TestAllPostsFirstAndMixed(t *testing.T) {
 	m, _ := keys(newTestModel(t), "k")
-	if m.feedList.items[0].title != "All posts" || selectedTitle(m.feedList) != "All posts" {
-		t.Fatalf("row 0 should be All posts, got %q", m.feedList.items[0].title)
+	if m.main.feeds.items[0].title != "All posts" || selectedTitle(m.main.feeds) != "All posts" {
+		t.Fatalf("row 0 should be All posts, got %q", m.main.feeds.items[0].title)
 	}
-	if n := len(m.postList.items); n != 12 {
+	if n := len(m.main.posts.items); n != 12 {
 		t.Fatalf("All posts should list 12, got %d", n)
 	}
 	want := []string{"Alpha post 0", "Beta post 0", "Gamma post 0", "Alpha post 1"}
 	for i, w := range want {
-		if m.postList.items[i].title != w {
-			t.Errorf("row %d = %q, want %q (newest first)", i, m.postList.items[i].title, w)
+		if m.main.posts.items[i].title != w {
+			t.Errorf("row %d = %q, want %q (newest first)", i, m.main.posts.items[i].title, w)
 		}
 	}
-	if r := m.postList.items[1].rightText(); r != "Beta · 04/11/2026" {
+	if r := m.main.posts.items[1].rightText(); r != "Beta · 04/11/2026" {
 		t.Errorf("All posts rows should name the feed: %q", r)
 	}
-	if m.feedList.items[0].right != "3" {
-		t.Errorf("All posts unread count = %q, want 3", m.feedList.items[0].right)
+	if m.main.feeds.items[0].right != "3" {
+		t.Errorf("All posts unread count = %q, want 3", m.main.feeds.items[0].right)
 	}
 }
 
 func TestHomeMixedSelectsAllPosts(t *testing.T) {
 	cfg := config.Default()
 	cfg.Home = "mixed"
-	m := *NewModel(cfg, testDB(t), nil, nil)
+	m := *NewModel(cfg, newLib(testDB(t)), nil, nil)
 	m, _ = update(m, tea.WindowSizeMsg{Width: 120, Height: 40})
-	m, _ = update(m, feedsRefreshedMsg{feeds: sampleFeeds()})
-	if selectedTitle(m.feedList) != "All posts" {
-		t.Errorf("home = mixed should start on All posts, got %q", selectedTitle(m.feedList))
+	m, _ = update(m, loaded(m, sampleFeeds()...))
+	if selectedTitle(m.main.feeds) != "All posts" {
+		t.Errorf("home = mixed should start on All posts, got %q", selectedTitle(m.main.feeds))
 	}
 }
 
 func TestPaneSwitch(t *testing.T) {
 	m := newTestModel(t)
 	for _, k := range []string{"l", "right", "tab"} {
-		m.focus = paneFeeds
-		if m, _ = keys(m, k); m.focus != panePosts {
+		m.main.focus = paneFeeds
+		if m, _ = keys(m, k); m.main.focus != panePosts {
 			t.Errorf("%s should focus posts", k)
 		}
 	}
 	for _, k := range []string{"h", "left"} {
-		m.focus = panePosts
-		if m, _ = keys(m, k); m.focus != paneFeeds {
+		m.main.focus = panePosts
+		if m, _ = keys(m, k); m.main.focus != paneFeeds {
 			t.Errorf("%s should focus feeds", k)
 		}
 	}
-	m.focus = paneFeeds
-	if m, _ = keys(m, "enter"); m.focus != panePosts || m.screen != screenMain {
+	m.main.focus = paneFeeds
+	if m, _ = keys(m, "enter"); m.main.focus != panePosts || m.page.Shown() {
 		t.Error("enter on feeds should focus posts, not open the reader")
 	}
 }
 
 func TestToggleReadFromAllPosts(t *testing.T) {
 	m, _ := keys(newTestModel(t), "k", "l", "j") // All posts, row 1 = Beta post 0 (unread)
-	if selectedTitle(m.postList) != "Beta post 0" {
-		t.Fatalf("selected %q", selectedTitle(m.postList))
+	if selectedTitle(m.main.posts) != "Beta post 0" {
+		t.Fatalf("selected %q", selectedTitle(m.main.posts))
 	}
 	m, _ = keys(m, "x")
 	if !isRead(m, 1, 0) {
 		t.Error("Beta post 0 should be read")
 	}
-	for i, f := range m.feeds.All() {
-		for j, p := range f.Posts {
+	for i := range m.lib.Len() {
+		for j, p := range feedAt(m, i).Posts {
 			if i != 1 && j == 0 && isRead(m, i, j) {
 				t.Errorf("%s was changed too", p.Title)
 			}
@@ -98,23 +99,23 @@ func TestToggleReadFromAllPosts(t *testing.T) {
 
 func TestMarkFeedRead(t *testing.T) {
 	m, _ := keys(newTestModel(t), "X")
-	if m.unread != 2 || m.read.Unread(m.feeds.All()[0]) != 0 {
-		t.Errorf("X should mark only Alpha read; unread = %d", m.unread)
+	if m.main.unread != 2 || m.lib.Feeds()[0].Unread != 0 {
+		t.Errorf("X should mark only Alpha read; unread = %d", m.main.unread)
 	}
 	m, _ = keys(m, "k", "X")
-	if m.unread != 0 {
+	if m.main.unread != 0 {
 		t.Errorf("X on All posts should mark everything read")
 	}
 }
 
 func TestKeys_JumpRefreshOpen(t *testing.T) {
 	m, _ := keys(newTestModel(t), "l", "J")
-	if m.postList.cursor != 3 { // 4 posts: jump 5 clamps at 3
-		t.Errorf("J should jump, cursor %d", m.postList.cursor)
+	if m.main.posts.cursor != 3 { // 4 posts: jump 5 clamps at 3
+		t.Errorf("J should jump, cursor %d", m.main.posts.cursor)
 	}
 	m, _ = keys(m, "K")
-	if m.postList.cursor != 0 {
-		t.Errorf("K should jump back, cursor %d", m.postList.cursor)
+	if m.main.posts.cursor != 0 {
+		t.Errorf("K should jump back, cursor %d", m.main.posts.cursor)
 	}
 
 	var opened string
@@ -123,13 +124,10 @@ func TestKeys_JumpRefreshOpen(t *testing.T) {
 	if opened != "https://Alpha.example/0" {
 		t.Errorf("o opened %q", opened)
 	}
-
-	m.fetcher = rss.NewFetcher(m.db, "02/01/2006")
 	if r, _ := update(m, press("r")); totalOf(r) != 1 {
 		t.Errorf("r on a feed should refresh 1 feed, got %d", totalOf(r))
 	}
 	all := newTestModel(t)
-	all.fetcher = m.fetcher
 	if r, _ := update(all, press("R")); totalOf(r) != 3 {
 		t.Errorf("R should refresh all 3, got %d", totalOf(r))
 	}
@@ -141,8 +139,8 @@ func TestRefresh_KeepsSelectionByKey(t *testing.T) {
 	f.Posts = append([]rss.Post{{UUID: "new1", Title: "new 1", Published: t0.Add(time.Hour)}, {UUID: "new2", Title: "new 2", Published: t0.Add(time.Hour)}}, f.Posts...)
 	m.refresh.Start([]string{sampleURL(0)})
 	m, _ = update(m, feedLoadedMsg{feed: f})
-	if selectedTitle(m.postList) != "Alpha post 2" {
-		t.Errorf("selection moved to %q", selectedTitle(m.postList))
+	if selectedTitle(m.main.posts) != "Alpha post 2" {
+		t.Errorf("selection moved to %q", selectedTitle(m.main.posts))
 	}
 }
 
@@ -152,26 +150,26 @@ func TestRefresh_SelectedPostRemoved(t *testing.T) {
 	f.Posts = f.Posts[:1]
 	m.refresh.Start([]string{sampleURL(0)})
 	m, _ = update(m, feedLoadedMsg{feed: f})
-	if m.postList.cursor != 0 || selectedTitle(m.postList) != "Alpha post 0" {
-		t.Errorf("cursor should clamp, got %d %q", m.postList.cursor, selectedTitle(m.postList))
+	if m.main.posts.cursor != 0 || selectedTitle(m.main.posts) != "Alpha post 0" {
+		t.Errorf("cursor should clamp, got %d %q", m.main.posts.cursor, selectedTitle(m.main.posts))
 	}
 }
 
 func TestEmptyStates(t *testing.T) {
 	cfg := config.Default()
-	m := *NewModel(cfg, testDB(t), nil, nil)
+	m := *NewModel(cfg, newLib(testDB(t)), nil, nil)
 	m, _ = update(m, tea.WindowSizeMsg{Width: 120, Height: 40})
 	if !strings.Contains(ansi.Strip(m.View().Content), "No feeds loaded yet") {
 		t.Error("empty model should say no feeds")
 	}
 	m, _ = keys(m, "j", "k", "x", "X", "enter", "l", "enter", "o")
 	empty := []rss.Feed{{Title: "Empty", URL: "https://e.example/feed", Posts: nil}}
-	m, _ = update(m, feedsRefreshedMsg{feeds: empty})
+	m, _ = update(m, loaded(m, empty...))
 	if !strings.Contains(ansi.Strip(m.View().Content), "No posts") {
 		t.Error("empty feed should say no posts")
 	}
 	m, _ = keys(m, "l", "x", "enter", "j", "X")
-	if m.screen != screenMain {
+	if m.page.Shown() {
 		t.Error("enter on an empty posts pane must not open the reader")
 	}
 }
@@ -256,11 +254,11 @@ func TestAllPosts_TiesKeepFeedOrder(t *testing.T) {
 			fs[i].Posts[j].Published = t0
 		}
 	}
-	m, _ = update(m, feedsRefreshedMsg{feeds: fs})
-	m.feedList.move(-m.feedList.cursor)
-	m.rebuildPosts()
+	m, _ = update(m, loaded(m, fs...))
+	m.main.feeds.move(-m.main.feeds.cursor)
+	m.main.rebuildPosts()
 	var got []string
-	for _, it := range m.postList.items {
+	for _, it := range m.main.posts.items {
 		got = append(got, it.title)
 	}
 	var want []string
@@ -278,7 +276,6 @@ func TestAllPosts_TiesKeepFeedOrder(t *testing.T) {
 // round's total is the number of distinct feeds, not feeds plus repeats.
 func TestRefresh_AllDuringSelectedSkipsFinished(t *testing.T) {
 	m := newTestModel(t)
-	m.fetcher = rss.NewFetcher(m.db, "02/01/2006")
 	f := sampleFeeds()
 	m, _ = keys(m, "k") // All posts: r stands for every feed
 	m, first := update(m, press("r"))
@@ -309,8 +306,7 @@ func totalOf(m Model) int {
 // refreshAt is a refresher part-way through a round of total feeds, done of
 // them finished, whose last round ended at at.
 func refreshAt(total, done int, at time.Time) *refresh.Refresher {
-	set := rss.NewFeedSet()
-	r := refresh.New(set)
+	r := refresh.New(rss.NewFeedSet(), fakeSource{})
 	if !at.IsZero() {
 		r.SetAt(at)
 	}
@@ -333,13 +329,13 @@ func TestUntitledFeed_NamedByHost(t *testing.T) {
 	feeds := sampleFeeds()
 	feeds[1].Title = ""
 	feeds[1].URL = "https://www.danluu.com/atom.xml"
-	m, _ = update(m, feedsRefreshedMsg{feeds: feeds})
+	m, _ = update(m, loaded(m, feeds...))
 
-	if got := m.feedList.items[2].title; got != "danluu.com" {
+	if got := m.main.feeds.items[2].title; got != "danluu.com" {
 		t.Errorf("feeds pane: %q, want danluu.com", got)
 	}
 	m, _ = keys(m, "k") // All posts
-	if got := m.postList.items[1].source; got != "danluu.com" {
+	if got := m.main.posts.items[1].source; got != "danluu.com" {
 		t.Errorf("All posts feed column: %q, want danluu.com", got)
 	}
 	m, _ = keys(m, "/")
@@ -390,5 +386,61 @@ func TestHintBar_Strip(t *testing.T) {
 				t.Fatalf("%s: bar drops the background after a reset: %q", screen, bar)
 			}
 		}
+	}
+}
+
+// newMain is a main page on its own over sampleFeeds: no Model, no messages.
+func newMain(t *testing.T, home string) (mainPage, *library.Library) {
+	t.Helper()
+	lib := newLib(testDB(t))
+	p := newMainPage(lib, home, "02/01/2006")
+	p.Resize(120, 40)
+	lib.Restore(library.Snapshot{Feeds: sampleFeeds()})
+	p.Sync()
+	return p, lib
+}
+
+// The posts pane shows whatever feed the cursor is on, however the cursor
+// got there, and the page follows the library without being told.
+func TestMainPage_PostsFollowFeedCursor(t *testing.T) {
+	p, lib := newMain(t, "home")
+	if got := selectedTitle(p.feeds); got != "Alpha" {
+		t.Fatalf("home starts on the first feed, got %q", got)
+	}
+	if got := selectedTitle(p.posts); got != "Alpha post 0" {
+		t.Errorf("posts pane shows %q", got)
+	}
+	p.Key(press("j"))
+	if got := selectedTitle(p.posts); got != "Beta post 0" {
+		t.Errorf("after moving to Beta the posts pane shows %q", got)
+	}
+	if _, ok := p.SelectedPost(); ok {
+		t.Error("no post is selected while the feeds pane has focus")
+	}
+	p.Key(press("l"))
+	e, ok := p.SelectedPost()
+	if !ok || e.Ref.Key != "Beta-0" || e.Read {
+		t.Fatalf("selected %+v, %v", e, ok)
+	}
+
+	if err := lib.SetRead(e.Ref, true); err != nil {
+		t.Fatal(err)
+	}
+	p.Sync()
+	if it, _ := p.posts.selected(); it.strong || it.marker != " " {
+		t.Errorf("a read post should be drawn read: %+v", it)
+	}
+	if p.Unread() != 11 {
+		t.Errorf("unread = %d, want 11", p.Unread())
+	}
+}
+
+func TestMainPage_MixedHomeStartsOnAllPosts(t *testing.T) {
+	p, _ := newMain(t, "mixed")
+	if got := selectedTitle(p.feeds); got != "All posts" {
+		t.Errorf("mixed starts on %q", got)
+	}
+	if got := p.SelectedFeeds(); len(got) != 3 {
+		t.Errorf("All posts stands for every feed, got %q", got)
 	}
 }

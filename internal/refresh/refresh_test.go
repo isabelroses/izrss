@@ -19,6 +19,11 @@ func urls(n int) []string {
 	return out
 }
 
+// stub is a source whose fetches all come back empty.
+type stub struct{}
+
+func (stub) Fetch(url string) rss.Feed { return rss.Feed{URL: url} }
+
 func setOf(us []string) *rss.FeedSet {
 	var fs []rss.Feed
 	for _, u := range us {
@@ -29,7 +34,7 @@ func setOf(us []string) *rss.FeedSet {
 
 func TestProgressNeverExceedsDistinctFeeds(t *testing.T) {
 	us := urls(5)
-	r := New(setOf(us))
+	r := New(setOf(us), stub{})
 	if got := r.Start(us[:2]); len(got) != 2 {
 		t.Fatalf("Start fetched %d, want 2", len(got))
 	}
@@ -47,7 +52,7 @@ func TestProgressNeverExceedsDistinctFeeds(t *testing.T) {
 // R while r runs must not refetch what r finished (the total was 337 of 256).
 func TestStartSkipsFeedsFinishedThisRound(t *testing.T) {
 	us := urls(256)
-	r := New(setOf(us))
+	r := New(setOf(us), stub{})
 	r.Start(us[:81])
 	for _, u := range us[:40] {
 		r.Finish(rss.Feed{URL: u}, now)
@@ -63,14 +68,15 @@ func TestStartSkipsFeedsFinishedThisRound(t *testing.T) {
 
 func TestRoundEndsAndNextStartsFresh(t *testing.T) {
 	us := urls(2)
-	r := New(setOf(us))
+	r := New(setOf(us), stub{})
 	r.Start(us)
-	if res := r.Finish(rss.Feed{URL: us[0]}, now); res.Finished {
+	r.Finish(rss.Feed{URL: us[0]}, now)
+	if _, total := r.Progress(); total == 0 || !r.At().IsZero() {
 		t.Error("the round isn't over after one of two")
 	}
-	res := r.Finish(rss.Feed{URL: us[1]}, now)
-	if !res.Finished || !r.At().Equal(now) {
-		t.Errorf("finished %v at %v", res.Finished, r.At())
+	r.Finish(rss.Feed{URL: us[1]}, now)
+	if !r.At().Equal(now) {
+		t.Errorf("round finished at %v, want %v", r.At(), now)
 	}
 	if _, total := r.Progress(); total != 0 {
 		t.Errorf("idle refresher reports total %d", total)
@@ -82,7 +88,7 @@ func TestRoundEndsAndNextStartsFresh(t *testing.T) {
 
 func TestUnrequestedAndDuplicateResultsAreNotProgress(t *testing.T) {
 	us := urls(2)
-	r := New(setOf(us))
+	r := New(setOf(us), stub{})
 	r.Start(us)
 	r.Finish(rss.Feed{URL: us[0]}, now)
 	r.Finish(rss.Feed{URL: us[0]}, now) // late duplicate
@@ -95,11 +101,11 @@ func TestUnrequestedAndDuplicateResultsAreNotProgress(t *testing.T) {
 func TestFinishAppliesToFeedSet(t *testing.T) {
 	us := urls(2)
 	set := setOf(us)
-	r := New(set)
+	r := New(set, stub{})
 	r.Start(us)
 
 	res := r.Finish(rss.Feed{URL: us[1], Title: "New", Posts: []rss.Post{{UUID: "n1"}, {UUID: "n2"}}}, now)
-	if !res.Changed || res.Err != nil {
+	if res.Err != nil {
 		t.Fatalf("result %+v", res)
 	}
 	if _, ok := set.Post(rss.PostRef{FeedURL: us[1], Key: "n2"}); !ok {
@@ -113,11 +119,11 @@ func TestFinishAppliesToFeedSet(t *testing.T) {
 func TestFailedFetchKeepsFeedAndNamesTheKnownOne(t *testing.T) {
 	us := urls(1)
 	set := setOf(us)
-	r := New(set)
+	r := New(set, stub{})
 	r.Start(us)
 
 	res := r.Finish(rss.Feed{URL: us[0], Title: "f0.example", Err: errors.New("boom")}, now)
-	if res.Changed || res.Err == nil {
+	if res.Err == nil {
 		t.Errorf("result %+v", res)
 	}
 	if res.Name != "T "+us[0] {
@@ -126,16 +132,27 @@ func TestFailedFetchKeepsFeedAndNamesTheKnownOne(t *testing.T) {
 	if f, _ := set.Feed(us[0]); len(f.Posts) != 1 {
 		t.Error("a failed refresh must keep the cached posts")
 	}
-	if !res.Finished {
+	if !r.At().Equal(now) {
 		t.Error("a failure still finishes the round")
 	}
 }
 
 func TestSetAtKeepsKnownTimeOnZero(t *testing.T) {
-	r := New(setOf(nil))
+	r := New(setOf(nil), stub{})
 	r.SetAt(now)
 	r.SetAt(time.Time{})
 	if !r.At().Equal(now) {
 		t.Errorf("At = %v", r.At())
+	}
+}
+
+func TestJobsFetchFromTheSource(t *testing.T) {
+	us := urls(2)
+	jobs := New(setOf(us), stub{}).Start(us)
+	if len(jobs) != 2 || jobs[1]().URL != us[1] {
+		t.Errorf("jobs should fetch each url from the source")
+	}
+	if jobs := New(setOf(us), nil).Start(us); jobs != nil {
+		t.Errorf("no source, no fetches: got %d", len(jobs))
 	}
 }
