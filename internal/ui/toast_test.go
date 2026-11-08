@@ -27,7 +27,7 @@ func recordTicks(t *toasts) *[]time.Duration {
 }
 
 func testToastTheme() toastTheme {
-	return toastTheme{text: lipgloss.Color("#ffffff"), bg: lipgloss.Color("#313244"), err: lipgloss.Color("#f38ba8")}
+	return toastTheme{text: lipgloss.Color("#ffffff"), subtle: lipgloss.Color("#a6adc8"), err: lipgloss.Color("#f38ba8")}
 }
 
 func TestToasts_AddAndExpire(t *testing.T) {
@@ -51,8 +51,8 @@ func TestToasts_TTL(t *testing.T) {
 	var ts toasts
 	ds := recordTicks(&ts)
 	ts.add("x")
-	if len(*ds) != 1 || (*ds)[0] != 3*time.Second || toastTTL != 3*time.Second {
-		t.Errorf("toast should last 3s, ticks %v", *ds)
+	if len(*ds) != 1 || (*ds)[0] != 6500*time.Millisecond || toastTTL != 6500*time.Millisecond {
+		t.Errorf("toast should last 6.5s, ticks %v", *ds)
 	}
 }
 
@@ -61,8 +61,8 @@ func TestToasts_MergeDuplicates(t *testing.T) {
 	recordTicks(&ts)
 	first := ts.add("same")
 	second := ts.add("same")
-	if len(ts.items) != 1 || !strings.Contains(ansi.Strip(ts.view(80, testToastTheme())), "×2") {
-		t.Fatalf("duplicates should merge with a count: %q", ansi.Strip(ts.view(80, testToastTheme())))
+	if len(ts.items) != 1 || !strings.Contains(ansi.Strip(toastView(ts, 80)), "×2") {
+		t.Fatalf("duplicates should merge with a count: %q", ansi.Strip(toastView(ts, 80)))
 	}
 	ts.expire(first().(toastExpiredMsg))
 	if len(ts.items) != 1 {
@@ -80,7 +80,7 @@ func TestToasts_Cap(t *testing.T) {
 	for _, s := range []string{"a", "b", "c", "d", "e"} {
 		ts.add(s)
 	}
-	lines := strings.Split(ansi.Strip(ts.view(80, testToastTheme())), "\n")
+	lines := toastLines(toastView(ts, 80))
 	if len(ts.items) != maxToasts || maxToasts != 3 || len(lines) != 3 {
 		t.Fatalf("want 3 toasts, got %d: %q", len(ts.items), lines)
 	}
@@ -93,13 +93,14 @@ func TestToasts_ViewFitsWidth(t *testing.T) {
 	var ts toasts
 	recordTicks(&ts)
 	ts.add(strings.Repeat("long ", 60))
-	for l := range strings.SplitSeq(ts.view(40, testToastTheme()), "\n") {
+	v := toastView(ts, 40)
+	for l := range strings.SplitSeq(v, "\n") {
 		if w := ansi.StringWidth(l); w > 40 {
 			t.Errorf("toast %d wide: %q", w, ansi.Strip(l))
 		}
-		if !strings.Contains(ansi.Strip(l), "…") {
-			t.Errorf("long toast should be truncated with …: %q", ansi.Strip(l))
-		}
+	}
+	if lines := toastLines(v); len(lines) != 1 || !strings.Contains(lines[0], "…") {
+		t.Errorf("long toast should be cut to one line with …: %q", lines)
 	}
 }
 
@@ -107,11 +108,18 @@ func TestToasts_Prefix(t *testing.T) {
 	var ts toasts
 	recordTicks(&ts)
 	ts.add("e")
-	v := ansi.Strip(ts.view(80, testToastTheme()))
+	v := ansi.Strip(toastView(ts, 80))
 	if !strings.Contains(v, "✗ e") {
 		t.Errorf("prefixes missing: %q", v)
 	}
-	if (toasts{}).view(80, testToastTheme()) != "" {
+	if first := strings.Split(v, "\n")[0]; !strings.HasPrefix(first, "╭") || !strings.HasSuffix(first, "╮") {
+		t.Errorf("toasts should sit in a rounded box like the help overlay: %q", v)
+	}
+	ts.add("f")
+	if boxes := ts.view(80, testToastTheme()); len(boxes) != 2 || strings.Count(ansi.Strip(boxes[0]), "╭") != 1 {
+		t.Errorf("each toast should get its own box: %q", boxes)
+	}
+	if len((toasts{}).view(80, testToastTheme())) != 0 {
 		t.Error("no toasts should render nothing")
 	}
 }
@@ -142,4 +150,20 @@ func TestShortReason(t *testing.T) {
 			t.Errorf("shortReason(%v) = %q, want %q", tt.err, got, tt.want)
 		}
 	}
+}
+
+// toastLines is the toasts' own rows of a view, without the box around them.
+func toastLines(view string) []string {
+	var out []string
+	for l := range strings.SplitSeq(ansi.Strip(view), "\n") {
+		if strings.Contains(l, "✗") {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+// toastView is every toast box, stacked.
+func toastView(ts toasts, width int) string {
+	return strings.Join(ts.view(width, testToastTheme()), "\n")
 }

@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	toastTTL  = 3 * time.Second
+	toastTTL  = 6500 * time.Millisecond
 	maxToasts = 3
 )
 
@@ -35,7 +35,7 @@ type toast struct {
 	count   int
 }
 
-type toastTheme struct{ text, bg, err color.Color }
+type toastTheme struct{ text, subtle, err color.Color }
 
 // toasts is a short stack of transient notifications, newest first.
 type toasts struct {
@@ -81,22 +81,27 @@ func (t *toasts) expire(msg toastExpiredMsg) {
 	}
 }
 
-// view renders the stack, one toast per line, each at most maxWidth wide.
-func (t toasts) view(maxWidth int, th toastTheme) string {
-	if len(t.items) == 0 || maxWidth < 4 {
-		return ""
+// view renders each toast, newest first, as its own rounded box like the
+// help overlay's, at most maxWidth wide, its text cut to one line.
+func (t toasts) view(maxWidth int, th toastTheme) []string {
+	const frame = 4 // the border and a cell of padding each side
+	if maxWidth < frame+4 {
+		return nil
 	}
-	lines := make([]string, len(t.items))
+	mark := lipgloss.NewStyle().Foreground(th.err).Render("✗ ")
+	text := lipgloss.NewStyle().Foreground(th.text)
+	subtle := lipgloss.NewStyle().Foreground(th.subtle)
+	boxes := make([]string, len(t.items))
 	for i, item := range t.items {
-		text := item.text
+		count := ""
 		if item.count > 1 {
-			text = fmt.Sprintf("%s ×%d", text, item.count)
+			count = fmt.Sprintf(" ×%d", item.count)
 		}
-		body := ansi.Truncate(text, maxWidth-4, "…") // " ✗ " + text + " "
-		lines[i] = lipgloss.NewStyle().Background(th.bg).Foreground(th.err).Render(" ✗ ") +
-			lipgloss.NewStyle().Background(th.bg).Foreground(th.text).Render(body+" ")
+		room := max(maxWidth-frame-2-ansi.StringWidth(count), 1) // 2: the mark
+		line := mark + text.Render(ansi.Truncate(item.text, room, "…")) + subtle.Render(count)
+		boxes[i] = box(line, ansi.StringWidth(line)+frame, th.err)
 	}
-	return strings.Join(lines, "\n")
+	return boxes
 }
 
 // notify shows a toast and records it in the log file. Error text can carry

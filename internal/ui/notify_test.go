@@ -111,9 +111,10 @@ func TestToastsRenderedTopRight(t *testing.T) {
 	m := newTestModel(t)
 	noTicks(&m)
 	m.notify("something broke")
-	first := strings.TrimRight(ansi.Strip(strings.Split(m.View().Content, "\n")[0]), " ")
-	if !strings.HasSuffix(first, "something broke") {
-		t.Errorf("toast should sit at the top right: %q", first)
+	lines := strings.Split(ansi.Strip(m.View().Content), "\n")
+	top, row := lines[0], strings.TrimRight(lines[1], " │")
+	if !strings.HasSuffix(top, "╮") || !strings.HasSuffix(row, "something broke") {
+		t.Errorf("toast should sit at the top right:\n%s\n%s", top, lines[1])
 	}
 }
 

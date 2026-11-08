@@ -38,7 +38,7 @@ func NewStyles(cfg *config.Config) *Styles {
 		Bar:    ansi.Style{}.BackgroundColor(hex(c.Borders)).String(),
 
 		List:  newListTheme(hex(c.Text), hex(c.Subtext), hex(c.Accent), hex(c.Inverttext), hex(c.Borders)),
-		Toast: toastTheme{text: hex(c.Text), bg: hex(c.Borders), err: lipgloss.Color("1")},
+		Toast: toastTheme{text: hex(c.Text), subtle: hex(c.Subtext), err: lipgloss.Color("1")},
 		Reader: reader.Theme{
 			Text:      hex(c.Text),
 			Subtle:    hex(c.Subtext),

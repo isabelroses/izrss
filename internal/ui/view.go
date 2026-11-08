@@ -76,9 +76,11 @@ func (m Model) withOverlays(base string) string {
 	case overlayHelp:
 		layers = append(layers, centred(m.helpView(), m.width, m.height))
 	}
-	if t := m.toasts.view(min(60, m.width), m.styles.Toast); t != "" {
+	y := 0 // toasts stack down from the top right, each in its own box
+	for _, t := range m.toasts.view(min(60, m.width), m.styles.Toast) {
 		l := lipgloss.NewLayer(t)
-		layers = append(layers, l.X(max(m.width-l.Width(), 0)).Y(0).Z(2))
+		layers = append(layers, l.X(max(m.width-l.Width(), 0)).Y(y).Z(2))
+		y += l.Height()
 	}
 	if len(layers) == 0 {
 		return base
