@@ -124,7 +124,9 @@ func TestReader_SideMargin(t *testing.T) {
 // The post sits inside the page margin and the document's own margin, and
 // images are fitted to the text column inside both.
 func TestReader_DocumentMargin(t *testing.T) {
-	m, _ := keys(newTestModel(t), "l", "enter")
+	m := newTestModel(t)
+	m.cfg.Reader.Width = config.Width{Percent: 100}
+	m, _ = keys(m, "l", "enter")
 	var body string
 	for line := range strings.SplitSeq(ansi.Strip(m.View().Content), "\n") {
 		if strings.Contains(line, "Alpha body 0") {
@@ -160,5 +162,29 @@ func TestReader_GapAboveHintLine(t *testing.T) {
 		if n := strings.Count(m.View().Content, "\n") + 1; n != h {
 			t.Errorf("height %d: %d lines", h, n)
 		}
+	}
+}
+
+// A text column narrower than the window, as at the recommended size, is
+// centred, and the header lines up with it.
+func TestReader_CentresNarrowText(t *testing.T) {
+	m, _ := keys(newTestModel(t), "l", "enter") // 120 wide, text 80
+	left := m.page.margin()
+	right := m.page.viewport.Style.GetPaddingRight()
+	if m.page.textWidth() != 80 || left+80+right != 120 || left-right < 0 || left-right > 1 {
+		t.Fatalf("text %d between margins %d and %d, want 80 centred in 120", m.page.textWidth(), left, right)
+	}
+	lines := strings.Split(ansi.Strip(m.View().Content), "\n")
+	pad := strings.Repeat(" ", left)
+	if !strings.HasPrefix(lines[0], pad+"Alpha post 0") {
+		t.Errorf("header should start at the text column: %q", lines[0])
+	}
+	for _, line := range lines {
+		if strings.Contains(line, "Alpha body 0") && !strings.HasPrefix(line, pad+strings.Repeat(" ", docMargin)+"Alpha body 0") {
+			t.Errorf("body should start at the text column: %q", line)
+		}
+	}
+	if hint := lines[len(lines)-1]; !strings.HasPrefix(hint, strings.Repeat(" ", readerMargin)) || strings.HasPrefix(hint, pad) {
+		t.Errorf("the hint line keeps the page margin, not the text column's: %q", hint)
 	}
 }

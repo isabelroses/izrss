@@ -70,6 +70,7 @@ func (p *readerPage) Link() string { return p.post.Link }
 // Open shows post at the top and starts loading its images.
 func (p *readerPage) Open(ref rss.PostRef, post rss.Post) tea.Cmd {
 	p.shown, p.ref, p.post = true, ref, post
+	p.viewport.Style = p.pageStyle(p.width) // the reader width may have been changed
 	// The terminal may have been resized since this post's images were fitted.
 	place := rawCmd(p.images.Open(sessionKey(ref), p.imageLayout()))
 	p.viewport.SetYOffset(0)
@@ -90,7 +91,7 @@ func (p *readerPage) Refresh(post rss.Post) {
 func (p *readerPage) Resize(width, height int) tea.Cmd {
 	p.width, p.height = width, height
 	p.viewport.SetWidth(width)
-	p.viewport.Style = pageStyle(width)
+	p.viewport.Style = p.pageStyle(width)
 	p.viewport.SetHeight(max(height-2-pageGap(height), 1)) // header and hint lines, the gap above the hint; the page style pads inside
 	if p.images.Enabled() {
 		p.cell = images.CellSize(int(os.Stdout.Fd()))
@@ -202,8 +203,8 @@ func (p *readerPage) opts() reader.Options {
 	}
 }
 
-// margin is the page's side margin; the header and hint line align with
-// the text.
+// margin is the blank columns left of the text column; the header aligns
+// with it.
 func (p *readerPage) margin() int { return p.viewport.Style.GetPaddingLeft() }
 
 // textWidth is the column the open post wraps at, inside the page margins.
@@ -298,14 +299,23 @@ func (p *readerPage) body() string {
 	return strings.Join(lines, "\n")
 }
 
-// pageStyle pads the reader viewport: a blank row under the header and a
-// margin each side, which narrow terminals don't get.
-func pageStyle(width int) lipgloss.Style {
-	side := readerMargin
+// pageStyle pads the reader viewport: a blank row under the header, a
+// margin each side, and the text column centred in the room left over when
+// the configured width is narrower.
+func (p *readerPage) pageStyle(width int) lipgloss.Style {
+	side := pageSide(width)
+	room := max(width-2*side, 0)
+	extra := room - p.cfg.Width.Of(room)
+	return lipgloss.NewStyle().Padding(1, side+extra-extra/2, 0, side+extra/2)
+}
+
+// pageSide is the reader page's margin each side, which narrow terminals
+// don't get; the hint line keeps to it.
+func pageSide(width int) int {
 	if width < 40 {
-		side = 0
+		return 0
 	}
-	return lipgloss.NewStyle().Padding(1, side, 0, side)
+	return readerMargin
 }
 
 // pageGap is the blank rows between the article and the hint line: one, unless

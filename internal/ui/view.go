@@ -28,7 +28,7 @@ func (m Model) View() tea.View {
 
 func (m Model) readerView() string {
 	feed, _ := m.lib.Feed(m.page.Ref().FeedURL)
-	return m.page.View(feed.Name(), m.styles, m.statusLine(m.page.margin()))
+	return m.page.View(feed.Name(), m.styles, m.statusLine(pageSide(m.width)))
 }
 
 // statusMargin is the main screen's edge gap, matching the list padding.
