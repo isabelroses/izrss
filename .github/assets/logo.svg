@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <title>izrss</title>
+  <rect width="256" height="256" rx="56" fill="#1e1e2e"/>
+  <g fill="none" stroke-linecap="round" stroke-width="30">
+    <path d="M61 119A76 76 0 0 1 137 195" stroke="#74c7ec"/>
+    <path d="M61 61A134 134 0 0 1 195 195" stroke="#cba6f7"/>
+  </g>
+  <rect x="46" y="160" width="34" height="50" rx="5" fill="#fab387"/>
+</svg>

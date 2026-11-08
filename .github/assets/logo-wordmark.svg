@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 976 256" width="976" height="256">
+  <title>izrss</title>
+  <rect width="976" height="256" rx="56" fill="#1e1e2e"/>
+  <g transform="translate(30.6 12.8) scale(0.9)">
+  <g fill="none" stroke-linecap="round" stroke-width="30">
+    <path d="M61 119A76 76 0 0 1 137 195" stroke="#74c7ec"/>
+    <path d="M61 61A134 134 0 0 1 195 195" stroke="#cba6f7"/>
+  </g>
+  <rect x="46" y="160" width="34" height="50" rx="5" fill="#fab387"/>
+  </g>
+  <g transform="translate(272 80) scale(2.2)" fill="none" stroke="#cdd6f4" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="24" cy="-14" r="7.5" fill="#cdd6f4" stroke="none"/>
+    <path transform="translate(0 0)" d="M10 6H24V50M8 50H40"/>
+    <path transform="translate(60 0)" d="M3 6H41L3 50H41"/>
+    <path transform="translate(120 0)" d="M8 6V50M8 30A24 24 0 0 1 32 6H41"/>
+    <path transform="translate(180 0)" d="M41 6H14A11 11 0 0 0 14 28H30A11 11 0 0 1 30 50H3"/>
+    <path transform="translate(240 0)" d="M41 6H14A11 11 0 0 0 14 28H30A11 11 0 0 1 30 50H3"/>
+  </g>
+</svg>

@@ -1,4 +1,5 @@
 <div align="center">
+ <img src="./.github/assets/logo.svg" width="128" alt="izrss logo">
  <h1>izrss</h1>
 
  <p>An RSS feed reader for the terminal.</p>
@@ -12,10 +13,33 @@
 
 The main bulk of customization is done via the `~/.config/izrss/config.toml` file. You can find an example file here [config.toml](./example.toml).
 
-The rest of the config is done via using the environment variables `GLAMOUR_STYLE`.
-For a good example see: [catppuccin/glamour](https://github.com/catppuccin/glamour)
-
 Then run `izrss` to read the feeds.
+
+Feeds are on the left and the selected feed's posts on the right; "All posts"
+at the top lists everything, newest first. Errors appear briefly as toasts in
+the corner and are kept in `~/.local/state/izrss/izrss.log`.
+
+| Key | Action |
+|---|---|
+| `↑` `↓` / `j` `k` | move (scroll in the reader) |
+| `J` `K` | jump 5 |
+| `←` `→` / `h` `l` / `tab` | switch pane |
+| `enter` | open the feed's posts, then the post |
+| `/` | search every post |
+| `x` / `X` | toggle read / mark the feed read |
+| `r` / `R` | refresh the feed / all feeds |
+| `o` | open the post in your browser |
+| `?` | show all keys |
+| `esc` / `q` | back; `q` on the main screen quits |
+
+### Images
+
+Posts show their images inline in terminals that support the kitty graphics
+protocol's Unicode placeholders, such as [Ghostty](https://ghostty.org) and
+[kitty](https://sw.kovidgoyal.net/kitty/). Elsewhere, and inside tmux or
+screen, images appear as their alt text linking to the image.
+
+Set `images = "on"` or `"off"` under `[reader]` to override the detection.
 
 ### Installation
 
