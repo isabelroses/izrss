@@ -1,5 +1,5 @@
 # all examples in this file differ from the default settings
-# to show how this file may be changed for a better user experince
+# to show how this file may be changed for a better user experience
 
 # this should follow the Go reference time format
 # see <https://go.dev/src/time/format.go> for more information
@@ -20,9 +20,24 @@ read_threshold = 0.75
 # it will not be responsive to screen sizes
 size = "full"
 
-# this value can be "environment" or a path to a glamour file otherwise this
-# will default auto style based on the terminal
-theme = "environment"
+# colours used when reading a post, in any format lipgloss supports
+# these default to the [colors] palette below when left out
+heading = "#B2C98F"
+link = "#B2C98F"
+code = "#6E8585"
+quote = "#6E8585"
+
+# the chroma style used to highlight code blocks
+# see <https://xyproto.github.io/splash/docs/> for the available styles
+code_theme = "gruvbox"
+
+# draw images inline; this can be "auto", "on" or "off"
+# "auto" draws them in terminals known to support it (ghostty and kitty)
+images = "auto"
+
+# the tallest an image may be, in terminal rows
+# by default images may be as tall as the reader
+image_max_height = 16
 
 # these values can be any format that lipgloss supports
 # see <https://github.com/charmbracelet/lipgloss#colors>

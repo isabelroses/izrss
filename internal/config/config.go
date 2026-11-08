@@ -19,8 +19,20 @@ type Config struct {
 
 type Reader struct {
 	Size          any     `toml:"size"`
-	Theme         string  `toml:"theme"`
 	ReadThreshold float64 `toml:"read_threshold"`
+
+	// Colours; empty means "use the [colors] palette".
+	Heading   string `toml:"heading"`
+	Link      string `toml:"link"`
+	Code      string `toml:"code"`
+	Quote     string `toml:"quote"`
+	CodeTheme string `toml:"code_theme"` // chroma style name
+
+	Images         string `toml:"images"`           // "auto", "on" or "off"
+	ImageMaxHeight int    `toml:"image_max_height"` // 0: the reader's height
+
+	// Theme is the obsolete glamour style, parsed only to warn about it.
+	Theme string `toml:"theme"`
 }
 
 type Colors struct {
@@ -39,7 +51,8 @@ func Default() *Config {
 		Reader: Reader{
 			Size:          "recomended",
 			ReadThreshold: 0.8,
-			Theme:         "",
+			CodeTheme:     "catppuccin-mocha",
+			Images:        "auto",
 		},
 		Colors: Colors{
 			Text:       "#cdd6f4",
@@ -51,13 +64,22 @@ func Default() *Config {
 	}
 }
 
+// Warnings describes settings that load but no longer do anything.
+func (c *Config) Warnings() []string {
+	var w []string
+	if c.Reader.Theme != "" {
+		w = append(w, "reader.theme is no longer supported; see example.toml for reader colours")
+	}
+	return w
+}
+
 // Load loads configuration from the specified path, or the default location if empty
 func Load(path string) (*Config, error) {
 	cfg := Default()
 
 	if path == "" {
 		var err error
-		path, err = configFile("config.toml")
+		path, err = xdg.ConfigFile("izrss/config.toml")
 		if err != nil {
 			return nil, fmt.Errorf("getting config file path: %w", err)
 		}
@@ -73,12 +95,4 @@ func Load(path string) (*Config, error) {
 	}
 
 	return cfg, nil
-}
-
-func configFile(file string) (string, error) {
-	configFile, err := xdg.ConfigFile("izrss/" + file)
-	if err != nil {
-		return "", fmt.Errorf("getting config file path: %w", err)
-	}
-	return configFile, nil
 }
