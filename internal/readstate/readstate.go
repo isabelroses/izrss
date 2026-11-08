@@ -77,9 +77,9 @@ func (s *State) IsRead(feedURL, key string) bool { return s.read[feedURL][key] }
 
 // Unread counts the unread posts of f.
 func (s *State) Unread(f rss.Feed) int {
-	unread := 0
+	unread, read := 0, s.read[f.URL]
 	for i := range f.Posts {
-		if !s.IsRead(f.URL, f.Posts[i].Key()) {
+		if !read[f.Posts[i].Key()] {
 			unread++
 		}
 	}

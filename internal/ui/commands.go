@@ -87,7 +87,9 @@ func (m *Model) feedLoaded(msg feedLoadedMsg) tea.Cmd {
 		log.Printf("%v", res.CacheErr)
 		cmd = tea.Batch(cmd, m.notify(toastError, "couldn't cache "+res.Name+" feed"))
 	}
-	m.researchPalette()
+	if _, running := m.refresh.Progress(); running == 0 { // once per round: each search scans every post
+		m.researchPalette()
+	}
 	m.rebuildFeeds()
 	if m.screen == screenReader {
 		m.reopen()

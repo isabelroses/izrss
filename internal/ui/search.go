@@ -53,10 +53,14 @@ func searchPosts(feeds []rss.Feed, query string) []rss.PostRef {
 
 // matchRank ranks how p's title or content contains the lowercase needle.
 func matchRank(p rss.Post, needle string) int {
-	title := strings.ToLower(p.Title)
+	find, lower := indexFold, func(s string) string { return s }
+	if !isASCII(needle) { // folding bytes can't match it
+		find, lower = strings.Index, strings.ToLower
+	}
+	title := lower(p.Title)
 	rank := noMatch
 	for from := 0; from <= len(title); {
-		i := strings.Index(title[from:], needle)
+		i := find(title[from:], needle)
 		if i < 0 {
 			break
 		}
@@ -66,10 +70,37 @@ func matchRank(p rss.Post, needle string) int {
 		rank = rankTitle
 		from += i + 1
 	}
-	if rank == noMatch && strings.Contains(strings.ToLower(p.Content), needle) {
+	if rank == noMatch && find(lower(p.Content), needle) >= 0 {
 		return rankContent
 	}
 	return rank
+}
+
+func isASCII(s string) bool {
+	for i := range len(s) {
+		if s[i] >= utf8.RuneSelf {
+			return false
+		}
+	}
+	return true
+}
+
+// indexFold is strings.Index(strings.ToLower(s), needle) for a lowercase
+// ASCII needle, without lowercasing a copy of s.
+func indexFold(s, needle string) int {
+	first := needle[0]
+	for i := 0; i+len(needle) <= len(s); i++ {
+		if c := s[i]; c == first || c-'A' < 26 && c+32 == first {
+			j := 1
+			for j < len(needle) && (s[i+j] == needle[j] || s[i+j]-'A' < 26 && s[i+j]+32 == needle[j]) {
+				j++
+			}
+			if j == len(needle) {
+				return i
+			}
+		}
+	}
+	return -1
 }
 
 // wordStart reports whether s[at:] starts a word: nothing before it, or no
