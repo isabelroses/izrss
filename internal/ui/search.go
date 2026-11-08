@@ -14,7 +14,8 @@ import (
 // keystroke is a plain substring scan rather than re-lowercasing every post.
 // It is kept per feed, so a refreshed feed is re-indexed on its own.
 type searchIndex struct {
-	feeds []feedIndex // in feed order
+	feeds []feedIndex    // in feed order
+	pos   map[string]int // feed URL -> place in feeds; private to the index
 	// Every post, newest first (ties in feed and post order); a post's
 	// indexedPost.pos is its place here.
 	order []postRef
@@ -23,7 +24,7 @@ type searchIndex struct {
 	// The last non-blank search: its needle and the posts it matched, in
 	// feed order. A query that extends it can only match a subset.
 	last     []byte
-	lastHits []rss.Loc
+	lastHits []place
 
 	marks []uint8 // by order position: a hit's rank+1, else 0; scratch
 }
@@ -40,30 +41,37 @@ const (
 // feedIndex is one feed's posts: post j's title is text[posts[j].start:
 // posts[j].mid] and its content text[posts[j].mid:posts[j].end].
 type feedIndex struct {
+	url   string
 	text  []byte
 	posts []indexedPost
 }
 
 type indexedPost struct {
+	key             string // the post's rss.Post.Key()
 	start, mid, end int
 	pos             int // where the post is in searchIndex.order
 }
 
+// place is a post's position in the feeds the index was built from. It never
+// leaves the index: results are handed out as rss.PostRef.
+type place struct{ feed, post int }
+
 // newSearchIndex indexes every feed into one shared buffer and posts slice.
-func newSearchIndex(feeds rss.Feeds) *searchIndex {
+func newSearchIndex(feeds []rss.Feed) *searchIndex {
 	n, size := 0, 0
 	for _, feed := range feeds {
 		n += len(feed.Posts)
 		size += textSize(feed)
 	}
 	text, posts := make([]byte, 0, size), make([]indexedPost, n)
-	idx := &searchIndex{feeds: make([]feedIndex, len(feeds))}
+	idx := &searchIndex{feeds: make([]feedIndex, len(feeds)), pos: make(map[string]int, len(feeds))}
 	for i, feed := range feeds {
 		start := len(text)
 		ps := posts[:len(feed.Posts):len(feed.Posts)]
 		posts = posts[len(feed.Posts):]
 		text = indexFeed(text, ps, feed)
-		idx.feeds[i] = feedIndex{text: text[start:len(text):len(text)], posts: ps}
+		idx.feeds[i] = feedIndex{url: feed.URL, text: text[start:len(text):len(text)], posts: ps}
+		idx.pos[feed.URL] = i
 	}
 	idx.order = make([]postRef, 0, n)
 	for i := range feeds {
@@ -83,7 +91,7 @@ func (idx *searchIndex) placeOrder() {
 }
 
 // appendRefs appends a postRef for each of feeds[i]'s posts.
-func appendRefs(refs []postRef, feeds rss.Feeds, i int) []postRef {
+func appendRefs(refs []postRef, feeds []rss.Feed, i int) []postRef {
 	for j, p := range feeds[i].Posts {
 		refs = append(refs, postRef{sec: p.Published.Unix(), nsec: int32(p.Published.Nanosecond()), feed: int32(i), post: int32(j)})
 	}
@@ -104,6 +112,7 @@ func indexFeed(text []byte, posts []indexedPost, feed rss.Feed) []byte {
 	base := len(text)
 	for j, post := range feed.Posts {
 		p := &posts[j]
+		p.key = post.Key()
 		p.start = len(text) - base
 		text = appendLower(text, post.Title)
 		p.mid = len(text) - base
@@ -113,18 +122,26 @@ func indexFeed(text []byte, posts []indexedPost, feed rss.Feed) []byte {
 	return text
 }
 
-// update re-indexes feeds[i] after it changed, as newSearchIndex(feeds)
-// would index it. feeds[i] may be a feed appended after the index was built.
-func (idx *searchIndex) update(feeds rss.Feeds, i int) {
-	if len(idx.feeds) != len(feeds) {
-		if len(idx.feeds)+1 != len(feeds) || i != len(idx.feeds) {
+// update re-indexes the feed with url after it changed, as
+// newSearchIndex(feeds) would index it. The feed may have been appended
+// after the index was built.
+func (idx *searchIndex) update(feeds []rss.Feed, url string) {
+	i, known := idx.pos[url]
+	switch {
+	case !known:
+		i = len(idx.feeds)
+		if len(feeds) != i+1 || feeds[i].URL != url {
 			*idx = *newSearchIndex(feeds)
 			return
 		}
 		idx.feeds = append(idx.feeds, feedIndex{})
+		idx.pos[url] = i
+	case len(feeds) != len(idx.feeds) || feeds[i].URL != url:
+		*idx = *newSearchIndex(feeds)
+		return
 	}
 	posts := make([]indexedPost, len(feeds[i].Posts))
-	idx.feeds[i] = feedIndex{text: indexFeed(make([]byte, 0, textSize(feeds[i])), posts, feeds[i]), posts: posts}
+	idx.feeds[i] = feedIndex{url: url, text: indexFeed(make([]byte, 0, textSize(feeds[i])), posts, feeds[i]), posts: posts}
 	idx.last, idx.lastHits = nil, nil // the last hits may have changed
 
 	// Merge feed i's posts back into the order in one pass, as the sort in
@@ -148,7 +165,7 @@ func (idx *searchIndex) update(feeds rss.Feeds, i int) {
 // case-insensitively: title matches at a word start, then other title
 // matches, then content-only matches, each newest first. An empty query
 // matches nothing.
-func (idx *searchIndex) search(query string) []rss.Loc {
+func (idx *searchIndex) search(query string) []rss.PostRef {
 	if strings.TrimSpace(query) == "" {
 		return nil
 	}
@@ -158,11 +175,11 @@ func (idx *searchIndex) search(query string) []rss.Loc {
 	// pass over that order lays out the results.
 	var counts [rankCount]int
 	found := idx.lastHits[:0] // filtered in place: found never overtakes the read
-	check := func(loc rss.Loc) {
-		fi := &idx.feeds[loc.Feed]
-		if rank := fi.match(loc.Post, needle); rank != noMatch {
+	check := func(loc place) {
+		fi := &idx.feeds[loc.feed]
+		if rank := fi.match(loc.post, needle); rank != noMatch {
 			found = append(found, loc)
-			idx.marks[fi.posts[loc.Post].pos] = uint8(rank + 1)
+			idx.marks[fi.posts[loc.post].pos] = uint8(rank + 1)
 			counts[rank]++
 		}
 	}
@@ -175,7 +192,7 @@ func (idx *searchIndex) search(query string) []rss.Loc {
 	} else {
 		for i := range idx.feeds {
 			for j := range idx.feeds[i].posts {
-				check(rss.Loc{Feed: i, Post: j})
+				check(place{i, j})
 			}
 		}
 	}
@@ -187,11 +204,12 @@ func (idx *searchIndex) search(query string) []rss.Loc {
 	for r := 1; r < rankCount; r++ {
 		next[r] = next[r-1] + counts[r-1]
 	}
-	hits := make([]rss.Loc, len(found)) // the caller's copy; the rest is reused
+	hits := make([]rss.PostRef, len(found)) // the caller's copy; the rest is reused
 	for n, mark := range idx.marks {
 		if mark != 0 {
 			r := &idx.order[n]
-			hits[next[mark-1]] = rss.Loc{Feed: int(r.feed), Post: int(r.post)}
+			fi := &idx.feeds[r.feed]
+			hits[next[mark-1]] = rss.PostRef{FeedURL: fi.url, Key: fi.posts[r.post].key}
 			next[mark-1]++
 			idx.marks[n] = 0
 		}

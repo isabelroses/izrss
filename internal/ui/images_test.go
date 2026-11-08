@@ -20,7 +20,7 @@ import (
 
 	"github.com/isabelroses/izrss/internal/config"
 	"github.com/isabelroses/izrss/internal/images"
-	"github.com/isabelroses/izrss/internal/reader"
+	"github.com/isabelroses/izrss/internal/imgsession"
 	"github.com/isabelroses/izrss/internal/rss"
 )
 
@@ -72,9 +72,10 @@ func imageModel(t *testing.T) Model {
 }
 
 func openPost(m Model, p rss.Post) (Model, tea.Cmd) {
-	m.feeds = rss.Feeds{{Title: "feed", URL: "https://example.com/feed", Posts: []rss.Post{p}}}
+	f := rss.Feed{Title: "feed", URL: "https://example.com/feed", Posts: []rss.Post{p}}
+	m.feeds.Reset([]rss.Feed{f})
 	m.rebuildFeeds()
-	cmd := m.openReader(rss.Loc{Feed: 0, Post: 0})
+	cmd := m.openReader(p.Ref(f.URL))
 	return m, cmd
 }
 
@@ -124,6 +125,12 @@ func update(m Model, msg tea.Msg) (Model, []tea.Msg) {
 	return updated.(Model), run(cmd)
 }
 
+// imageInfo is what the model's image session knows of the image with src.
+func imageInfo(m Model, src string) imgsession.Info {
+	info, _ := m.images.Info(src)
+	return info
+}
+
 func postWithImage(src string) rss.Post {
 	return rss.Post{UUID: "p1", Title: "t", Link: "https://example.com/p1", Content: `<p>intro</p><img src="` + src + `" alt="a picture"><p>outro</p>`}
 }
@@ -149,7 +156,7 @@ func loadAndShow(t *testing.T, m Model, p rss.Post) (Model, string) {
 func TestReader_ImagesOff_NoCmds(t *testing.T) {
 	srv := newImgServer(t)
 	m := imageModel(t)
-	m.imgOn = false
+	m.images = imgsession.New(nil, false)
 	m, cmd := openPost(m, postWithImage(srv.URL+"/a.png"))
 	if _, ok := find[imageLoadedMsg](run(cmd)); ok {
 		t.Error("images off should not load images")
@@ -170,7 +177,7 @@ func TestReader_PendingThenReady(t *testing.T) {
 		t.Fatalf("pending image should show a placeholder line:\n%s", ansi.Strip(m.viewport.GetContent()))
 	}
 	loaded, ok := find[imageLoadedMsg](run(cmd))
-	if !ok || loaded.err != nil {
+	if !ok || loaded.Err != nil {
 		t.Fatalf("expected imageLoadedMsg, got %+v", loaded)
 	}
 
@@ -199,17 +206,6 @@ func TestReader_PendingThenReady(t *testing.T) {
 	}
 }
 
-func TestImageLoaded_NotReadyNoUpload(t *testing.T) {
-	srv := newImgServer(t)
-	m := imageModel(t)
-	m, cmd := openPost(m, postWithImage(srv.URL+"/a.png"))
-	loaded, _ := find[imageLoadedMsg](run(cmd))
-	m.ready = false
-	if _, msgs := update(m, loaded); strings.Contains(raws(msgs), "\x1b_G") {
-		t.Error("no upload may be sent before the first frame")
-	}
-}
-
 func TestImageLoaded_StalePostIgnored(t *testing.T) {
 	srv := newImgServer(t)
 	m := imageModel(t)
@@ -235,7 +231,7 @@ func TestImageLoaded_StalePostIgnored(t *testing.T) {
 func TestImageLoaded_ErrorShowsAlt(t *testing.T) {
 	m := imageModel(t)
 	m, _ = openPost(m, postWithImage("https://example.invalid/a.png"))
-	m, msgs := update(m, imageLoadedMsg{post: m.imgPost, src: "https://example.invalid/a.png", err: fmt.Errorf("boom")})
+	m, msgs := update(m, imageLoadedMsg{imgsession.Result{Post: sessionKey(m.open), Src: "https://example.invalid/a.png", Err: fmt.Errorf("boom")}})
 	if raws(msgs) != "" {
 		t.Error("failed image should send nothing")
 	}
@@ -263,7 +259,7 @@ func TestImageReady_KeepsReadingPosition(t *testing.T) {
 	ready, _ := find[imageReadyMsg](msgs)
 	m, _ = update(m, ready)
 
-	rows := loaded.prep.Rows
+	rows := loaded.Prep.Rows
 	if got := m.viewport.YOffset(); got != 100+rows-1 {
 		t.Errorf("YOffset = %d, want %d", got, 100+rows-1)
 	}
@@ -280,7 +276,7 @@ func TestResize_RePlacesWithoutRefetch(t *testing.T) {
 
 	m, msgs := update(m, tea.WindowSizeMsg{Width: 40, Height: 40})
 	r := raws(msgs)
-	id := m.imgs[srv.URL+"/a.png"].id
+	id := imageInfo(m, srv.URL+"/a.png").ID
 	if !strings.Contains(r, "a=p") || !strings.Contains(r, "i="+strconv.Itoa(id)) {
 		t.Errorf("resize should re-place image %d, got %q", id, r)
 	}
@@ -300,21 +296,21 @@ func TestResizeOnMain_ReopenRefits(t *testing.T) {
 	srv := newImgServer(t)
 	m := imageModel(t)
 	m, _ = loadAndShow(t, m, postWithImage(srv.URL+"/a.png"))
-	pi := m.imgs[srv.URL+"/a.png"]
-	oldCols := pi.prep.Cols
+	oldCols := imageInfo(m, srv.URL+"/a.png").Cols
 
 	m, _ = keys(m, "esc")
 	if m.screen != screenMain {
 		t.Fatal("esc should leave the reader")
 	}
 	m, _ = update(m, tea.WindowSizeMsg{Width: 40, Height: 40})
-	cmd := m.openReader(rss.Loc{Feed: 0, Post: 0})
+	cmd := m.openReader(m.open)
 	r := raws(run(cmd))
-	if pi.prep.Cols >= oldCols {
-		t.Errorf("cols %d not re-fitted from %d", pi.prep.Cols, oldCols)
+	pi := imageInfo(m, srv.URL+"/a.png")
+	if pi.Cols >= oldCols {
+		t.Errorf("cols %d not re-fitted from %d", pi.Cols, oldCols)
 	}
-	if !strings.Contains(r, "a=p") || !strings.Contains(r, "i="+strconv.Itoa(pi.id)) {
-		t.Errorf("reopen should re-place image %d, got %q", pi.id, r)
+	if !strings.Contains(r, "a=p") || !strings.Contains(r, "i="+strconv.Itoa(pi.ID)) {
+		t.Errorf("reopen should re-place image %d, got %q", pi.ID, r)
 	}
 	for line := range strings.SplitSeq(m.viewport.GetContent(), "\n") {
 		if w := ansi.StringWidth(line); w > 40 {
@@ -327,7 +323,7 @@ func TestResume_ReUploads(t *testing.T) {
 	srv := newImgServer(t)
 	m := imageModel(t)
 	m, _ = loadAndShow(t, m, postWithImage(srv.URL+"/a.png"))
-	id := m.imgs[srv.URL+"/a.png"].id
+	id := imageInfo(m, srv.URL+"/a.png").ID
 
 	_, msgs := update(m, tea.ResumeMsg{})
 	if r := raws(msgs); !strings.Contains(r, "a=T") || !strings.Contains(r, "i="+strconv.Itoa(id)) {
@@ -339,7 +335,7 @@ func TestView_PlaceholderKeepsIDColour(t *testing.T) {
 	srv := newImgServer(t)
 	m := imageModel(t)
 	m, _ = loadAndShow(t, m, postWithImage(srv.URL+"/a.png"))
-	id := m.imgs[srv.URL+"/a.png"].id
+	id := imageInfo(m, srv.URL+"/a.png").ID
 	sgr := "38;5;" + strconv.Itoa(id)
 
 	found := false
@@ -355,42 +351,6 @@ func TestView_PlaceholderKeepsIDColour(t *testing.T) {
 	}
 	if !found {
 		t.Error("no placeholder rows in the view")
-	}
-}
-
-func TestIDEviction_DeletesOld(t *testing.T) {
-	srv := newImgServer(t)
-	m := imageModel(t)
-	for i := range 255 {
-		m.ids.Acquire("filler" + strconv.Itoa(i))
-	}
-	_, upload := loadAndShow(t, m, postWithImage(srv.URL+"/a.png"))
-	del := strings.Index(upload, "a=d")
-	put := strings.Index(upload, "a=T")
-	if del < 0 || put < 0 || del > put {
-		t.Errorf("evicted image must be deleted before the upload: %q", upload[:min(len(upload), 120)])
-	}
-}
-
-func TestPickSource(t *testing.T) {
-	set := []reader.Candidate{{URL: "s", W: 640}, {URL: "l", W: 2880}, {URL: "m", W: 1080}}
-	tests := []struct {
-		name   string
-		img    reader.Image
-		wantPx int
-		want   string
-	}{
-		{"no srcset uses src", reader.Image{Src: "src"}, 1000, "src"},
-		{"smallest wide enough", reader.Image{Src: "src", Srcset: set}, 1000, "m"},
-		{"exact match", reader.Image{Src: "src", Srcset: set}, 640, "s"},
-		{"none wide enough takes largest", reader.Image{Src: "src", Srcset: set}, 5000, "l"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := pickSource(tt.img, tt.wantPx); got != tt.want {
-				t.Errorf("pickSource = %q, want %q", got, tt.want)
-			}
-		})
 	}
 }
 
@@ -423,11 +383,11 @@ func TestLoadImages_FetchesSrcsetAndUsesDeclaredWidth(t *testing.T) {
 	if len(paths) != 1 || paths[0] != "/big.png" {
 		t.Errorf("fetched %v, want the srcset candidate wide enough for the reader", paths)
 	}
-	if loaded.prep.CSSW != 320 || loaded.prep.Cols != 40 {
-		t.Errorf("declared width 320 css px should give 40 cols, got css %d cols %d", loaded.prep.CSSW, loaded.prep.Cols)
+	if loaded.Prep.CSSW != 320 || loaded.Prep.Cols != 40 {
+		t.Errorf("declared width 320 css px should give 40 cols, got css %d cols %d", loaded.Prep.CSSW, loaded.Prep.Cols)
 	}
-	if loaded.src != srv.URL+"/small.png" {
-		t.Errorf("the image keeps its src identity, got %q", loaded.src)
+	if loaded.Src != srv.URL+"/small.png" {
+		t.Errorf("the image keeps its src identity, got %q", loaded.Src)
 	}
 }
 
@@ -438,19 +398,19 @@ func TestImageLoaded_NoEncodingInUpdate(t *testing.T) {
 	m := imageModel(t)
 	m, cmd := openPost(m, postWithImage(srv.URL+"/a.png"))
 	loaded, ok := find[imageLoadedMsg](run(cmd))
-	if !ok || loaded.err != nil {
+	if !ok || loaded.Err != nil {
 		t.Fatalf("expected imageLoadedMsg, got %+v", loaded)
 	}
-	if !strings.Contains(loaded.upload, "a=T") {
-		t.Fatalf("the load command should encode the upload, got %q", loaded.upload[:min(len(loaded.upload), 40)])
+	if !strings.Contains(loaded.Upload, "a=T") {
+		t.Fatalf("the load command should encode the upload, got %q", loaded.Upload[:min(len(loaded.Upload), 40)])
 	}
-	if loaded.prep.Img != nil {
+	if loaded.Prep.Img != nil {
 		t.Error("decoded pixels should be dropped once encoded")
 	}
 
-	loaded.upload = "\x1b_Gsentinel\x1b\\"
+	loaded.Upload = "\x1b_Gsentinel\x1b\\"
 	_, msgs := update(m, loaded)
-	if r := raws(msgs); r != loaded.upload {
+	if r := raws(msgs); r != loaded.Upload {
 		t.Errorf("Update should send the pre-encoded upload as is, got %q", r[:min(len(r), 80)])
 	}
 }
@@ -463,7 +423,7 @@ func TestImageUpdate_Fast(t *testing.T) {
 	m, loaded := loadedPhoto(t)
 	start := time.Now()
 	updated, _ := m.Update(loaded)
-	updated.(Model).Update(imageReadyMsg{post: loaded.post, src: loaded.src})
+	updated.(Model).Update(imageReadyMsg{post: loaded.Post, src: loaded.Src})
 	if d := time.Since(start); d > 20*time.Millisecond {
 		t.Errorf("Update took %v for one image; heavy work belongs in commands", d)
 	}

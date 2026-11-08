@@ -15,7 +15,10 @@ import (
 
 	"github.com/isabelroses/izrss/internal/config"
 	"github.com/isabelroses/izrss/internal/images"
+	"github.com/isabelroses/izrss/internal/imgsession"
 	"github.com/isabelroses/izrss/internal/reader"
+	"github.com/isabelroses/izrss/internal/readstate"
+	"github.com/isabelroses/izrss/internal/refresh"
 	"github.com/isabelroses/izrss/internal/rss"
 	"github.com/isabelroses/izrss/internal/storage"
 )
@@ -51,40 +54,38 @@ type Model struct {
 	palette    palette
 	focus      pane
 	postsFor   string // the feed key the posts pane was built for
-	feeds      rss.Feeds
+	feeds      *rss.FeedSet
+	read       *readstate.State
 	feedList   list
 	postList   list
 	unread     int // unread posts in all feeds, as of rebuildFeeds
 	feedTitleW int // the widest feeds-pane title, as of rebuildFeeds
-	refresh    refreshState
+	refresh    *refresh.Refresher
 	toasts     toasts
 	now        func() time.Time
 	openURL    func(string) error
 
 	// reader
 	viewport viewport.Model
-	open     openRef         // the post in the reader
+	open     rss.PostRef     // the post in the reader
 	post     rss.Post        // a copy of it, for rendering
 	doc      reader.Document // the open post, as last rendered
 	docWidth []int           // the cell width of each of doc.Lines
 
-	imgOn      bool
-	imgFetcher *images.Fetcher
-	ids        *images.IDs
-	cell       images.Cell
-	imgs       map[string]*postImage // images of imgPost, by resolved src
-	imgPost    string
-	imgToasted bool // the open post's image failures were reported
+	images *imgsession.Session // the open post's images
+	cell   images.Cell         // the terminal's cell size, when images are on
 
 	warnings []string // config warnings, toasted at startup
 }
 
-// openRef identifies the post in the reader independently of row order.
-type openRef struct{ feedURL, key string }
-
 // NewModel creates a model; nothing touches the terminal or network here.
 func NewModel(cfg *config.Config, db *storage.DB, fetcher *rss.Fetcher, imgFetcher *images.Fetcher, warnings []string) *Model {
 	styles := NewStyles(cfg)
+	feeds := rss.NewFeedSet()
+	var loader imgsession.Loader // a nil *Fetcher must not become a non-nil interface
+	if imgFetcher != nil {
+		loader = imgFetcher
+	}
 	m := &Model{
 		cfg:      cfg,
 		help:     newHelp(styles),
@@ -92,15 +93,15 @@ func NewModel(cfg *config.Config, db *storage.DB, fetcher *rss.Fetcher, imgFetch
 		fetcher:  fetcher,
 		styles:   styles,
 		palette:  newPalette(),
+		feeds:    feeds,
+		refresh:  refresh.New(feeds),
+		read:     readstate.New(db),
 		viewport: viewport.New(),
 		now:      time.Now,
 		openURL:  openURL,
 
-		imgOn:      imgFetcher != nil && images.Enabled(cfg.Reader.Images, os.Getenv),
-		imgFetcher: imgFetcher,
-		ids:        images.NewIDs(),
-		imgs:       map[string]*postImage{},
-		warnings:   warnings,
+		images:   imgsession.New(loader, loader != nil && images.Enabled(cfg.Reader.Images, os.Getenv)),
+		warnings: warnings,
 	}
 	// Assume a dark background until the terminal answers asynchronously; a
 	// synchronous query blocks startup for up to 4s on some terminals.
@@ -116,7 +117,7 @@ func (m Model) Init() tea.Cmd {
 		tea.RequestBackgroundColor,
 		minuteTick(),
 		m.warningsCmd(),
-		tea.Sequence(m.loadCachedFeeds(), func() tea.Msg { return refreshMsg{indexes: m.allIndexes()} }),
+		tea.Sequence(m.loadCachedFeeds(), func() tea.Msg { return refreshMsg{urls: m.cfg.Urls} }),
 	)
 }
 
@@ -144,17 +145,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
+		first := !m.ready
 		m.resize(msg.Width, msg.Height)
 		m.refreshCellSize()
+		if first { // the first frame follows; uploads may start
+			for _, o := range m.images.FrameDrawn() {
+				cmds = append(cmds, m.imageOutcome(o))
+			}
+		}
 		if m.screen == screenReader {
-			cmds = append(cmds, m.resizeImages())
+			cmds = append(cmds, rawCmd(m.images.Resized(m.imageLayout())))
 			m.rerenderReader()
 		}
 	case tea.BackgroundColorMsg:
 		m.setBackground(msg.IsDark())
 	case tea.ResumeMsg:
 		if m.screen == screenReader {
-			cmds = append(cmds, m.reuploadImages())
+			cmds = append(cmds, rawCmd(m.images.Resume()))
 		}
 	case tea.KeyPressMsg:
 		switch {
@@ -181,23 +188,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		for _, e := range msg.errs {
 			cmds = append(cmds, m.notify(toastError, e))
 		}
-		m.feeds = msg.feeds
-		m.feedsChanged()
-		if !msg.at.IsZero() {
-			m.refresh.at = msg.at
+		m.feeds.Reset(msg.feeds)
+		if msg.read != nil {
+			m.read.Restore(msg.read)
 		}
+		m.feedsChanged()
+		m.refresh.SetAt(msg.at)
 		m.rebuildFeeds()
 		m.selectInitialFeed()
 	case refreshMsg:
-		cmds = append(cmds, m.refreshFeeds(msg.indexes))
+		cmds = append(cmds, m.refreshFeeds(msg.urls))
 	case feedLoadedMsg:
 		cmds = append(cmds, m.feedLoaded(msg))
 	case minuteTickMsg:
 		cmds = append(cmds, minuteTick())
 	case imageLoadedMsg:
-		cmds = append(cmds, m.imageLoaded(msg), m.imageFailureToast())
+		cmds = append(cmds, m.imageOutcome(m.images.Loaded(msg.Result)))
 	case imageReadyMsg:
-		m.imageReady(msg)
+		if m.images.Uploaded(msg.post, msg.src) {
+			m.rerenderReader()
+		}
 	case toastExpiredMsg:
 		m.toasts.expire(msg)
 	case notifyMsg:
@@ -219,7 +229,7 @@ func (m *Model) resize(width, height int) {
 }
 
 func (m *Model) selectInitialFeed() {
-	if m.started || len(m.feeds) == 0 {
+	if m.started || m.feeds.Len() == 0 {
 		return
 	}
 	m.started = true
@@ -229,13 +239,8 @@ func (m *Model) selectInitialFeed() {
 	}
 }
 
-// quit saves read state and exits.
-func (m *Model) quit() tea.Cmd {
-	if err := m.feeds.WriteTracking(m.db); err != nil {
-		log.Printf("error writing tracking: %v", err)
-	}
-	return tea.Quit
-}
+// quit exits; read state is saved as it changes.
+func (m *Model) quit() tea.Cmd { return tea.Quit }
 
 // logPanic records a panic and its stack in the log file, then lets it
 // continue so Bubble Tea restores the terminal. Use as `defer logPanic()`.

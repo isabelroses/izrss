@@ -14,6 +14,7 @@ import (
 
 	"github.com/isabelroses/izrss/internal/config"
 	"github.com/isabelroses/izrss/internal/images"
+	"github.com/isabelroses/izrss/internal/readstate"
 	"github.com/isabelroses/izrss/internal/rss"
 	"github.com/isabelroses/izrss/internal/storage"
 	"github.com/isabelroses/izrss/internal/ui"
@@ -88,10 +89,15 @@ func run(cli *CLI) error {
 
 	if cli.CountUnread {
 		feeds := fetcher.GetAllContent(cfg.Urls, true)
-		if err := feeds.ReadTracking(db); err != nil {
+		state := readstate.New(db)
+		if err := state.Load(); err != nil {
 			return fmt.Errorf("reading tracking data: %w", err)
 		}
-		fmt.Print(feeds.GetTotalUnreads())
+		unread := 0
+		for _, f := range feeds {
+			unread += state.Unread(f)
+		}
+		fmt.Print(unread)
 		return nil
 	}
 

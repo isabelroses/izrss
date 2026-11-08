@@ -37,7 +37,7 @@ func (m Model) mainView() string {
 	th := m.listTheme()
 
 	switch split, left, right := m.paneWidths(); {
-	case len(m.feeds) == 0:
+	case m.feeds.Len() == 0:
 		lines = append(lines, placeholderLines("No feeds loaded yet", m.width, body, m.styles.Hint)...)
 	case split:
 		l := m.feedList.view(left, m.focus == paneFeeds, th)
@@ -108,7 +108,7 @@ func (m Model) withOverlays(base string) string {
 	var layers []*lipgloss.Layer
 	switch m.overlay {
 	case overlayPalette:
-		layers = append(layers, centred(m.palette.view(m.feeds, m.width, m.listTheme(), m.styles), m.width, m.height))
+		layers = append(layers, centred(m.palette.view(m.feeds, m.read, m.width, m.listTheme(), m.styles), m.width, m.height))
 	case overlayHelp:
 		layers = append(layers, centred(m.helpView(), m.width, m.height))
 	}

@@ -241,30 +241,6 @@ func (db *DB) LoadPostReadStatuses() (map[ReadKey]bool, error) {
 	return statuses, nil
 }
 
-// LoadFeedReadStatuses returns the saved read statuses of one feed's posts,
-// by key. The (feed_url, key) primary key makes this an index range scan.
-func (db *DB) LoadFeedReadStatuses(feedURL string) (map[string]bool, error) {
-	rows, err := db.conn.Query(`SELECT key, read FROM post_read_status WHERE feed_url = ?`, feedURL)
-	if err != nil {
-		return nil, fmt.Errorf("querying read statuses: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-
-	statuses := make(map[string]bool)
-	for rows.Next() {
-		var key string
-		var read bool
-		if err := rows.Scan(&key, &read); err != nil {
-			return nil, fmt.Errorf("scanning row: %w", err)
-		}
-		statuses[key] = read
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterating rows: %w", err)
-	}
-	return statuses, nil
-}
-
 // GetCacheTime retrieves the last fetch time from the database
 func (db *DB) GetCacheTime() (*time.Time, error) {
 	var value string

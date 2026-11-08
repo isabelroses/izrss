@@ -14,34 +14,27 @@ import (
 	"github.com/isabelroses/izrss/internal/rss"
 )
 
-// openReader shows the post at loc full-screen and starts loading its images.
-func (m *Model) openReader(loc rss.Loc) tea.Cmd {
-	f := m.feeds[loc.Feed]
-	p := f.Posts[loc.Post]
-	m.open = openRef{feedURL: f.URL, key: p.Key()}
+// openReader shows the post ref addresses full-screen and starts loading its
+// images.
+func (m *Model) openReader(ref rss.PostRef) tea.Cmd {
+	p, ok := m.feeds.Post(ref)
+	if !ok {
+		return nil
+	}
+	m.open = ref
 	m.post = p
 	m.screen = screenReader
-	if key := postKey(p.UUID, p.Link, p.Title); key != m.imgPost {
-		m.imgPost = key
-		m.imgs = map[string]*postImage{}
-		m.imgToasted = false
-	}
 	// The terminal may have been resized since this post's images were fitted.
-	place := m.resizeImages()
+	place := rawCmd(m.images.Open(sessionKey(ref), m.imageLayout()))
 	m.viewport.SetYOffset(0)
 	m.renderReader()
-	return tea.Batch(place, m.loadImages(m.doc), m.markReadIfScrolled())
-}
-
-// openLoc finds the open post in the current feeds.
-func (m Model) openLoc() (rss.Loc, bool) {
-	return m.feeds.Locate(m.open.feedURL, m.open.key)
+	return tea.Batch(place, imageJobs(m.images.Fetch(m.doc.Images, m.imageLayout())), m.markReadIfScrolled())
 }
 
 // reopen refreshes the reader after the feeds changed underneath it.
 func (m *Model) reopen() {
-	if loc, ok := m.openLoc(); ok {
-		m.post = m.feeds[loc.Feed].Posts[loc.Post]
+	if p, ok := m.feeds.Post(m.open); ok {
+		m.post = p
 		m.rerenderReader()
 	}
 }
@@ -55,8 +48,8 @@ func (m *Model) readerKey(msg tea.KeyPressMsg) tea.Cmd {
 	case key.Matches(msg, k.ForceQuit):
 		return m.quit()
 	case key.Matches(msg, k.Toggle):
-		if loc, ok := m.openLoc(); ok {
-			return m.toggleRead(loc)
+		if _, ok := m.feeds.Post(m.open); ok {
+			return m.setRead(m.open, !m.read.IsRead(m.open.FeedURL, m.open.Key))
 		}
 		return nil
 	case key.Matches(msg, k.Browser):
@@ -73,11 +66,10 @@ func (m *Model) markReadIfScrolled() tea.Cmd {
 	if m.viewport.ScrollPercent() < m.cfg.Reader.ReadThreshold {
 		return nil
 	}
-	loc, ok := m.openLoc()
-	if !ok || m.feeds[loc.Feed].Posts[loc.Post].Read {
+	if _, ok := m.feeds.Post(m.open); !ok || m.read.IsRead(m.open.FeedURL, m.open.Key) {
 		return nil
 	}
-	return m.setRead(loc, true)
+	return m.setRead(m.open, true)
 }
 
 // renderReader renders the open post into the viewport.
@@ -122,13 +114,13 @@ func (m Model) pageView() string {
 }
 
 func (m *Model) readerOpts() reader.Options {
-	ready, failed := m.readyRows()
+	ready, failed := m.images.Display()
 	return reader.Options{
 		Width:      m.textWidth(),
 		Margin:     docMargin,
 		Theme:      readerTheme(m.cfg),
 		BaseURL:    m.post.Link,
-		ShowImages: m.imgOn,
+		ShowImages: m.images.Enabled(),
 		Ready:      ready,
 		Failed:     failed,
 	}
@@ -187,8 +179,8 @@ func readerWidth(size any, width int) int {
 // position on the right.
 func (m Model) readerHeader() string {
 	meta := []string{}
-	if loc, ok := m.openLoc(); ok {
-		meta = append(meta, feedName(m.feeds[loc.Feed]))
+	if f, ok := m.feeds.Feed(m.open.FeedURL); ok {
+		meta = append(meta, f.Name())
 	}
 	if m.post.Date != "" {
 		meta = append(meta, m.post.Date)

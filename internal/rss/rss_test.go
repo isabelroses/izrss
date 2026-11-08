@@ -7,56 +7,6 @@ import (
 	"github.com/mmcdole/gofeed"
 )
 
-func TestGetTotalUnreads(t *testing.T) {
-	feed := Feed{
-		Posts: []Post{
-			{UUID: "1", Read: false},
-			{UUID: "2", Read: true},
-			{UUID: "3", Read: false},
-		},
-	}
-
-	total := feed.GetTotalUnreads()
-	if total != 2 {
-		t.Errorf("Expected 2 unread posts, got %d", total)
-	}
-}
-
-func TestFeedsGetTotalUnreads(t *testing.T) {
-	feeds := Feeds{
-		{Posts: []Post{
-			{UUID: "1", Read: false},
-			{UUID: "2", Read: true},
-		}},
-		{Posts: []Post{
-			{UUID: "3", Read: false},
-			{UUID: "4", Read: false},
-		}},
-	}
-
-	total := feeds.GetTotalUnreads()
-	if total != 3 {
-		t.Errorf("Expected 3 unread posts, got %d", total)
-	}
-}
-
-func TestReadAll(t *testing.T) {
-	feeds := Feeds{
-		{Posts: []Post{
-			{UUID: "1", Read: false},
-			{UUID: "2", Read: false},
-		}},
-	}
-
-	ReadAll(feeds, 0)
-
-	for _, post := range feeds[0].Posts {
-		if !post.Read {
-			t.Errorf("Expected all posts to be read")
-		}
-	}
-}
-
 func TestSortPosts(t *testing.T) {
 	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	posts := []Post{

@@ -63,11 +63,8 @@ func scaleSetup(b *testing.B) (*config.Config, *storage.DB) {
 		if feeds[i].Err != nil || len(feeds[i].Posts) != scalePosts {
 			b.Fatalf("feed %d: %d posts, err %v", i, len(feeds[i].Posts), feeds[i].Err)
 		}
-		for j := range feeds[i].Posts {
-			feeds[i].Posts[j].Read = j%3 != 0
-		}
 	}
-	if err := feeds.WriteTracking(db); err != nil {
+	if err := db.SavePostReadStatuses(thirdsUnread(feeds)); err != nil {
 		b.Fatal(err)
 	}
 	return cfg, db
@@ -146,20 +143,17 @@ func benchRefreshAll(b *testing.B, query string) {
 			m, _ = update(m, tea.KeyPressMsg{Code: r, Text: string(r)})
 		}
 	}
-	fresh := make([]rss.Feed, len(m.feeds))
-	for i, f := range m.feeds {
+	fresh := make([]rss.Feed, m.feeds.Len())
+	for i, f := range m.feeds.All() {
 		fresh[i] = f
 		fresh[i].Posts = append([]rss.Post(nil), f.Posts...)
-		for j := range fresh[i].Posts {
-			fresh[i].Posts[j].Read = false // as parsed: read state comes from the db
-		}
 	}
 	b.ReportAllocs()
 	for b.Loop() {
-		m.refresh = refreshing(upTo(len(fresh))...)
-		for i, f := range fresh {
+		m.refresh.Start(m.feeds.URLs())
+		for _, f := range fresh {
 			f.Posts = append([]rss.Post(nil), f.Posts...)
-			m, _ = update(m, feedLoadedMsg{feed: f, index: i})
+			m, _ = update(m, feedLoadedMsg{feed: f})
 			readerSink = m.View().Content
 		}
 	}
@@ -241,17 +235,6 @@ func BenchmarkToggleRead250(b *testing.B) {
 	}
 }
 
-// BenchmarkQuit250 is quit's bulk read-state write over 10k posts.
-func BenchmarkQuit250(b *testing.B) {
-	m := scaleModel(b)
-	b.ReportAllocs()
-	for b.Loop() {
-		if err := m.feeds.WriteTracking(m.db); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
 // BenchmarkRefreshFetch250 is a full refresh as the program runs it: every
 // feed fetched (from a local server) and parsed concurrently, each result
 // handled by Update and drawn as it arrives.
@@ -270,13 +253,18 @@ func BenchmarkRefreshFetch250(b *testing.B) {
 		urls[i] = fmt.Sprintf("%s/f%d.xml", srv.URL, i)
 	}
 	m.cfg.Urls = urls
+	moved := append([]rss.Feed(nil), m.feeds.All()...)
+	for i := range moved {
+		moved[i].URL = urls[i]
+	}
+	m, _ = update(m, feedsRefreshedMsg{feeds: moved})
 	b.ReportAllocs()
 	defer peakHeap(b)()
 	for b.Loop() {
-		m.refresh = refreshing(upTo(len(urls))...)
+		m.refresh.Start(urls)
 		msgs := make(chan feedLoadedMsg)
-		for i, url := range urls {
-			go func() { msgs <- feedLoadedMsg{feed: m.fetcher.GetContentForURL(url, false), index: i} }()
+		for _, url := range urls {
+			go func() { msgs <- feedLoadedMsg{feed: m.fetcher.GetContentForURL(url, false)} }()
 		}
 		for range urls {
 			m, _ = update(m, <-msgs)

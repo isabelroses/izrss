@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/isabelroses/izrss/internal/config"
+	"github.com/isabelroses/izrss/internal/imgsession"
 	"github.com/isabelroses/izrss/internal/rss"
 )
 
@@ -45,12 +46,12 @@ func timeoutErr() error {
 func TestFeedError_Toast(t *testing.T) {
 	m := newTestModel(t)
 	noTicks(&m)
-	m.refresh = refreshing(1)
-	m, _ = update(m, feedLoadedMsg{feed: rss.Feed{URL: "https://Beta.example/feed", Title: "Beta.example", Err: timeoutErr()}, index: 1})
+	m.refresh.Start([]string{sampleURL(1)})
+	m, _ = update(m, feedLoadedMsg{feed: rss.Feed{URL: "https://Beta.example/feed", Title: "Beta.example", Err: timeoutErr()}})
 	if got := toastTexts(m); len(got) != 1 || got[0] != "Beta: timed out" {
 		t.Errorf("toasts = %q, want [Beta: timed out]", got)
 	}
-	if len(m.feeds[1].Posts) != 4 {
+	if len(m.feeds.All()[1].Posts) != 4 {
 		t.Error("a failed refresh must keep the cached posts")
 	}
 }
@@ -60,12 +61,12 @@ func TestRefreshFailures_ToastBurst(t *testing.T) {
 	m := newTestModel(t)
 	noTicks(&m)
 	for i := range 11 {
-		m.feeds = append(m.feeds, rss.Feed{Title: fmt.Sprintf("F%d", i), URL: fmt.Sprintf("https://f%d.example", i)})
+		m.feeds.Replace(rss.Feed{Title: fmt.Sprintf("F%d", i), URL: fmt.Sprintf("https://f%d.example", i)})
 	}
-	m.refresh = refreshing(upTo(14)[3:]...)
+	m.refresh.Start(m.feeds.URLs()[3:])
 	for i := range 11 {
 		f := rss.Feed{URL: fmt.Sprintf("https://f%d.example", i), Err: timeoutErr()}
-		m, _ = update(m, feedLoadedMsg{feed: f, index: 3 + i})
+		m, _ = update(m, feedLoadedMsg{feed: f})
 	}
 	if n := len(m.toasts.items); n > 3 {
 		t.Errorf("%d toasts visible, want at most 3", n)
@@ -104,7 +105,7 @@ func TestImageFailures_OneToastPerPost(t *testing.T) {
 	m, _ = openPost(m, p)
 	for _, src := range []string{"https://example.invalid/a.png", "https://example.invalid/b.png"} {
 		var msgs []tea.Msg
-		m, msgs = update(m, imageLoadedMsg{post: m.imgPost, src: src, err: errors.New("404")})
+		m, msgs = update(m, imageLoadedMsg{imgsession.Result{Post: sessionKey(m.open), Src: src, Err: errors.New("404")}})
 		m = applyNotifies(t, m, msgs)
 	}
 	if got := toastTexts(m); len(got) != 1 || got[0] != "2 images in this post couldn't be loaded" {
@@ -137,7 +138,7 @@ func TestToastOverReaderKeepsPlaceholders(t *testing.T) {
 	noTicks(&m)
 	m, _ = loadAndShow(t, m, postWithImage(srv.URL+"/a.png"))
 	m, _ = update(m, notifyErr("boom"))
-	id := m.imgs[srv.URL+"/a.png"].id
+	id := imageInfo(m, srv.URL+"/a.png").ID
 	view := m.View().Content
 	if !strings.Contains(view, placeholder) || !strings.Contains(view, fmt.Sprintf("38;5;%d", id)) {
 		t.Error("composing a toast over the reader lost the image placeholders")

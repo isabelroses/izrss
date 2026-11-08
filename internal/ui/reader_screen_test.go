@@ -6,8 +6,6 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
-
-	"github.com/isabelroses/izrss/internal/rss"
 )
 
 func TestReader_HeaderLine(t *testing.T) {
@@ -47,10 +45,10 @@ func TestReader_BackPreservesSelection(t *testing.T) {
 func TestReader_ToggleReadStays(t *testing.T) {
 	m, _ := keys(newTestModel(t), "l", "enter")
 	m.viewport.SetHeight(1) // keep the threshold from auto-marking
-	before := m.feeds[0].Posts[0].Read
+	before := isRead(m, 0, 0)
 	m, _ = keys(m, "x")
-	if m.screen != screenReader || m.feeds[0].Posts[0].Read == before {
-		t.Errorf("x should toggle read and stay: screen %v read %v", m.screen, m.feeds[0].Posts[0].Read)
+	if m.screen != screenReader || isRead(m, 0, 0) == before {
+		t.Errorf("x should toggle read and stay: screen %v read %v", m.screen, isRead(m, 0, 0))
 	}
 }
 
@@ -61,10 +59,10 @@ func TestReader_ThresholdMarksByKey(t *testing.T) {
 	}
 	m, _ = keys(m, "enter") // short post: fully visible, past any threshold
 	m, _ = update(m, tea.KeyPressMsg{Code: tea.KeyDown})
-	if !m.feeds[2].Posts[0].Read {
+	if !isRead(m, 2, 0) {
 		t.Error("Gamma post 0 should be marked read")
 	}
-	if m.feeds[0].Posts[0].Read || m.feeds[1].Posts[0].Read {
+	if isRead(m, 0, 0) || isRead(m, 1, 0) {
 		t.Error("other feeds' posts were marked read (index bug)")
 	}
 }
@@ -83,8 +81,8 @@ func TestReader_ViewportHeight(t *testing.T) {
 
 func TestOpenReader_RendersHTML(t *testing.T) {
 	m := newTestModel(t)
-	m.feeds[0].Posts[0].Content = "<h2>Hi</h2><p>there</p>"
-	m.openReader(rss.Loc{Feed: 0, Post: 0})
+	m.feeds.All()[0].Posts[0].Content = "<h2>Hi</h2><p>there</p>"
+	m.openReader(m.feeds.All()[0].Posts[0].Ref(m.feeds.All()[0].URL))
 	view := ansi.Strip(m.viewport.View())
 	if !strings.Contains(view, "## Hi") || !strings.Contains(view, "there") {
 		t.Errorf("reader should render HTML:\n%s", view)
@@ -97,7 +95,7 @@ func TestReader_SideMargin(t *testing.T) {
 	m := newTestModel(t)
 	m.cfg.Reader.Size = "full"
 	long := strings.Repeat("word ", 60)
-	m.feeds[0].Posts[0].Content = "<p>" + long + "</p>"
+	m.feeds.All()[0].Posts[0].Content = "<p>" + long + "</p>"
 	m, _ = keys(m, "l", "enter")
 	body := strings.Split(m.View().Content, "\n")[1:39]
 	widest := 0

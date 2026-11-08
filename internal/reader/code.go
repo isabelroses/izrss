@@ -3,20 +3,19 @@ package reader
 import (
 	"image/color"
 	"math"
-	"regexp"
 	"strings"
 
 	"charm.land/lipgloss/v2"
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/formatters"
-	"github.com/alecthomas/chroma/v2/lexers"
 	"github.com/alecthomas/chroma/v2/styles"
 	"github.com/charmbracelet/x/ansi"
 	"golang.org/x/net/html"
 )
 
-// codeLanguage reads "language-x" / "lang-x" from <pre> or its <code> child.
-func codeLanguage(pre *html.Node) string {
+// codeHints reads what <pre> and its <code> child say about their language.
+func codeHints(pre *html.Node, filename string) langHints {
+	h := langHints{Filename: filename}
 	nodes := []*html.Node{pre}
 	for c := pre.FirstChild; c != nil; c = c.NextSibling {
 		if c.Type == html.ElementNode && c.Data == "code" {
@@ -24,15 +23,10 @@ func codeLanguage(pre *html.Node) string {
 		}
 	}
 	for _, n := range nodes {
-		for class := range strings.FieldsSeq(attr(n, "class")) {
-			for _, p := range []string{"language-", "lang-"} {
-				if lang, ok := strings.CutPrefix(class, p); ok {
-					return lang
-				}
-			}
-		}
+		h.Classes = append(h.Classes, attr(n, "class"))
+		h.Data = append(h.Data, attr(n, "data-language"), attr(n, "data-lang"))
 	}
-	return ""
+	return h
 }
 
 // codeTitle is the text of a <figcaption> directly before pre, which blogs
@@ -64,90 +58,6 @@ func siblingElement(c *html.Node, step func(*html.Node) *html.Node) *html.Node {
 		}
 	}
 	return nil
-}
-
-// lexer picks chroma's lexer by language name, else by file name, else by
-// what the code looks like, else plain text, so every block is drawn in the
-// code theme's own colours.
-func lexer(lang, filename, code string) chroma.Lexer {
-	var l chroma.Lexer
-	if lang != "" {
-		l = lexers.Get(lang)
-	}
-	if l == nil && filename != "" && !strings.ContainsAny(filename, " /") {
-		l = lexers.Match(filename)
-	}
-	if l == nil && lang == "" && filename == "" {
-		l = detect(code)
-	}
-	if l == nil {
-		l = lexers.Fallback
-	}
-	return chroma.Coalesce(l)
-}
-
-// detect guesses code's language, or returns nil when unsure. Nix, common in
-// feeds but unknown to chroma's analysers, is checked first; then chroma's
-// analysers, trusting only a confident score: their weak guesses misfire
-// (GDScript for Go or Caddyfiles, MySQL for Nix).
-func detect(code string) chroma.Lexer {
-	if looksLikeNix(code) {
-		return lexers.Get("nix")
-	}
-	var best chroma.Lexer
-	var score float32
-	for _, l := range lexers.GlobalLexerRegistry.Lexers {
-		if a, ok := l.(chroma.Analyser); ok {
-			if s := a.AnalyseText(code); s > score {
-				best, score = l, s
-			}
-		}
-	}
-	if score < confident || best == nil || isPlainLexer(best) {
-		return nil
-	}
-	return best
-}
-
-// confident is the analyser score detect trusts: shebangs, XML and PHP
-// openers and the like score 1.
-const confident = 0.8
-
-func isPlainLexer(l chroma.Lexer) bool {
-	name := l.Config().Name
-	return l == lexers.Fallback || name == "plaintext" || name == "fallback"
-}
-
-// nixTells score how Nix-like code is: strong tells are constructs rarely
-// seen elsewhere, weak ones are common in Nix but not unique to it.
-var nixTells = []struct {
-	re     *regexp.Regexp
-	weight int
-}{
-	{regexp.MustCompile(`(?m)^\s*(?:\{.*)?\}\s*:\s*(?:\{|\w.*)?$`), 2}, // a function's argument set: "{ pkgs, ... }:"
-	{regexp.MustCompile(`\bwith (?:pkgs|lib);`), 2},
-	{regexp.MustCompile(`\b(?:mkDerivation|mkShell|mkOption|mkEnableOption|mkIf|mkDefault|mkForce|mkMerge|callPackage|buildGoModule|buildRustPackage|fetchFromGitHub|fetchTarball|mapAttrs|genAttrs|optionalString|concatStringsSep|builtins\.\w+)\b`), 2},
-	{regexp.MustCompile(`\binherit\b`), 2},
-	{regexp.MustCompile(`\$\{(?:pkgs|config|lib)\b`), 2},
-	{regexp.MustCompile(`\bnixpkgs\.(?:url|lib)\b`), 2},
-	{regexp.MustCompile(`(?m)^\s*'';\s*$`), 2},                                         // the end of an indented string
-	{regexp.MustCompile(`(?m)^\s*[A-Za-z_][\w'-]*(?:\.[\w"'-]+)*\s*=\s*\S.*;\s*$`), 1}, // a binding: "a.b = 1;"
-	{regexp.MustCompile(`(?m)^\s*\};\s*$`), 1},
-	{regexp.MustCompile(`(?m)=\s*\{\s*$`), 1},
-	{regexp.MustCompile(`=\s*\.{1,2}/\S*;`), 1}, // a path
-	{regexp.MustCompile(`\b(?:pkgs|lib|config|inputs)\.[A-Za-z]`), 1},
-	{regexp.MustCompile(`\b(?:return|var\s+\w|const\s+\w|function\s*\()|=>`), -2}, // JavaScript and kin
-}
-
-// looksLikeNix reports whether code scores as Nix.
-func looksLikeNix(code string) bool {
-	score := 0
-	for _, t := range nixTells {
-		if t.re.MatchString(code) {
-			score += t.weight
-		}
-	}
-	return score >= 3
 }
 
 // highlight returns code as styled lines using chroma's lexer, style and

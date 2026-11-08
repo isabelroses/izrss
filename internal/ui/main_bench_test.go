@@ -12,14 +12,26 @@ import (
 
 	"github.com/isabelroses/izrss/internal/config"
 	"github.com/isabelroses/izrss/internal/rss"
+	"github.com/isabelroses/izrss/internal/storage"
 )
+
+// thirdsUnread is a read status for every post of feeds: one in three unread.
+func thirdsUnread(feeds rss.Feeds) []storage.PostReadStatus {
+	var out []storage.PostReadStatus
+	for _, f := range feeds {
+		for j, p := range f.Posts {
+			out = append(out, storage.PostReadStatus{FeedURL: f.URL, Key: p.Key(), Read: j%3 != 0})
+		}
+	}
+	return out
+}
 
 func benchFeedsLarge() rss.Feeds {
 	fs := make(rss.Feeds, 11)
 	for i := range fs {
 		posts := make([]rss.Post, 36)
 		for j := range posts {
-			posts[j] = rss.Post{UUID: fmt.Sprintf("%d-%d", i, j), Title: fmt.Sprintf("A reasonably long post title number %d from feed %d", j, i), Published: t0.Add(-time.Duration(j*11+i) * time.Hour), Date: "04/11/2026", Read: j%3 != 0}
+			posts[j] = rss.Post{UUID: fmt.Sprintf("%d-%d", i, j), Title: fmt.Sprintf("A reasonably long post title number %d from feed %d", j, i), Published: t0.Add(-time.Duration(j*11+i) * time.Hour), Date: "04/11/2026"}
 		}
 		fs[i] = rss.Feed{Title: fmt.Sprintf("Feed number %d", i), URL: fmt.Sprintf("https://f%d.example", i), Posts: posts}
 	}
@@ -49,7 +61,7 @@ func benchModel(b *testing.B) Model {
 	for _, f := range feeds {
 		cfg.Urls = append(cfg.Urls, f.URL)
 	}
-	if err := feeds.WriteTracking(db); err != nil {
+	if err := db.SavePostReadStatuses(thirdsUnread(feeds)); err != nil {
 		b.Fatal(err)
 	}
 	m := *NewModel(cfg, db, nil, nil, nil)
@@ -74,13 +86,13 @@ func BenchmarkFeedSwitch(b *testing.B) {
 // BenchmarkFeedLoaded handles one feed's refresh result.
 func BenchmarkFeedLoaded(b *testing.B) {
 	m := benchModel(b)
-	m.refresh.total = 1 << 30 // keep the refresh "in progress"
-	feed := m.feeds[3]
+	m.refresh.Start(m.feeds.URLs()) // keep the refresh "in progress"
+	feed := m.feeds.All()[3]
 	b.ReportAllocs()
 	for b.Loop() {
 		fresh := feed
 		fresh.Posts = append([]rss.Post(nil), feed.Posts...)
-		_ = m.feedLoaded(feedLoadedMsg{feed: fresh, index: 3})
+		_ = m.feedLoaded(feedLoadedMsg{feed: fresh})
 	}
 }
 

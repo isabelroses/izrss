@@ -54,10 +54,10 @@ func TestPalette_EscRestores(t *testing.T) {
 
 func TestPalette_SwallowsKeys(t *testing.T) {
 	m, _ := keys(newTestModel(t), "/")
-	unread := m.feeds.GetTotalUnreads()
+	unread := m.unread
 	var msgs []tea.Msg
 	m, msgs = keys(m, "q", "?", "x")
-	if quits(msgs) || m.overlay != overlayPalette || m.feeds.GetTotalUnreads() != unread {
+	if quits(msgs) || m.overlay != overlayPalette || m.unread != unread {
 		t.Errorf("palette must swallow keys: quit %v overlay %v", quits(msgs), m.overlay)
 	}
 	if v := m.palette.input.Value(); v != "q?x" {
@@ -83,11 +83,11 @@ func TestPalette_WidthAndCap(t *testing.T) {
 	for i := range 50 {
 		many.Posts = append(many.Posts, rss.Post{UUID: fmt.Sprint(i), Title: fmt.Sprintf("match %d", i), Content: "match"})
 	}
-	m.feeds = append(m.feeds, many)
+	m.feeds.Replace(many)
 	m, _ = update(m, tea.WindowSizeMsg{Width: 200, Height: 40})
 	m, _ = keys(m, "/")
 	m = typeText(m, "match")
-	box := m.palette.view(m.feeds, m.width, m.listTheme(), m.styles)
+	box := m.palette.view(m.feeds, m.read, m.width, m.listTheme(), m.styles)
 	lines := strings.Split(box, "\n")
 	if w := ansi.StringWidth(lines[0]); w != 80 {
 		t.Errorf("box width %d, want 80", w)
@@ -142,7 +142,7 @@ func TestPalette_FeedShrinksWhileOpen(t *testing.T) {
 	m, _ = keys(m, "down", "down", "down") // cursor on the last Gamma hit
 	shrunk := sampleFeeds()[2]
 	shrunk.Posts = shrunk.Posts[:1]
-	m, _ = update(m, feedLoadedMsg{feed: shrunk, index: 2})
+	m, _ = update(m, feedLoadedMsg{feed: shrunk})
 	if len(m.palette.hits) != 1 {
 		t.Errorf("hits should follow the new feeds: got %d, want 1", len(m.palette.hits))
 	}
@@ -166,4 +166,25 @@ func TestPalette_FeedsReplacedWhileOpen(t *testing.T) {
 	if m.screen != screenReader {
 		t.Error("enter should open a surviving hit")
 	}
+}
+
+// A hit whose post is gone (its feed shrank or was dropped after the hit was
+// listed) opens nothing, and does not crash or open some other post.
+func TestPalette_EnterOnStaleHit(t *testing.T) {
+	m, _ := keys(newTestModel(t), "/")
+	m = typeText(m, "gamma post")
+	m, _ = keys(m, "down", "down", "down") // the last Gamma hit
+	hit := m.palette.hits[m.palette.cursor]
+	shrunk := sampleFeeds()[2]
+	shrunk.Posts = shrunk.Posts[:1]
+	m.feeds.Replace(shrunk) // behind the palette's back, as a refresh landing mid-keypress would
+	m.palette.hits = []rss.PostRef{hit}
+	m.palette.cursor = 0
+	m, _ = keys(m, "enter")
+	if m.screen == screenReader || m.overlay != overlayPalette {
+		t.Errorf("a stale hit should do nothing: screen %v overlay %v", m.screen, m.overlay)
+	}
+	m.feeds.Reset(nil)
+	m, _ = keys(m, "enter")
+	_ = m.View()
 }

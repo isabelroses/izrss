@@ -42,6 +42,22 @@ func TestAppendLower_GeneralPunctuationHasNoCase(t *testing.T) {
 	}
 }
 
+// numbered gives each feed without one a distinct URL, as real feeds have.
+func numbered(feeds rss.Feeds) rss.Feeds {
+	for i := range feeds {
+		if feeds[i].URL == "" {
+			feeds[i].URL = fmt.Sprintf("https://feed-%d.example", i)
+		}
+	}
+	return feeds
+}
+
+// titleOf is the title of the post ref addresses.
+func titleOf(feeds rss.Feeds, ref rss.PostRef) string {
+	p, _ := rss.NewFeedSet(feeds...).Post(ref)
+	return p.Title
+}
+
 func TestSearchPosts(t *testing.T) {
 	feeds := rss.Feeds{
 		{Posts: []rss.Post{
@@ -67,8 +83,8 @@ func TestSearchPosts(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.query, func(t *testing.T) {
 			var got []string
-			for _, h := range newSearchIndex(feeds).search(tt.query) {
-				got = append(got, feeds[h.Feed].Posts[h.Post].Title)
+			for _, h := range newSearchIndex(numbered(feeds)).search(tt.query) {
+				got = append(got, titleOf(feeds, h))
 			}
 			if strings.Join(got, ",") != strings.Join(tt.want, ",") {
 				t.Errorf("search(%q) = %v, want %v", tt.query, got, tt.want)
@@ -82,9 +98,9 @@ func TestSearchPosts(t *testing.T) {
 func TestSearchIndex_Incremental(t *testing.T) {
 	feeds := benchFeeds()
 	feeds[3].Posts[5].Title = "The Quick Fix"
-	idx := newSearchIndex(feeds)
+	idx := newSearchIndex(numbered(feeds))
 	for _, q := range []string{"q", "qu", "quick", "quick ", "quick f", "QUICK FOX", "quick", "", "k", "ick", "haystack", "needle in", "zzz", "zzzz"} {
-		got, want := idx.search(q), newSearchIndex(feeds).search(q)
+		got, want := idx.search(q), newSearchIndex(numbered(feeds)).search(q)
 		if !slices.Equal(got, want) {
 			t.Errorf("search(%q): %d hits, want %d", q, len(got), len(want))
 		}
@@ -94,16 +110,16 @@ func TestSearchIndex_Incremental(t *testing.T) {
 // Re-indexing one changed or appended feed searches as a fresh index does.
 func TestSearchIndex_Update(t *testing.T) {
 	feeds := benchFeeds()
-	idx := newSearchIndex(feeds)
+	idx := newSearchIndex(numbered(feeds))
 	_ = idx.search("needle") // leave narrowing state behind
 
 	feeds[2].Posts = []rss.Post{{Title: "Fresh NEEDLE"}, {Content: "no match"}}
-	idx.update(feeds, 2)
-	feeds = append(feeds, rss.Feed{Posts: []rss.Post{{Content: "needle again"}}})
-	idx.update(feeds, len(feeds)-1)
+	idx.update(feeds, feeds[2].URL)
+	feeds = append(feeds, rss.Feed{URL: "appended", Posts: []rss.Post{{Content: "needle again"}}})
+	idx.update(feeds, "appended")
 
 	for _, q := range []string{"needle", "needle ", "fresh", "haystack", "zzz"} {
-		got, want := idx.search(q), newSearchIndex(feeds).search(q)
+		got, want := idx.search(q), newSearchIndex(numbered(feeds)).search(q)
 		if !slices.Equal(got, want) {
 			t.Errorf("search(%q) = %v, want %v", q, got, want)
 		}
@@ -127,11 +143,11 @@ func TestSearch_RanksTitleMatches(t *testing.T) {
 		}},
 	}
 	want := []string{"Release notes 1.3", "Release notes 1.2", "Prerelease builds", "Unreleased ideas", "Weekly links", "On shipping"}
-	idx := newSearchIndex(feeds)
+	idx := newSearchIndex(numbered(feeds))
 	for _, q := range []string{"rel", "release"} { // fresh, then narrowed
 		var got []string
 		for _, h := range idx.search(q) {
-			got = append(got, feeds[h.Feed].Posts[h.Post].Title)
+			got = append(got, titleOf(feeds, h))
 		}
 		if !slices.Equal(got, want) {
 			t.Errorf("search(%q) = %q, want %q", q, got, want)
@@ -148,12 +164,12 @@ func TestSearchIndex_UpdateKeepsRecencyOrder(t *testing.T) {
 			feeds[i].Posts = append(feeds[i].Posts, rss.Post{Title: fmt.Sprintf("post %d.%d", i, j), Published: t0.Add(-time.Duration(j*2+i%2) * time.Hour)})
 		}
 	}
-	idx := newSearchIndex(feeds)
+	idx := newSearchIndex(numbered(feeds))
 	feeds[2].Posts = []rss.Post{{Title: "post new", Published: t0.Add(time.Hour)}, {Title: "post tie", Published: t0.Add(-2 * time.Hour)}, {Title: "post old", Published: t0.Add(-time.Hour * 99)}}
-	idx.update(feeds, 2)
-	feeds = append(feeds, rss.Feed{Posts: []rss.Post{{Title: "post appended", Published: t0}}})
-	idx.update(feeds, 4)
-	if got, want := idx.search("post"), newSearchIndex(feeds).search("post"); !slices.Equal(got, want) {
+	idx.update(feeds, feeds[2].URL)
+	feeds = append(feeds, rss.Feed{URL: "appended", Posts: []rss.Post{{Title: "post appended", Published: t0}}})
+	idx.update(feeds, "appended")
+	if got, want := idx.search("post"), newSearchIndex(numbered(feeds)).search("post"); !slices.Equal(got, want) {
 		t.Errorf("after update: %v, want %v", got, want)
 	}
 }

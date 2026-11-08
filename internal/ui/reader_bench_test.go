@@ -39,7 +39,7 @@ func BenchmarkReaderView(b *testing.B) {
 	b.Run("image", func(b *testing.B) {
 		m, loaded := loadedPhoto(b)
 		m, _ = update(m, loaded)
-		m, _ = update(m, imageReadyMsg{post: loaded.post, src: loaded.src})
+		m, _ = update(m, imageReadyMsg{post: loaded.Post, src: loaded.Src})
 		b.ReportAllocs()
 		for b.Loop() {
 			readerSink = m.View().Content

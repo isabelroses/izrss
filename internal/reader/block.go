@@ -317,7 +317,7 @@ func (r *renderer) pre(n *html.Node) block {
 	code = strings.TrimRight(code, "\n")
 	title := codeTitle(n)
 
-	lines := highlight(code, lexer(codeLanguage(n), title, code), r.o.Theme.CodeTheme)
+	lines := highlight(code, codeLexer(codeHints(n, title), code), r.o.Theme.CodeTheme)
 	if lines == nil {
 		lines = strings.Split(code, "\n")
 	}

@@ -1,8 +1,8 @@
 package ui
 
 import (
+	"errors"
 	"log"
-	"slices"
 	"strconv"
 
 	"charm.land/bubbles/v2/key"
@@ -30,13 +30,16 @@ func unreadText(n int) string {
 // so drawing doesn't walk every post or measure every feed title.
 func (m *Model) rebuildFeeds() {
 	keep, _ := m.feedList.selected()
-	total := m.feeds.GetTotalUnreads()
-	items := make([]item, 0, len(m.feeds)+1)
+	feeds := m.feeds.All() // positions are only used within this rebuild
+	total := 0
+	items := make([]item, 0, len(feeds)+1)
 	items = append(items, item{key: allPostsKey, title: "All posts", right: unreadText(total), strong: total > 0})
-	for _, f := range m.feeds {
-		n := f.GetTotalUnreads()
-		items = append(items, item{key: f.URL, title: feedName(f), right: unreadText(n), strong: n > 0})
+	for _, f := range feeds {
+		n := m.read.Unread(f)
+		total += n
+		items = append(items, item{key: f.URL, title: f.Name(), right: unreadText(n), strong: n > 0})
 	}
+	items[0].right, items[0].strong = unreadText(total), total > 0
 	m.feedList.setItems(items, keep)
 	m.unread = total
 	m.feedTitleW = 0
@@ -62,8 +65,9 @@ func (m *Model) rebuildPosts() {
 		m.postsFor = feed.key
 	}
 
+	feeds := m.feeds.All() // positions are only used within this rebuild
 	var refs []postRef
-	for i, f := range m.feeds {
+	for i, f := range feeds {
 		if feed.key != allPostsKey && f.URL != feed.key {
 			continue
 		}
@@ -78,23 +82,28 @@ func (m *Model) rebuildPosts() {
 
 	var names []string // the feed column of "All posts"
 	if all {
-		names = make([]string, len(m.feeds))
-		for i, f := range m.feeds {
-			names[i] = feedName(f)
+		names = make([]string, len(feeds))
+		for i, f := range feeds {
+			names[i] = f.Name()
 		}
 	}
 	items := make([]item, len(refs))
+	flags := make([][]bool, len(feeds)) // by feed, fetched as the feed's first post is met
 	for n, r := range refs {
-		f, p := &m.feeds[r.feed], &m.feeds[r.feed].Posts[r.post]
+		f, p := &feeds[r.feed], &feeds[r.feed].Posts[r.post]
+		if flags[r.feed] == nil {
+			flags[r.feed] = m.read.Flags(*f)
+		}
 		source := ""
 		if all {
 			source = names[r.feed]
 		}
 		marker := " "
-		if !p.Read {
+		unread := !flags[r.feed][r.post]
+		if unread {
 			marker = "•"
 		}
-		items[n] = item{group: f.URL, key: p.Key(), title: p.Title, source: source, right: p.Date, marker: marker, strong: !p.Read}
+		items[n] = item{group: f.URL, key: p.Key(), title: p.Title, source: source, right: p.Date, marker: marker, strong: unread}
 	}
 	m.postList.setItems(items, keep)
 }
@@ -159,28 +168,29 @@ func sortNewestFirst(refs []postRef) []postRef {
 	return src
 }
 
-// selectedPost locates the post under the posts-pane cursor.
-func (m Model) selectedPost() (rss.Loc, bool) {
+// selectedPost finds the post under the posts-pane cursor.
+func (m Model) selectedPost() (rss.PostRef, rss.Post, bool) {
 	it, ok := m.postList.selected()
 	if !ok {
-		return rss.Loc{}, false
+		return rss.PostRef{}, rss.Post{}, false
 	}
-	return m.feeds.Locate(it.group, it.key)
+	ref := rss.PostRef{FeedURL: it.group, Key: it.key}
+	p, ok := m.feeds.Post(ref)
+	return ref, p, ok
 }
 
-// selectedFeedIndexes are the feeds the feeds-pane selection stands for.
-func (m Model) selectedFeedIndexes() []int {
+// selectedFeedURLs are the feeds the feeds-pane selection stands for.
+func (m Model) selectedFeedURLs() []string {
 	it, ok := m.feedList.selected()
-	if !ok {
+	switch {
+	case !ok:
 		return nil
+	case it.key == allPostsKey:
+		return m.feeds.URLs()
+	case m.feeds.Has(it.key):
+		return []string{it.key}
 	}
-	var idx []int
-	for i, f := range m.feeds {
-		if it.key == allPostsKey || f.URL == it.key {
-			idx = append(idx, i)
-		}
-	}
-	return idx
+	return nil
 }
 
 func (m *Model) mainKey(msg tea.KeyPressMsg) tea.Cmd {
@@ -207,28 +217,22 @@ func (m *Model) mainKey(msg tea.KeyPressMsg) tea.Cmd {
 			m.focus = panePosts
 			return nil
 		}
-		if loc, ok := m.selectedPost(); ok {
-			return m.openReader(loc)
+		if ref, _, ok := m.selectedPost(); ok {
+			return m.openReader(ref)
 		}
 	case key.Matches(msg, k.Toggle):
-		if loc, ok := m.selectedPost(); ok && m.focus == panePosts {
-			return m.toggleRead(loc)
+		if ref, _, ok := m.selectedPost(); ok && m.focus == panePosts {
+			return m.setRead(ref, !m.read.IsRead(ref.FeedURL, ref.Key))
 		}
 	case key.Matches(msg, k.MarkFeed):
-		return m.markRead(m.selectedFeedIndexes())
+		return m.markRead(m.selectedFeedURLs())
 	case key.Matches(msg, k.Refresh):
-		var urls []int
-		for _, i := range m.selectedFeedIndexes() {
-			if u := slices.Index(m.cfg.Urls, m.feeds[i].URL); u >= 0 {
-				urls = append(urls, u)
-			}
-		}
-		return m.refreshFeeds(urls)
+		return m.refreshFeeds(m.selectedFeedURLs())
 	case key.Matches(msg, k.RefreshAll):
-		return m.refreshFeeds(m.allIndexes())
+		return m.refreshFeeds(m.cfg.Urls)
 	case key.Matches(msg, k.Browser):
-		if loc, ok := m.selectedPost(); ok && m.focus == panePosts {
-			return m.openLink(m.feeds[loc.Feed].Posts[loc.Post].Link)
+		if _, p, ok := m.selectedPost(); ok && m.focus == panePosts {
+			return m.openLink(p.Link)
 		}
 	}
 	return nil
@@ -243,26 +247,28 @@ func (m *Model) moveFocused(delta int) {
 	m.postList.move(delta)
 }
 
-func (m *Model) toggleRead(loc rss.Loc) tea.Cmd {
-	return m.setRead(loc, !m.feeds[loc.Feed].Posts[loc.Post].Read)
-}
-
 // setRead changes and saves one post's read state.
-func (m *Model) setRead(loc rss.Loc, read bool) tea.Cmd {
-	m.feeds.SetRead(loc, read)
-	m.rebuildFeeds()
-	return m.readStatusSaved(m.feeds.WritePostTrackingAt(m.db, loc))
-}
-
-func (m *Model) markRead(feedIdx []int) tea.Cmd {
-	if len(feedIdx) == 0 {
+func (m *Model) setRead(ref rss.PostRef, read bool) tea.Cmd {
+	if _, ok := m.feeds.Post(ref); !ok {
 		return nil
 	}
-	for _, i := range feedIdx {
-		rss.ReadAll(m.feeds, i)
+	err := m.read.Set(ref, read)
+	m.rebuildFeeds()
+	return m.readStatusSaved(err)
+}
+
+func (m *Model) markRead(urls []string) tea.Cmd {
+	if len(urls) == 0 {
+		return nil
+	}
+	var err error
+	for _, url := range urls {
+		if f, ok := m.feeds.Feed(url); ok {
+			err = errors.Join(err, m.read.MarkFeedRead(f))
+		}
 	}
 	m.rebuildFeeds()
-	return m.readStatusSaved(m.feeds.WriteTracking(m.db))
+	return m.readStatusSaved(err)
 }
 
 // readStatusSaved reports a failure to save read state.

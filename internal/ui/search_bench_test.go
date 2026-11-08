@@ -10,7 +10,7 @@ import (
 	"github.com/isabelroses/izrss/internal/rss"
 )
 
-var searchSink []rss.Loc
+var searchSink []rss.PostRef
 
 // benchFeeds builds 20 feeds of 40 posts with ~5KB of HTML each, including
 // non-ASCII punctuation as real feed content usually has.
@@ -23,7 +23,7 @@ func benchFeeds() rss.Feeds {
 			posts[j] = rss.Post{Title: fmt.Sprintf("post %d", j), Content: body}
 		}
 		posts[0].Content += "<p>Needle in the HAYSTACK</p>"
-		feeds[i] = rss.Feed{Posts: posts}
+		feeds[i] = rss.Feed{URL: fmt.Sprintf("https://b%d.example", i), Posts: posts}
 	}
 	return feeds
 }
@@ -43,7 +43,7 @@ func BenchmarkSearchPosts(b *testing.B) {
 // BenchmarkPaletteTyping opens the palette and types a query one key at a
 // time, searching after each keystroke as the UI does.
 func BenchmarkPaletteTyping(b *testing.B) {
-	m := Model{feeds: benchFeeds(), palette: newPalette()}
+	m := Model{feeds: rss.NewFeedSet(benchFeeds()...), palette: newPalette()}
 	b.ReportAllocs()
 	for b.Loop() {
 		m.openPalette()

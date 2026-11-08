@@ -10,6 +10,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/isabelroses/izrss/internal/readstate"
 	"github.com/isabelroses/izrss/internal/rss"
 )
 
@@ -29,7 +30,7 @@ const (
 // palette is the pop-up search box: live results across every feed.
 type palette struct {
 	input  textinput.Model
-	hits   []rss.Loc
+	hits   []rss.PostRef
 	cursor int
 	index  *searchIndex // built on the first search; nil when stale
 }
@@ -57,12 +58,12 @@ func (m *Model) paletteKey(msg tea.KeyPressMsg) tea.Cmd {
 		if m.palette.cursor >= len(m.palette.hits) {
 			return nil
 		}
-		loc := m.palette.hits[m.palette.cursor]
-		if !validLoc(m.feeds, loc) {
+		ref := m.palette.hits[m.palette.cursor]
+		if _, ok := m.feeds.Post(ref); !ok { // the feed was refreshed since
 			return nil
 		}
 		m.closePalette()
-		return m.openReader(loc)
+		return m.openReader(ref)
 	case "up", "ctrl+p":
 		m.palette.cursor = max(m.palette.cursor-1, 0)
 		return nil
@@ -75,7 +76,7 @@ func (m *Model) paletteKey(msg tea.KeyPressMsg) tea.Cmd {
 	m.palette.input, cmd = m.palette.input.Update(msg)
 	if q := m.palette.input.Value(); q != before {
 		if m.palette.index == nil {
-			m.palette.index = newSearchIndex(m.feeds)
+			m.palette.index = newSearchIndex(m.feeds.All())
 		}
 		m.palette.hits = m.palette.index.search(q)
 		m.palette.cursor = 0
@@ -90,14 +91,14 @@ func (m *Model) feedsChanged() {
 	m.researchPalette()
 }
 
-// feedChanged is feedsChanged when only m.feeds[i] changed (or was
-// appended): an open palette's index re-indexes just that feed.
-func (m *Model) feedChanged(i int) {
+// feedChanged is feedsChanged when only the feed with url changed (or was
+// added): an open palette's index re-indexes just that feed.
+func (m *Model) feedChanged(url string) {
 	if m.overlay != overlayPalette || m.palette.index == nil {
 		m.feedsChanged()
 		return
 	}
-	m.palette.index.update(m.feeds, i)
+	m.palette.index.update(m.feeds.All(), url)
 	m.researchPalette()
 }
 
@@ -109,18 +110,13 @@ func (m *Model) researchPalette() {
 	}
 	if q := m.palette.input.Value(); q != "" {
 		if m.palette.index == nil {
-			m.palette.index = newSearchIndex(m.feeds)
+			m.palette.index = newSearchIndex(m.feeds.All())
 		}
 		m.palette.hits = m.palette.index.search(q)
 	} else {
 		m.palette.hits = nil
 	}
 	m.palette.cursor = min(m.palette.cursor, max(len(m.palette.hits)-1, 0))
-}
-
-// validLoc reports whether loc points at a post in feeds.
-func validLoc(feeds rss.Feeds, loc rss.Loc) bool {
-	return loc.Feed >= 0 && loc.Feed < len(feeds) && loc.Post >= 0 && loc.Post < len(feeds[loc.Feed].Posts)
 }
 
 // closePalette hides the palette and frees its search index.
@@ -133,7 +129,7 @@ func (m *Model) closePalette() {
 func paletteWidth(width int) int { return min(paletteMaxWidth, width*8/10) }
 
 // view renders the palette box, paletteWidth(width) cells wide.
-func (p palette) view(feeds rss.Feeds, width int, th listTheme, st *Styles) string {
+func (p palette) view(feeds *rss.FeedSet, read *readstate.State, width int, th listTheme, st *Styles) string {
 	boxW := paletteWidth(width)
 	inner := max(boxW-4, 1) // rounded border and one cell of padding each side
 	// Text lines are indented one cell to line up with the result rows,
@@ -148,9 +144,10 @@ func (p palette) view(feeds rss.Feeds, width int, th listTheme, st *Styles) stri
 	// Only the visible rows are built; a broad query can hit every post.
 	visible := p.hits[first:min(first+paletteRows, len(p.hits))]
 	items := make([]item, len(visible))
-	for i, loc := range visible {
-		post := feeds[loc.Feed].Posts[loc.Post]
-		items[i] = item{title: post.Title, right: feedName(feeds[loc.Feed]), strong: !post.Read}
+	for i, ref := range visible {
+		feed, _ := feeds.Feed(ref.FeedURL)
+		post, _ := feeds.Post(ref)
+		items[i] = item{title: post.Title, right: feed.Name(), strong: !read.IsRead(ref.FeedURL, ref.Key)}
 	}
 	rows := list{items: items, cursor: p.cursor - first, height: min(paletteRows, len(p.hits))}
 	lines = append(lines, rows.view(inner, true, th)...)

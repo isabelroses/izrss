@@ -52,8 +52,8 @@ func loadedPhoto(tb testing.TB) (Model, imageLoadedMsg) {
 	m, _ = update(m, tea.WindowSizeMsg{Width: 160, Height: 50})
 	m, cmd := openPost(m, postWithImage(srv.URL+"/photo.png"))
 	loaded, ok := find[imageLoadedMsg](run(cmd))
-	if !ok || loaded.err != nil {
-		tb.Fatalf("load failed: %+v", loaded.err)
+	if !ok || loaded.Err != nil {
+		tb.Fatalf("load failed: %+v", loaded.Err)
 	}
 	return m, loaded
 }
@@ -67,6 +67,6 @@ func BenchmarkImageUpdate(b *testing.B) {
 		updated, cmd := m.Update(loaded)
 		_ = cmd
 		mm := updated.(Model)
-		mm.Update(imageReadyMsg{post: loaded.post, src: loaded.src})
+		mm.Update(imageReadyMsg{post: loaded.Post, src: loaded.Src})
 	}
 }

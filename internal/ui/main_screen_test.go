@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"math/rand/v2"
 	"slices"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/isabelroses/izrss/internal/config"
+	"github.com/isabelroses/izrss/internal/refresh"
 	"github.com/isabelroses/izrss/internal/rss"
 )
 
@@ -90,12 +92,12 @@ func TestToggleReadFromAllPosts(t *testing.T) {
 		t.Fatalf("selected %q", selectedTitle(m.postList))
 	}
 	m, _ = keys(m, "x")
-	if !m.feeds[1].Posts[0].Read {
+	if !isRead(m, 1, 0) {
 		t.Error("Beta post 0 should be read")
 	}
-	for i, f := range m.feeds {
+	for i, f := range m.feeds.All() {
 		for j, p := range f.Posts {
-			if i != 1 && j == 0 && p.Read {
+			if i != 1 && j == 0 && isRead(m, i, j) {
 				t.Errorf("%s was changed too", p.Title)
 			}
 		}
@@ -104,11 +106,11 @@ func TestToggleReadFromAllPosts(t *testing.T) {
 
 func TestMarkFeedRead(t *testing.T) {
 	m, _ := keys(newTestModel(t), "X")
-	if m.feeds.GetTotalUnreads() != 2 || m.feeds[0].GetTotalUnreads() != 0 {
-		t.Errorf("X should mark only Alpha read; unread = %d", m.feeds.GetTotalUnreads())
+	if m.unread != 2 || m.read.Unread(m.feeds.All()[0]) != 0 {
+		t.Errorf("X should mark only Alpha read; unread = %d", m.unread)
 	}
 	m, _ = keys(m, "k", "X")
-	if m.feeds.GetTotalUnreads() != 0 {
+	if m.unread != 0 {
 		t.Errorf("X on All posts should mark everything read")
 	}
 }
@@ -131,11 +133,13 @@ func TestKeys_JumpRefreshOpen(t *testing.T) {
 	}
 
 	m.fetcher = rss.NewFetcher(m.db, "02/01/2006")
-	if r, _ := update(m, press("r")); r.refresh.total != 1 {
-		t.Errorf("r on a feed should refresh 1 feed, got %d", r.refresh.total)
+	if r, _ := update(m, press("r")); totalOf(r) != 1 {
+		t.Errorf("r on a feed should refresh 1 feed, got %d", totalOf(r))
 	}
-	if r, _ := update(m, press("R")); r.refresh.total != 3 {
-		t.Errorf("R should refresh all 3, got %d", r.refresh.total)
+	all := newTestModel(t)
+	all.fetcher = m.fetcher
+	if r, _ := update(all, press("R")); totalOf(r) != 3 {
+		t.Errorf("R should refresh all 3, got %d", totalOf(r))
 	}
 }
 
@@ -143,8 +147,8 @@ func TestRefresh_KeepsSelectionByKey(t *testing.T) {
 	m, _ := keys(newTestModel(t), "l", "j", "j") // Alpha post 2
 	f := sampleFeeds()[0]
 	f.Posts = append([]rss.Post{{UUID: "new1", Title: "new 1", Published: t0.Add(time.Hour)}, {UUID: "new2", Title: "new 2", Published: t0.Add(time.Hour)}}, f.Posts...)
-	m.refresh = refreshing(0)
-	m, _ = update(m, feedLoadedMsg{feed: f, index: 0})
+	m.refresh.Start([]string{sampleURL(0)})
+	m, _ = update(m, feedLoadedMsg{feed: f})
 	if selectedTitle(m.postList) != "Alpha post 2" {
 		t.Errorf("selection moved to %q", selectedTitle(m.postList))
 	}
@@ -154,8 +158,8 @@ func TestRefresh_SelectedPostRemoved(t *testing.T) {
 	m, _ := keys(newTestModel(t), "l", "J")
 	f := sampleFeeds()[0]
 	f.Posts = f.Posts[:1]
-	m.refresh = refreshing(0)
-	m, _ = update(m, feedLoadedMsg{feed: f, index: 0})
+	m.refresh.Start([]string{sampleURL(0)})
+	m, _ = update(m, feedLoadedMsg{feed: f})
 	if m.postList.cursor != 0 || selectedTitle(m.postList) != "Alpha post 0" {
 		t.Errorf("cursor should clamp, got %d %q", m.postList.cursor, selectedTitle(m.postList))
 	}
@@ -184,19 +188,19 @@ func TestStatusText(t *testing.T) {
 	now := t0
 	tests := []struct {
 		unread int
-		r      refreshState
+		r      *refresh.Refresher
 		want   string
 	}{
-		{18, refreshState{total: 11, done: 3}, "refreshing 3/11…"},
-		{18, refreshState{at: now.Add(-20 * time.Second)}, "18 unread · refreshed just now"},
-		{18, refreshState{at: now.Add(-2 * time.Minute)}, "18 unread · refreshed 2m ago"},
-		{1, refreshState{at: now.Add(-3 * time.Hour)}, "1 unread · refreshed 3h ago"},
-		{0, refreshState{at: now.Add(-50 * time.Hour)}, "0 unread · refreshed 2d ago"},
-		{5, refreshState{}, "5 unread"},
+		{18, refreshAt(11, 3, time.Time{}), "refreshing 3/11…"},
+		{18, refreshAt(0, 0, now.Add(-20*time.Second)), "18 unread · refreshed just now"},
+		{18, refreshAt(0, 0, now.Add(-2*time.Minute)), "18 unread · refreshed 2m ago"},
+		{1, refreshAt(0, 0, now.Add(-3*time.Hour)), "1 unread · refreshed 3h ago"},
+		{0, refreshAt(0, 0, now.Add(-50*time.Hour)), "0 unread · refreshed 2d ago"},
+		{5, refreshAt(0, 0, time.Time{}), "5 unread"},
 	}
 	for _, tt := range tests {
 		if got := statusText(tt.unread, tt.r, now); got != tt.want {
-			t.Errorf("statusText(%d, %+v) = %q, want %q", tt.unread, tt.r, got, tt.want)
+			t.Errorf("statusText(%d) = %q, want %q", tt.unread, got, tt.want)
 		}
 	}
 }
@@ -244,11 +248,9 @@ func TestStatusLine_UnreadTracksChanges(t *testing.T) {
 	if s := status(); !strings.Contains(s, "2 unread") {
 		t.Errorf("after toggle: status %q, want 2 unread", s)
 	}
-	fresh := sampleFeeds()[1]
-	fresh.Posts[1].Read = false // not saved read, so the refresh leaves it unread
-	m, _ = update(m, feedLoadedMsg{feed: fresh, index: 1})
-	if s := status(); !strings.Contains(s, "3 unread") {
-		t.Errorf("after refresh: status %q, want 3 unread", s)
+	m, _ = update(m, feedLoadedMsg{feed: sampleFeeds()[1]}) // freshly parsed: no flags
+	if s := status(); !strings.Contains(s, "2 unread") {
+		t.Errorf("after refresh: status %q, want 2 unread (read state survives a refresh)", s)
 	}
 }
 
@@ -325,35 +327,86 @@ func TestRefresh_NoStacking(t *testing.T) {
 	m.fetcher = rss.NewFetcher(m.db, "02/01/2006")
 	m, first := update(m, press("r"))  // Alpha
 	m, second := update(m, press("R")) // adds Beta and Gamma
-	if m.refresh.total != len(m.feeds) {
-		t.Fatalf("r then R: total %d, want %d", m.refresh.total, len(m.feeds))
+	if totalOf(m) != m.feeds.Len() {
+		t.Fatalf("r then R: total %d, want %d", totalOf(m), m.feeds.Len())
 	}
-	if n := len(first) + len(second); n != len(m.feeds) {
-		t.Errorf("r then R fetched %d feeds, want %d", n, len(m.feeds))
+	if n := len(first) + len(second); n != m.feeds.Len() {
+		t.Errorf("r then R fetched %d feeds, want %d", n, m.feeds.Len())
 	}
 	m, again := update(m, press("R"))
-	if m.refresh.total != len(m.feeds) || len(again) != 0 {
-		t.Errorf("R while all are in flight: total %d, %d fetches", m.refresh.total, len(again))
+	if totalOf(m) != m.feeds.Len() || len(again) != 0 {
+		t.Errorf("R while all are in flight: total %d, %d fetches", totalOf(m), len(again))
 	}
 
 	f := sampleFeeds()
-	m, _ = update(m, feedLoadedMsg{feed: f[0], index: 0})
-	m, _ = update(m, feedLoadedMsg{feed: f[0], index: 0}) // a late duplicate
-	if m.refresh.done != 1 {
-		t.Errorf("a duplicate result was counted: done %d", m.refresh.done)
+	m, _ = update(m, feedLoadedMsg{feed: f[0]})
+	m, _ = update(m, feedLoadedMsg{feed: f[0]}) // a late duplicate
+	if done, _ := m.refresh.Progress(); done != 1 {
+		t.Errorf("a duplicate result was counted: done %d", done)
 	}
 	if s := statusText(m.unread, m.refresh, m.now()); s != "refreshing 1/3…" {
 		t.Errorf("status %q", s)
 	}
-	m, _ = update(m, feedLoadedMsg{feed: f[1], index: 1})
-	m, _ = update(m, feedLoadedMsg{feed: f[2], index: 2})
-	if m.refresh.total != 0 || m.refresh.at.IsZero() {
-		t.Errorf("refresh should be finished: %+v", m.refresh)
+	m, _ = update(m, feedLoadedMsg{feed: f[1]})
+	m, _ = update(m, feedLoadedMsg{feed: f[2]})
+	if totalOf(m) != 0 || m.refresh.At().IsZero() {
+		t.Errorf("refresh should be finished: total %d at %v", totalOf(m), m.refresh.At())
 	}
 	m, msgs := update(m, press("r"))
-	if m.refresh.total != 1 || len(msgs) != 1 {
-		t.Errorf("r after the refresh finished: total %d, %d fetches", m.refresh.total, len(msgs))
+	if totalOf(m) != 1 || len(msgs) != 1 {
+		t.Errorf("r after the refresh finished: total %d, %d fetches", totalOf(m), len(msgs))
 	}
+}
+
+// R while r is running must not fetch again the feeds r has finished: the
+// round's total is the number of distinct feeds, not feeds plus repeats.
+func TestRefresh_AllDuringSelectedSkipsFinished(t *testing.T) {
+	m := newTestModel(t)
+	m.fetcher = rss.NewFetcher(m.db, "02/01/2006")
+	f := sampleFeeds()
+	m, _ = keys(m, "k") // All posts: r stands for every feed
+	m, first := update(m, press("r"))
+	if len(first) != 3 {
+		t.Fatalf("r on All posts fetched %d feeds, want 3", len(first))
+	}
+	m, _ = update(m, feedLoadedMsg{feed: f[0]})
+	m, _ = update(m, feedLoadedMsg{feed: f[1]})
+	m, second := update(m, press("R"))
+	if len(second) != 0 {
+		t.Errorf("R refetched %d feeds already finished or in flight", len(second))
+	}
+	if done, total := m.refresh.Progress(); done != 2 || total != 3 {
+		t.Errorf("progress %d/%d, want 2/3", done, total)
+	}
+	m, _ = update(m, feedLoadedMsg{feed: f[2]})
+	if totalOf(m) != 0 {
+		t.Error("the round should be over")
+	}
+}
+
+// totalOf is the number of feeds in the running refresh.
+func totalOf(m Model) int {
+	_, total := m.refresh.Progress()
+	return total
+}
+
+// refreshAt is a refresher part-way through a round of total feeds, done of
+// them finished, whose last round ended at at.
+func refreshAt(total, done int, at time.Time) *refresh.Refresher {
+	set := rss.NewFeedSet()
+	r := refresh.New(set)
+	if !at.IsZero() {
+		r.SetAt(at)
+	}
+	var urls []string
+	for i := range total {
+		urls = append(urls, fmt.Sprintf("https://f%d.example", i))
+	}
+	r.Start(urls)
+	for _, u := range urls[:done] {
+		r.Finish(rss.Feed{URL: u}, t0)
+	}
+	return r
 }
 
 // A feed with no title is named by its URL's host, without "www.", wherever
@@ -379,9 +432,14 @@ func TestUntitledFeed_NamedByHost(t *testing.T) {
 		t.Error("palette rows should name the feed by host")
 	}
 	m, _ = keys(m, "esc")
+	m.openReader(rss.PostRef{FeedURL: feeds[1].URL, Key: "Beta-0"}) // the reader header names the feed the same way
+	if hdr := ansi.Strip(strings.Split(m.View().Content, "\n")[0]); !strings.Contains(hdr, "danluu.com") {
+		t.Errorf("reader header %q should name the feed by host", hdr)
+	}
+	m, _ = keys(m, "esc")
 
-	m.refresh = refreshing(1)
-	m, _ = update(m, feedLoadedMsg{feed: rss.Feed{URL: feeds[1].URL, Err: timeoutErr()}, index: 1})
+	m.refresh.Start([]string{sampleURL(1)})
+	m, _ = update(m, feedLoadedMsg{feed: rss.Feed{URL: feeds[1].URL, Err: timeoutErr()}})
 	if got := toastTexts(m); len(got) != 1 || got[0] != "danluu.com: timed out" {
 		t.Errorf("toasts = %q", got)
 	}

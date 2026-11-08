@@ -15,7 +15,7 @@ import (
 var t0 = time.Date(2026, 11, 4, 12, 0, 0, 0, time.UTC)
 
 // sampleFeeds: three feeds of four posts; post j of feed i is j+3*i hours
-// old, so "All posts" interleaves them. Post 0 of each feed is unread.
+// old, so "All posts" interleaves them. Post 0 of each feed is unread: newTestModel marks the rest read.
 func sampleFeeds() rss.Feeds {
 	names := []string{"Alpha", "Beta", "Gamma"}
 	fs := make(rss.Feeds, len(names))
@@ -30,7 +30,6 @@ func sampleFeeds() rss.Feeds {
 				Content:   fmt.Sprintf("<p>%s body %d</p>", name, j),
 				Published: t0.Add(-time.Duration(j*3+i) * time.Hour),
 				Date:      "04/11/2026",
-				Read:      j != 0,
 			}
 		}
 		fs[i] = rss.Feed{Title: name, URL: url, Posts: posts}
@@ -59,6 +58,15 @@ func newTestModel(t *testing.T) Model {
 	m := *NewModel(cfg, testDB(t), nil, nil, nil)
 	m.now = func() time.Time { return t0 }
 	m, _ = update(m, tea.WindowSizeMsg{Width: 120, Height: 40})
+	for _, f := range sampleFeeds() {
+		for j, p := range f.Posts {
+			if j != 0 {
+				if err := m.read.Set(p.Ref(f.URL), true); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+	}
 	m, _ = update(m, feedsRefreshedMsg{feeds: sampleFeeds()})
 	return m
 }
@@ -105,20 +113,11 @@ func quits(msgs []tea.Msg) bool {
 	return ok
 }
 
-// refreshing is a refresh in progress of the feeds at cfg.Urls indexes idx.
-func refreshing(idx ...int) refreshState {
-	r := refreshState{total: len(idx), inFlight: make(map[int]bool, len(idx))}
-	for _, i := range idx {
-		r.inFlight[i] = true
-	}
-	return r
-}
+// sampleURL is the URL of sampleFeeds' i'th feed.
+func sampleURL(i int) string { return sampleFeeds()[i].URL }
 
-// upTo is 0..n-1.
-func upTo(n int) []int {
-	idx := make([]int, n)
-	for i := range idx {
-		idx[i] = i
-	}
-	return idx
+// isRead reports whether post j of the model's i'th feed is read.
+func isRead(m Model, i, j int) bool {
+	f := m.feeds.All()[i]
+	return m.read.IsRead(f.URL, f.Posts[j].Key())
 }

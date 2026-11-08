@@ -36,7 +36,6 @@ type Post struct {
 	Content   string
 	Link      string
 	Date      string
-	Read      bool
 }
 
 type Feed struct {
@@ -61,124 +60,9 @@ func (p Post) Key() string {
 	return p.Title + "\x00" + p.Date
 }
 
-// Loc addresses a post as feeds[Feed].Posts[Post].
-type Loc struct{ Feed, Post int }
-
-// Locate finds the post with key, preferring the copy in the feed with
-// feedURL (posts can be cross-posted); feedURL "" searches every feed.
-func (f Feeds) Locate(feedURL, key string) (Loc, bool) {
-	var fallback *Loc
-	for i, feed := range f {
-		for j, p := range feed.Posts {
-			if p.Key() != key {
-				continue
-			}
-			if feedURL == "" || feed.URL == feedURL {
-				return Loc{Feed: i, Post: j}, true
-			}
-			if fallback == nil {
-				fallback = &Loc{Feed: i, Post: j}
-			}
-		}
-	}
-	if fallback != nil {
-		return *fallback, true
-	}
-	return Loc{}, false
-}
-
-// SetRead sets the read state of the post at loc.
-func (f Feeds) SetRead(loc Loc, read bool) {
-	f[loc.Feed].Posts[loc.Post].Read = read
-}
-
-// WritePostTrackingAt persists the read state of the post at loc.
-func (f Feeds) WritePostTrackingAt(db *storage.DB, loc Loc) error {
-	post := f[loc.Feed].Posts[loc.Post]
-	return db.SavePostReadStatus(f[loc.Feed].URL, post.Key(), post.Read)
-}
-
-// GetTotalUnreads returns the total number of unread posts in a feed
-func (f Feed) GetTotalUnreads() int {
-	total := 0
-	for _, post := range f.Posts {
-		if !post.Read {
-			total++
-		}
-	}
-	return total
-}
-
-// GetTotalUnreads returns the total number of unread posts in all feeds
-func (f Feeds) GetTotalUnreads() int {
-	total := 0
-	for _, feed := range f {
-		total += feed.GetTotalUnreads()
-	}
-	return total
-}
-
 // SortPosts sorts posts by publish date in descending order
 func SortPosts(posts []Post) {
 	slices.SortStableFunc(posts, func(a, b Post) int { return b.Published.Compare(a.Published) })
-}
-
-// ReadAll marks all posts in a feed as read
-func ReadAll(feeds Feeds, feedID int) {
-	for i := range feeds[feedID].Posts {
-		feeds[feedID].Posts[i].Read = true
-	}
-}
-
-// WriteTracking saves the tracking state to the database
-func (f Feeds) WriteTracking(db *storage.DB) error {
-	total := 0
-	for _, feed := range f {
-		total += len(feed.Posts)
-	}
-
-	statuses := make([]storage.PostReadStatus, 0, total)
-	for _, feed := range f {
-		for _, post := range feed.Posts {
-			statuses = append(statuses, storage.PostReadStatus{
-				FeedURL: feed.URL,
-				Key:     post.Key(),
-				Read:    post.Read,
-			})
-		}
-	}
-	return db.SavePostReadStatuses(statuses)
-}
-
-// ReadTracking reads the tracking state from the database
-func (f Feeds) ReadTracking(db *storage.DB) error {
-	statuses, err := db.LoadPostReadStatuses()
-	if err != nil {
-		return err
-	}
-	for i := range f {
-		for j, post := range f[i].Posts {
-			if read, ok := statuses[storage.ReadKey{FeedURL: f[i].URL, Key: post.Key()}]; ok {
-				f[i].Posts[j].Read = read
-			}
-		}
-	}
-	return nil
-}
-
-// ReadTrackingAt reads the tracking state of the feed at index i alone from
-// the database, as ReadTracking would set it.
-func (f Feeds) ReadTrackingAt(db *storage.DB, i int) error {
-	statuses, err := db.LoadFeedReadStatuses(f[i].URL)
-	if err != nil {
-		return err
-	}
-	for j, post := range f[i].Posts {
-		if read, ok := statuses[post.Key()]; ok {
-			f[i].Posts[j].Read = read
-		}
-	}
-	return nil
 }
 
 // Fetcher handles RSS feed fetching. Its fetches share one concurrency
@@ -237,7 +121,7 @@ func (f *Fetcher) FetchURL(url string, preferCache bool) (data []byte, cacheErr,
 func (f *Fetcher) GetContentForURL(url string, preferCache bool) Feed {
 	feed, cacheErr, err := f.loadFeed(url, preferCache)
 	if err != nil {
-		return Feed{Title: hostOf(url), URL: url, Posts: []Post{}, Err: err, CacheErr: cacheErr}
+		return Feed{URL: url, Posts: []Post{}, Err: err, CacheErr: cacheErr}
 	}
 	return Feed{Title: cleanText(feed.Title), URL: url, Posts: f.sortedPosts(feed), CacheErr: cacheErr}
 }
@@ -256,12 +140,16 @@ func cleanText(s string) string {
 	}, s)
 }
 
-// hostOf names a feed by its URL's host (and port) when it has no title.
-func hostOf(raw string) string {
-	if u, err := neturl.Parse(raw); err == nil && u.Host != "" {
-		return u.Host
+// Name is how the feed is shown, everywhere: its title, else its URL's host without
+// "www.", else its URL.
+func (f Feed) Name() string {
+	if strings.TrimSpace(f.Title) != "" {
+		return f.Title
 	}
-	return raw
+	if u, err := neturl.Parse(f.URL); err == nil && u.Host != "" {
+		return strings.TrimPrefix(u.Host, "www.")
+	}
+	return f.URL
 }
 
 // sortedPosts converts a parsed feed's items into posts, newest first.
@@ -341,14 +229,14 @@ func (f *Fetcher) GetCachedContent(urls []string) Feeds {
 func (f *Fetcher) cachedFeed(url string) Feed {
 	data, err := f.db.LoadFeedCache(url)
 	if err == nil && data == nil {
-		return Feed{Title: hostOf(url), URL: url, Posts: []Post{}}
+		return Feed{URL: url, Posts: []Post{}}
 	}
 	var feed *gofeed.Feed
 	if err == nil {
 		feed, err = parseFeed(url, data)
 	}
 	if err != nil {
-		return Feed{Title: hostOf(url), URL: url, Posts: []Post{}, Err: err}
+		return Feed{URL: url, Posts: []Post{}, Err: err}
 	}
 	return Feed{Title: cleanText(feed.Title), URL: url, Posts: f.sortedPosts(feed)}
 }

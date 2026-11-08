@@ -40,8 +40,8 @@ func TestLoadCachedFeeds_NoNetwork(t *testing.T) {
 		if f.URL != cfg.Urls[i] || f.Err != nil || len(f.Posts) != 0 {
 			t.Errorf("feed %d: url %q err %v posts %d", i, f.URL, f.Err, len(f.Posts))
 		}
-		if host := strings.TrimPrefix(srv.URL, "http://"); f.Title != host {
-			t.Errorf("feed %d title %q, want %q", i, f.Title, host)
+		if host := strings.TrimPrefix(srv.URL, "http://"); f.Name() != host || f.Title != "" {
+			t.Errorf("feed %d title %q name %q, want name %q", i, f.Title, f.Name(), host)
 		}
 	}
 	if len(msg.errs) != 0 {

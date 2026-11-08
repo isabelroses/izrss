@@ -30,40 +30,6 @@ func TestPostKey(t *testing.T) {
 	}
 }
 
-func twoFeeds() Feeds {
-	return Feeds{
-		{URL: "a", Posts: []Post{{UUID: "a1"}, {UUID: "shared"}}},
-		{URL: "b", Posts: []Post{{UUID: "b1"}, {UUID: "shared"}}},
-	}
-}
-
-func TestLocate(t *testing.T) {
-	fs := twoFeeds()
-	if loc, ok := fs.Locate("", "b1"); !ok || loc != (Loc{Feed: 1, Post: 0}) {
-		t.Errorf("Locate any b1 = %+v, %v", loc, ok)
-	}
-	if loc, ok := fs.Locate("a", "a1"); !ok || loc != (Loc{Feed: 0, Post: 0}) {
-		t.Errorf("Locate a/a1 = %+v, %v", loc, ok)
-	}
-	if _, ok := fs.Locate("", "missing"); ok {
-		t.Error("missing key found")
-	}
-}
-
-func TestLocate_DuplicateKeysPreferFeed(t *testing.T) {
-	if loc, ok := twoFeeds().Locate("b", "shared"); !ok || loc != (Loc{Feed: 1, Post: 1}) {
-		t.Errorf("should prefer feed b's copy, got %+v", loc)
-	}
-}
-
-func TestSetReadAt(t *testing.T) {
-	fs := twoFeeds()
-	fs.SetRead(Loc{Feed: 1, Post: 1}, true)
-	if !fs[1].Posts[1].Read || fs[0].Posts[1].Read {
-		t.Errorf("only feed b's shared post should be read: %+v", fs)
-	}
-}
-
 func testDB(t *testing.T) *storage.DB {
 	t.Helper()
 	db, err := storage.New(t.TempDir() + "/t.db")
@@ -91,8 +57,8 @@ func TestGetContentForURL_ErrorFields(t *testing.T) {
 	if feed.Err == nil {
 		t.Error("a 500 should set Err")
 	}
-	if !strings.Contains(feed.Title, strings.TrimPrefix(bad.URL, "http://")) {
-		t.Errorf("title should name the feed host, got %q", feed.Title)
+	if feed.Name() != strings.TrimPrefix(bad.URL, "http://") {
+		t.Errorf("a failed feed should be named by its host, got %q", feed.Name())
 	}
 
 	good := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -163,62 +129,6 @@ func TestGetContentForURL_SanitizesTitles(t *testing.T) {
 	}
 }
 
-// reloaded returns fresh copies of feeds with read state loaded from db.
-func reloaded(t *testing.T, db *storage.DB, feeds Feeds) Feeds {
-	t.Helper()
-	fresh := make(Feeds, len(feeds))
-	for i, f := range feeds {
-		fresh[i] = f
-		fresh[i].Posts = make([]Post, len(f.Posts))
-		for j, p := range f.Posts {
-			p.Read = false
-			fresh[i].Posts[j] = p
-		}
-	}
-	if err := fresh.ReadTracking(db); err != nil {
-		t.Fatal(err)
-	}
-	return fresh
-}
-
-func TestTracking_GUIDLessPostsAreIndependent(t *testing.T) {
-	db := testDB(t)
-	feeds := Feeds{{URL: "a", Posts: []Post{
-		{Link: "https://a/1", Title: "one"},
-		{Link: "https://a/2", Title: "two"},
-	}}}
-	feeds.SetRead(Loc{0, 0}, true)
-	if err := feeds.WritePostTrackingAt(db, Loc{0, 0}); err != nil {
-		t.Fatal(err)
-	}
-	got := reloaded(t, db, feeds)
-	if !got[0].Posts[0].Read || got[0].Posts[1].Read {
-		t.Errorf("only post one should be read: %v %v", got[0].Posts[0].Read, got[0].Posts[1].Read)
-	}
-
-	// The bulk write must keep them apart too.
-	if err := got.WriteTracking(db); err != nil {
-		t.Fatal(err)
-	}
-	got = reloaded(t, db, feeds)
-	if !got[0].Posts[0].Read || got[0].Posts[1].Read {
-		t.Errorf("after WriteTracking: %v %v", got[0].Posts[0].Read, got[0].Posts[1].Read)
-	}
-}
-
-func TestTracking_SameGUIDInTwoFeedsIsIndependent(t *testing.T) {
-	db := testDB(t)
-	feeds := twoFeeds()
-	feeds.SetRead(Loc{1, 1}, true) // "shared" in feed b only
-	if err := feeds.WriteTracking(db); err != nil {
-		t.Fatal(err)
-	}
-	got := reloaded(t, db, feeds)
-	if got[0].Posts[1].Read || !got[1].Posts[1].Read {
-		t.Errorf("shared: feed a read %v, feed b read %v; want false, true", got[0].Posts[1].Read, got[1].Posts[1].Read)
-	}
-}
-
 func TestGetCachedContent(t *testing.T) {
 	db := testDB(t)
 	if err := db.SaveFeedCache("https://cached.example/feed", []byte(rssBody)); err != nil {
@@ -228,7 +138,7 @@ func TestGetCachedContent(t *testing.T) {
 	if feeds[0].Title != "T" || len(feeds[0].Posts) != 1 || feeds[0].Err != nil {
 		t.Errorf("cached feed: %+v", feeds[0])
 	}
-	if feeds[1].Title != "cold.example" || len(feeds[1].Posts) != 0 || feeds[1].Err != nil {
+	if feeds[1].Title != "" || feeds[1].Name() != "cold.example" || len(feeds[1].Posts) != 0 || feeds[1].Err != nil {
 		t.Errorf("cold feed: %+v", feeds[1])
 	}
 }
@@ -257,40 +167,5 @@ func TestFetchURL_CapsBody(t *testing.T) {
 	t.Cleanup(exact.Close)
 	if feed := f.GetContentForURL(exact.URL, false); feed.Err != nil || len(feed.Posts) != 1 {
 		t.Errorf("a feed at the cap should load: %v", feed.Err)
-	}
-}
-
-// ReadTrackingAt loads one feed's read state exactly as ReadTracking does,
-// leaving the other feeds alone.
-func TestReadTrackingAt_MatchesReadTracking(t *testing.T) {
-	db := testDB(t)
-	feeds := Feeds{
-		{URL: "a", Posts: []Post{{UUID: "shared"}, {Link: "https://a/1"}, {Title: "t", Date: "d"}}},
-		{URL: "b", Posts: []Post{{UUID: "shared"}, {Link: "https://a/1"}}},
-	}
-	feeds.SetRead(Loc{0, 0}, true)
-	feeds.SetRead(Loc{0, 2}, true)
-	feeds.SetRead(Loc{1, 1}, true)
-	if err := feeds.WriteTracking(db); err != nil {
-		t.Fatal(err)
-	}
-	want := reloaded(t, db, feeds)
-	for i := range feeds {
-		got := reloaded(t, db, feeds)
-		for k := range got {
-			for j := range got[k].Posts {
-				got[k].Posts[j].Read = false
-			}
-		}
-		if err := got.ReadTrackingAt(db, i); err != nil {
-			t.Fatal(err)
-		}
-		for k := range got {
-			for j, p := range got[k].Posts {
-				if w := k == i && want[k].Posts[j].Read; p.Read != w {
-					t.Errorf("feed %d: feeds[%d].Posts[%d].Read = %v, want %v", i, k, j, p.Read, w)
-				}
-			}
-		}
 	}
 }
