@@ -31,11 +31,17 @@ func TestList_HangingIndent(t *testing.T) {
 	}
 }
 
+// Lists are drawn as glamour does: "•" at every depth, nested two cells
+// in, the marker in the text colour.
 func TestList_NestedBullets(t *testing.T) {
-	lines := plain(Render(`<ul><li>a<ul><li>b<ul><li>c</li></ul></li></ul></li></ul>`, opts(40)))
-	want := []string{"• a", "  ◦ b", "    ▪ c"}
-	if strings.Join(lines, "\n") != strings.Join(want, "\n") {
+	doc := Render(`<ul><li>a<ul><li>b<ul><li>c</li></ul></li></ul></li></ul>`, opts(40))
+	want := []string{"• a", "  • b", "    • c"}
+	if lines := plain(doc); strings.Join(lines, "\n") != strings.Join(want, "\n") {
 		t.Errorf("got %q, want %q", lines, want)
+	}
+	marker := style{fg: testTheme().Text}.open() + "• "
+	if !strings.HasPrefix(doc.Lines[0], marker) {
+		t.Errorf("marker should be in the text colour: %q", doc.Lines[0])
 	}
 }
 
@@ -71,10 +77,14 @@ func TestBlockquote_PrefixesEveryLine(t *testing.T) {
 	}
 }
 
-func TestRule_FullWidth(t *testing.T) {
-	lines := plain(Render(`<p>a</p><hr><p>b</p>`, opts(30)))
-	if lines[2] != strings.Repeat("─", 30) {
-		t.Errorf("rule should span the width: %q", lines[2])
+// A rule is glamour's: a short dimmed dash line between blank lines.
+func TestRule_Glamour(t *testing.T) {
+	doc := Render(`<p>a</p><hr><p>b</p>`, opts(30))
+	if lines := plain(doc); len(lines) != 5 || lines[1] != "" || lines[2] != "--------" || lines[3] != "" {
+		t.Errorf("got %q", lines)
+	}
+	if !strings.HasPrefix(doc.Lines[2], style{fg: testTheme().Subtle}.open()) {
+		t.Errorf("rule should be dimmed: %q", doc.Lines[2])
 	}
 }
 
@@ -87,7 +97,7 @@ func TestPre_PreservesSpacesAndTruncates(t *testing.T) {
 	if lines[1] != "    tab" {
 		t.Errorf("tab should expand to 4 spaces: %q", lines[1])
 	}
-	if ansi.StringWidth(doc.Lines[2]) != 20 || !strings.HasSuffix(lines[2], "…") {
+	if ansi.StringWidth(doc.Lines[3]) != 20 || !strings.HasSuffix(lines[2], "…") {
 		t.Errorf("long code line should truncate with …: %q", lines[2])
 	}
 	if len(lines) != 3 {

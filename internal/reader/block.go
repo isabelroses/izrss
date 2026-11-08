@@ -110,14 +110,13 @@ func (r *renderer) walk(n *html.Node) {
 	case tag == "br":
 		r.inline.lineBreak()
 	case isHeading(tag):
-		level := int(tag[1] - '0')
-		r.labelled(n, strings.Repeat("#", level)+" ", style{bold: true, fg: r.o.Theme.Heading})
+		r.heading(n, int(tag[1]-'0'))
 	case tag == "ul" || tag == "ol":
 		r.emit(r.list(n))
 	case tag == "blockquote":
 		r.emit(r.blockquote(n))
 	case tag == "hr":
-		r.emit(block{lines: []string{r.subtle(strings.Repeat("─", r.width))}})
+		r.emit(block{lines: []string{r.subtle(strings.Repeat("-", min(8, r.width)))}})
 	case tag == "pre":
 		r.emit(r.pre(n))
 	case tag == "table":
@@ -154,6 +153,24 @@ func isHeading(tag string) bool {
 	return len(tag) == 2 && tag[0] == 'h' && tag[1] >= '1' && tag[1] <= '6'
 }
 
+// heading renders a heading as glamour's dark style does: h1 as a chip on
+// the heading colour, the rest bold in it behind "##"-style markers.
+func (r *renderer) heading(n *html.Node, level int) {
+	r.flush()
+	st := style{bold: true, fg: r.o.Theme.Heading}
+	if level == 1 {
+		r.inline.openChip(style{bold: true, fg: r.o.Theme.Chip, bg: r.o.Theme.Heading})
+		r.walkChildren(n)
+		r.inline.closeChip()
+	} else {
+		r.inline.push(st)
+		r.inline.text(strings.Repeat("#", level) + " ")
+		r.walkChildren(n)
+		r.inline.pop()
+	}
+	r.flush()
+}
+
 // labelled renders n's children in st as their own paragraph, after a marker
 // in the subtle colour (a heading's "## ", a summary's "▸ ").
 func (r *renderer) labelled(n *html.Node, marker string, st style) {
@@ -182,6 +199,29 @@ func (r *renderer) inlineElement(n *html.Node) {
 		r.walkChildren(n)
 		r.inline.pop()
 	}
+	if n.Data == "a" && st.link != "" && showURL(attr(n, "href"), st.link, textContent(n)) {
+		// As glamour does, the URL follows the link text, dimmed.
+		r.inline.space = true
+		r.inline.push(style{fg: r.o.Theme.Subtle, link: st.link})
+		r.inline.text(st.link)
+		r.inline.pop()
+	}
+}
+
+// showURL reports whether a link's URL should follow its text: not for
+// in-page anchors, links without text, or text that already is the URL.
+func showURL(href, link, text string) bool {
+	text = strings.TrimSpace(text)
+	if text == "" || strings.HasPrefix(strings.TrimSpace(href), "#") {
+		return false
+	}
+	bare := func(s string) string {
+		for _, p := range []string{"https://", "http://", "mailto:"} {
+			s = strings.TrimPrefix(s, p)
+		}
+		return strings.TrimSuffix(strings.TrimPrefix(s, "www."), "/")
+	}
+	return bare(text) != bare(link)
 }
 
 func (r *renderer) inlineStyle(n *html.Node) (style, bool) {
@@ -201,12 +241,10 @@ func (r *renderer) inlineStyle(n *html.Node) (style, bool) {
 		if !safeLink(link) {
 			link = ""
 		}
-		return style{fg: r.o.Theme.Link, link: link}, true
+		return style{fg: r.o.Theme.Link, underline: true, link: link}, true
 	}
 	return style{}, false
 }
-
-var bullets = []string{"•", "◦", "▪"}
 
 // list renders <ul>/<ol> items with markers and hanging indents.
 func (r *renderer) list(n *html.Node) block {
@@ -227,11 +265,11 @@ func (r *renderer) list(n *html.Node) block {
 	if ordered {
 		markerW = len(strconv.Itoa(start+len(items)-1)) + 2 // "10. "
 	}
-	markerStyle := lipgloss.NewStyle().Foreground(r.o.Theme.Subtle)
+	markerStyle := lipgloss.NewStyle().Foreground(r.o.Theme.Text)
 
 	out := block{tight: r.depth > 0}
 	for i, li := range items {
-		marker := bullets[min(r.depth, len(bullets)-1)] + " "
+		marker := "• "
 		if ordered {
 			num := strconv.Itoa(start+i) + ". "
 			marker = strings.Repeat(" ", markerW-len(num)) + num
@@ -278,7 +316,7 @@ func (r *renderer) pre(n *html.Node) block {
 	code = strings.TrimRight(code, "\n")
 	title := codeTitle(n)
 
-	lines := highlight(code, lexer(codeLanguage(n), title), r.o.Theme.CodeTheme)
+	lines := highlight(code, lexer(codeLanguage(n), title, code), r.o.Theme.CodeTheme)
 	if lines == nil {
 		lines = strings.Split(code, "\n")
 	}

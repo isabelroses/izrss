@@ -83,16 +83,16 @@ func TestReader_ViewportHeight(t *testing.T) {
 
 func TestOpenReader_RendersHTML(t *testing.T) {
 	m := newTestModel(t)
-	m.feeds[0].Posts[0].Content = "<h1>Hi</h1><p>there</p>"
+	m.feeds[0].Posts[0].Content = "<h2>Hi</h2><p>there</p>"
 	m.openReader(rss.Loc{Feed: 0, Post: 0})
 	view := ansi.Strip(m.viewport.View())
-	if !strings.Contains(view, "# Hi") || !strings.Contains(view, "there") {
+	if !strings.Contains(view, "## Hi") || !strings.Contains(view, "there") {
 		t.Errorf("reader should render HTML:\n%s", view)
 	}
 }
 
-// The page has a margin each side; the text column inside it is what
-// reader.size sets.
+// The page has a margin each side and the document its own inside it; the
+// text column inside the page margins is what reader.size sets.
 func TestReader_SideMargin(t *testing.T) {
 	m := newTestModel(t)
 	m.cfg.Reader.Size = "full"
@@ -106,15 +106,33 @@ func TestReader_SideMargin(t *testing.T) {
 		if strings.TrimSpace(plain) == "" {
 			continue
 		}
-		if !strings.HasPrefix(plain, "  ") || strings.HasPrefix(plain, "   ") {
-			t.Errorf("line %d should have a two-column left margin: %q", i, plain)
+		if !strings.HasPrefix(plain, "    ") || strings.HasPrefix(plain, "     ") {
+			t.Errorf("line %d should have a four-column left margin: %q", i, plain)
 		}
 		widest = max(widest, len(strings.TrimRight(plain, " ")))
 	}
-	if widest > 118 || widest < 110 {
+	if widest > 116 || widest < 108 {
 		t.Errorf("text should fill the width inside both margins, widest %d", widest)
 	}
 	if got := m.readerOpts().Width; got != 116 {
 		t.Errorf("full size text width = %d, want 116", got)
+	}
+}
+
+// The post sits inside the page margin and the document's own margin, and
+// images are fitted to the text column inside both.
+func TestReader_DocumentMargin(t *testing.T) {
+	m, _ := keys(newTestModel(t), "l", "enter")
+	var body string
+	for _, line := range strings.Split(ansi.Strip(m.View().Content), "\n") {
+		if strings.Contains(line, "Alpha body 0") {
+			body = line
+		}
+	}
+	if want := strings.Repeat(" ", readerMargin+docMargin) + "Alpha body 0"; !strings.HasPrefix(body, want) || strings.HasPrefix(body, want[:len(want)-len("Alpha body 0")]+" ") {
+		t.Errorf("body line %q should start %q", body, want)
+	}
+	if got, want := m.contentWidth(), m.textWidth()-2*docMargin; got != want {
+		t.Errorf("images fit %d columns, want %d", got, want)
 	}
 }

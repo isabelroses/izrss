@@ -125,6 +125,7 @@ func (m *Model) readerOpts() reader.Options {
 	ready, failed := m.readyRows()
 	return reader.Options{
 		Width:      m.textWidth(),
+		Margin:     docMargin,
 		Theme:      readerTheme(m.cfg),
 		BaseURL:    m.post.Link,
 		ShowImages: m.imgOn,
@@ -135,6 +136,10 @@ func (m *Model) readerOpts() reader.Options {
 
 // readerMargin is the blank columns each side of the reader page.
 const readerMargin = 2
+
+// docMargin indents the post inside the page, as glamour's document margin
+// does; the header and hint bar stay at the page margin.
+const docMargin = 2
 
 // pageStyle pads the reader viewport: a blank row under the header and a
 // margin each side, which narrow terminals don't get.
@@ -153,6 +158,12 @@ func (m Model) pageMargin() int { return m.viewport.Style.GetPaddingLeft() }
 // textWidth is the column the open post wraps at, inside the page margins.
 func (m Model) textWidth() int {
 	return readerWidth(m.cfg.Reader.Size, m.viewport.Width()-m.viewport.Style.GetHorizontalFrameSize())
+}
+
+// contentWidth is the column images are fitted to: the text width inside the
+// document margin.
+func (m Model) contentWidth() int {
+	return reader.ContentWidth(reader.Options{Width: m.textWidth(), Margin: docMargin})
 }
 
 // readerWidth is the column the reader wraps at for the configured size.

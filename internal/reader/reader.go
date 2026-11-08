@@ -13,12 +13,14 @@ import (
 // Theme holds the colours the reader draws with.
 type Theme struct {
 	Text, Subtle, Heading, Link, Code, Quote color.Color
-	CodeTheme                                string // chroma style name
+	Chip                                     color.Color // text on the heading colour (h1)
+	CodeTheme                                string      // chroma style name
 }
 
 // Options controls a single render.
 type Options struct {
-	Width      int
+	Width      int // the whole line, Margin included
+	Margin     int // blank columns each side of the text, as glamour's document margin
 	Theme      Theme
 	BaseURL    string              // the post's link; resolves relative href/src
 	ShowImages bool                // draw image blocks (pending or ready)
@@ -60,10 +62,32 @@ func Render(htmlStr string, o Options) Document {
 		return Document{}
 	}
 
-	r := newRenderer(o, max(o.Width, 1))
+	r := newRenderer(o, ContentWidth(o))
 	r.walkChildren(body(root))
 	b := join(r.finish())
+	if m := margin(o); m > 0 {
+		indent := strings.Repeat(" ", m)
+		for i, line := range b.lines {
+			if line != "" {
+				b.lines[i] = indent + line
+			}
+		}
+	}
 	return Document{Lines: b.lines, Images: b.images}
+}
+
+// ContentWidth is the width text wraps at and images must fit in: o.Width
+// less the margin each side.
+func ContentWidth(o Options) int {
+	return max(o.Width-2*margin(o), 1)
+}
+
+// margin is o.Margin, dropped when it would leave too little room for text.
+func margin(o Options) int {
+	if o.Margin <= 0 || o.Width-2*o.Margin < 12 {
+		return 0
+	}
+	return o.Margin
 }
 
 // body returns the <body> element, or n itself if there is none.

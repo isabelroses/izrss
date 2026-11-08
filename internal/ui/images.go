@@ -75,7 +75,7 @@ func (m *Model) loadImages(doc reader.Document) tea.Cmd {
 	}
 	var cmds []tea.Cmd
 	fetcher, post, cell := m.imgFetcher, m.imgPost, m.cell
-	maxCols, maxRows := m.textWidth(), m.imageMaxRows()
+	maxCols, maxRows := m.contentWidth(), m.imageMaxRows()
 	for _, img := range doc.Images {
 		if _, known := m.imgs[img.Src]; known {
 			continue
@@ -161,7 +161,7 @@ func (m *Model) rerenderReader() {
 // in the terminal without re-sending pixels.
 func (m *Model) resizeImages() tea.Cmd {
 	var b strings.Builder
-	width := m.textWidth()
+	width := m.contentWidth()
 	for _, pi := range m.imgs {
 		if !pi.uploaded {
 			continue

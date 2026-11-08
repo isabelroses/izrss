@@ -14,8 +14,9 @@ type tableRow struct {
 	header bool
 }
 
-// table renders a simple grid with lipgloss/table: natural column widths,
-// shrunk and truncated only when the table would overflow.
+// table renders a simple grid with lipgloss/table, as glamour does: inner
+// borders only, natural column widths, shrunk and truncated only when the
+// table would overflow.
 func (r *renderer) table(n *html.Node) block {
 	rows := tableRows(n)
 	cols := 0
@@ -41,13 +42,7 @@ func (r *renderer) table(n *html.Node) block {
 				if row == table.HeaderRow {
 					st = st.Bold(true)
 				}
-				if col > 0 {
-					st = st.PaddingLeft(1)
-				}
-				if col < cols-1 {
-					st = st.PaddingRight(1)
-				}
-				return st
+				return st.Padding(0, 1) // as glamour pads every cell
 			})
 		data := rows
 		if rows[0].header {

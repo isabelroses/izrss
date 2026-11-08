@@ -1,4 +1,4 @@
-Name    │ Kind    │ Notes            
-────────┼─────────┼──────────────────
-izrss   │ reader  │ terminal RSS     
-glamour │ library │ markdown renderer
+   Name    │ Kind    │ Notes             
+  ─────────┼─────────┼───────────────────
+   izrss   │ reader  │ terminal RSS      
+   glamour │ library │ markdown renderer 

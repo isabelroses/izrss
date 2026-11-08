@@ -100,10 +100,16 @@ func (in *inline) addWord(word string, st style) {
 }
 
 // writeSpace emits the pending collapsed space in st, unless the paragraph
-// is empty or the space would start a line.
+// is empty or the space would start a line. A space between differently
+// styled runs is drawn plain, so an underline or link starts at its text.
 func (in *inline) writeSpace(st style) {
-	if in.space && len(in.pieces) > 0 && in.pieces[len(in.pieces)-1].text != "\n" {
-		in.pieces = append(in.pieces, piece{text: " ", st: st})
+	if in.space && len(in.pieces) > 0 {
+		if prev := in.pieces[len(in.pieces)-1]; prev.text != "\n" {
+			if prev.st != st {
+				st = style{fg: in.theme.Text}
+			}
+			in.pieces = append(in.pieces, piece{text: " ", st: st})
+		}
 	}
 	in.space = false
 }
@@ -196,13 +202,22 @@ func (in *inline) styled() string {
 // wrap wraps the paragraph to width with lipgloss.Wrap, which re-applies
 // styles and links on every line so each line is self-contained.
 func (in *inline) wrap(width int) []string {
-	s := in.styled()
-	if strings.TrimSpace(ansi.Strip(s)) == "" {
+	if in.blank() {
 		return nil
 	}
-	lines := strings.Split(lipgloss.Wrap(s, width, ""), "\n")
+	lines := strings.Split(lipgloss.Wrap(in.styled(), width, ""), "\n")
 	for len(lines) > 0 && strings.TrimSpace(ansi.Strip(lines[len(lines)-1])) == "" {
 		lines = lines[:len(lines)-1]
 	}
 	return lines
+}
+
+// blank reports whether the paragraph has no visible text.
+func (in *inline) blank() bool {
+	for _, p := range in.pieces {
+		if strings.TrimSpace(p.text) != "" {
+			return false
+		}
+	}
+	return true
 }

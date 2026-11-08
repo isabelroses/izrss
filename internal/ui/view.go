@@ -71,15 +71,22 @@ func (m Model) readerView() string {
 const statusMargin = 1
 
 // statusLine shows key hints on the left and the feed status on the right,
-// margin cells in from each edge.
+// margin cells (at least one) in from each edge, on a strip of the surface
+// colour across the full width.
 func (m Model) statusLine(margin int) string {
+	margin = max(margin, 1)
 	status := statusText(m.unread, m.refresh, m.now())
 	h := m.help
 	h.SetWidth(max(m.width-2*margin-ansi.StringWidth(status)-2, 0))
 	left := h.ShortHelpView(bindings.shortHelp(m.screen, m.focus))
 	pad := strings.Repeat(" ", margin)
 	gap := strings.Repeat(" ", max(m.width-2*margin-ansi.StringWidth(left)-ansi.StringWidth(status), 0))
-	return ansi.Truncate(pad+left+gap+m.styles.Hint.Render(status)+pad, m.width, "")
+	line := ansi.Truncate(pad+left+gap+m.styles.Hint.Render(status)+pad, m.width, "")
+	line += strings.Repeat(" ", max(m.width-ansi.StringWidth(line), 0))
+	// Each styled run ends in a reset, which would clear the strip too:
+	// re-open it after every one.
+	bar := m.styles.Bar
+	return bar + strings.ReplaceAll(line, ansi.ResetStyle, ansi.ResetStyle+bar) + ansi.ResetStyle
 }
 
 // placeholderLines fills height lines with msg on the first one.

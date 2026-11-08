@@ -19,6 +19,7 @@ func testTheme() Theme {
 		Text:      lipgloss.Color("#cdd6f4"),
 		Subtle:    lipgloss.Color("#a6adc8"),
 		Heading:   lipgloss.Color("#74c7ec"),
+		Chip:      lipgloss.Color("#1e1e2e"),
 		Link:      lipgloss.Color("#74c7ec"),
 		Code:      lipgloss.Color("#a6adc8"),
 		Quote:     lipgloss.Color("#a6adc8"),
@@ -51,7 +52,9 @@ func TestGolden(t *testing.T) {
 	for name, src := range fixtures(t) {
 		for _, width := range []int{40, 80} {
 			t.Run(name+"/"+itoa(width), func(t *testing.T) {
-				got := ansi.Strip(Render(src, opts(width)).String())
+				o := opts(width)
+				o.Margin = 2 // as the reader screen draws posts
+				got := ansi.Strip(Render(src, o).String())
 				path := filepath.Join("testdata", name+"."+itoa(width)+".golden")
 				if *update {
 					if err := os.WriteFile(path, []byte(got), 0o644); err != nil {
@@ -90,8 +93,8 @@ func TestLinks_EmitHyperlink(t *testing.T) {
 	if !strings.Contains(out, ansi.SetHyperlink("https://x.dev/a")) {
 		t.Errorf("expected OSC 8 hyperlink to https://x.dev/a in %q", out)
 	}
-	if visible := ansi.Strip(out); strings.Contains(visible, "https://x.dev/a") || !strings.Contains(visible, "read") {
-		t.Errorf("visible text should be the link text only, got %q", visible)
+	if visible := ansi.Strip(out); visible != "read https://x.dev/a" {
+		t.Errorf("visible text should be the link text then its URL, got %q", visible)
 	}
 }
 

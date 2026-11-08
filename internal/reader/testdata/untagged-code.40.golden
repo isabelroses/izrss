@@ -1,0 +1,64 @@
+  ## Packaging a tool with flakes
+
+  None of the code blocks below say
+  what language they are in, as is
+  common with static site generators
+  that drop the class.
+
+                                      
+    { pkgs, lib, ... }:               
+    {                                 
+      environment.systemPackages = …  
+      services.openssh.enable = tru…  
+      programs.fish.enable = lib.mk…  
+    }                                 
+                                      
+
+  Build it with:
+
+                                      
+    nix build .#default --no-link     
+                                      
+
+  The package itself:
+
+                                      
+    {                                 
+      lib,                            
+      buildGoModule,                  
+    }:                                
+    buildGoModule {                   
+      pname = "izrss";                
+      version = "0.4.0";              
+      src = ./.;                      
+      vendorHash = lib.fakeHash;      
+      ldflags = [ "-s" "-w" ];        
+      meta.mainProgram = "izrss";     
+    }                                 
+                                      
+
+  A shell script that wraps it:
+
+                                      
+    #!/usr/bin/env bash               
+    set -euo pipefail                 
+    for f in "$@"; do                 
+      echo "building $f"              
+    done                              
+                                      
+
+  And the secrets file, which is YAML:
+
+                                      
+    keys:                             
+      - &isabel age1qyqszqgpqyqszqg…  
+    creation_rules:                   
+      - path_regex: secrets/[^/]+\.…  
+                                      
+
+  Plain output is left alone:
+
+                                      
+    hello world, this is just some …  
+    from a command that ran           
+                                      

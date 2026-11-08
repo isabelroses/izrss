@@ -1,0 +1,43 @@
+<h2>Packaging a tool with flakes</h2>
+<p>None of the code blocks below say what language they are in, as is common with static site generators that drop the class.</p>
+<pre><code>{ pkgs, lib, ... }:
+{
+  environment.systemPackages = with pkgs; [ git vim ];
+  services.openssh.enable = true;
+  programs.fish.enable = lib.mkDefault true;
+}
+</code></pre>
+<p>Build it with:</p>
+<pre><code>nix build .#default --no-link
+</code></pre>
+<p>The package itself:</p>
+<pre><code>{
+  lib,
+  buildGoModule,
+}:
+buildGoModule {
+  pname = "izrss";
+  version = "0.4.0";
+  src = ./.;
+  vendorHash = lib.fakeHash;
+  ldflags = [ "-s" "-w" ];
+  meta.mainProgram = "izrss";
+}
+</code></pre>
+<p>A shell script that wraps it:</p>
+<pre><code>#!/usr/bin/env bash
+set -euo pipefail
+for f in "$@"; do
+  echo "building $f"
+done
+</code></pre>
+<p>And the secrets file, which is YAML:</p>
+<pre><code>keys:
+  - &amp;isabel age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs
+creation_rules:
+  - path_regex: secrets/[^/]+\.yaml$
+</code></pre>
+<p>Plain output is left alone:</p>
+<pre><code>hello world, this is just some output
+from a command that ran
+</code></pre>

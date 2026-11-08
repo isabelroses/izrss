@@ -386,3 +386,35 @@ func TestUntitledFeed_NamedByHost(t *testing.T) {
 		t.Errorf("toasts = %q", got)
 	}
 }
+
+// The hint bar is a strip on the surface colour across the whole width, on
+// both screens, with the keys still in the accent colour.
+func TestHintBar_Strip(t *testing.T) {
+	m := newTestModel(t)
+	bg := ansi.Style{}.BackgroundColor(hex(m.cfg.Colors.Borders)).String()
+	key := ansi.Style{}.ForegroundColor(hex(m.cfg.Colors.Accent)).String()
+	for _, screen := range []string{"main", "reader"} {
+		if screen == "reader" {
+			m, _ = keys(m, "l", "enter")
+		}
+		lines := strings.Split(m.View().Content, "\n")
+		bar := lines[len(lines)-1]
+		if w := ansi.StringWidth(bar); w != m.width {
+			t.Errorf("%s: bar is %d wide, want %d", screen, w, m.width)
+		}
+		if !strings.HasPrefix(bar, bg) || !strings.HasPrefix(ansi.Strip(bar), " ") {
+			t.Errorf("%s: bar should start on the background with padding: %q", screen, bar)
+		}
+		if !strings.Contains(bar, key) {
+			t.Errorf("%s: keys should keep the accent colour: %q", screen, bar)
+		}
+		// Every reset before the end must re-open the background.
+		body := strings.TrimSuffix(bar, ansi.ResetStyle)
+		for i := strings.Index(body, ansi.ResetStyle); i >= 0; i = strings.Index(body, ansi.ResetStyle) {
+			body = body[i+len(ansi.ResetStyle):]
+			if !strings.HasPrefix(body, bg) {
+				t.Fatalf("%s: bar drops the background after a reset: %q", screen, bar)
+			}
+		}
+	}
+}
