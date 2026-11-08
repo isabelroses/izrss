@@ -1,0 +1,120 @@
+package ui
+
+import (
+	"strings"
+	"testing"
+
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
+
+	"github.com/isabelroses/izrss/internal/rss"
+)
+
+func TestReader_HeaderLine(t *testing.T) {
+	m, _ := keys(newTestModel(t), "l", "enter")
+	if m.screen != screenReader {
+		t.Fatal("enter on a post should open the reader")
+	}
+	lines := strings.Split(m.View().Content, "\n")
+	head := ansi.Strip(lines[0])
+	for _, want := range []string{"Alpha post 0", "Alpha", "04/11/2026", "%"} {
+		if !strings.Contains(head, want) {
+			t.Errorf("header %q lacks %q", head, want)
+		}
+	}
+	if ansi.StringWidth(lines[0]) > 120 || len(lines) != 40 {
+		t.Errorf("reader view: %d lines, header %d wide", len(lines), ansi.StringWidth(lines[0]))
+	}
+	if !strings.Contains(ansi.Strip(m.View().Content), "Alpha body 0") {
+		t.Error("reader should show the post body")
+	}
+}
+
+func TestReader_BackPreservesSelection(t *testing.T) {
+	for _, back := range []string{"esc", "q", "h", "left"} {
+		m, _ := keys(newTestModel(t), "j", "l", "j", "j", "j") // Beta, post 3
+		m, _ = keys(m, "enter")
+		m, msgs := keys(m, back)
+		if quits(msgs) {
+			t.Fatalf("%s in the reader must not quit", back)
+		}
+		if m.screen != screenMain || m.focus != panePosts || selectedTitle(m.feedList) != "Beta" || selectedTitle(m.postList) != "Beta post 3" {
+			t.Errorf("%s: screen %v focus %v feed %q post %q", back, m.screen, m.focus, selectedTitle(m.feedList), selectedTitle(m.postList))
+		}
+	}
+}
+
+func TestReader_ToggleReadStays(t *testing.T) {
+	m, _ := keys(newTestModel(t), "l", "enter")
+	m.viewport.SetHeight(1) // keep the threshold from auto-marking
+	before := m.feeds[0].Posts[0].Read
+	m, _ = keys(m, "x")
+	if m.screen != screenReader || m.feeds[0].Posts[0].Read == before {
+		t.Errorf("x should toggle read and stay: screen %v read %v", m.screen, m.feeds[0].Posts[0].Read)
+	}
+}
+
+func TestReader_ThresholdMarksByKey(t *testing.T) {
+	m, _ := keys(newTestModel(t), "k", "l", "j", "j") // All posts row 2 = Gamma post 0
+	if selectedTitle(m.postList) != "Gamma post 0" {
+		t.Fatalf("selected %q", selectedTitle(m.postList))
+	}
+	m, _ = keys(m, "enter") // short post: fully visible, past any threshold
+	m, _ = update(m, tea.KeyPressMsg{Code: tea.KeyDown})
+	if !m.feeds[2].Posts[0].Read {
+		t.Error("Gamma post 0 should be marked read")
+	}
+	if m.feeds[0].Posts[0].Read || m.feeds[1].Posts[0].Read {
+		t.Error("other feeds' posts were marked read (index bug)")
+	}
+}
+
+func TestReader_ViewportHeight(t *testing.T) {
+	m, _ := keys(newTestModel(t), "l", "enter")
+	if h := m.viewport.Height(); h != 38 {
+		t.Errorf("viewport height %d, want 38", h)
+	}
+	m, _ = update(m, tea.WindowSizeMsg{Width: 100, Height: 30})
+	m, _ = keys(m, "esc", "enter")
+	if h := m.viewport.Height(); h != 28 {
+		t.Errorf("after resize and reopen: %d, want 28", h)
+	}
+}
+
+func TestOpenReader_RendersHTML(t *testing.T) {
+	m := newTestModel(t)
+	m.feeds[0].Posts[0].Content = "<h1>Hi</h1><p>there</p>"
+	m.openReader(rss.Loc{Feed: 0, Post: 0})
+	view := ansi.Strip(m.viewport.View())
+	if !strings.Contains(view, "# Hi") || !strings.Contains(view, "there") {
+		t.Errorf("reader should render HTML:\n%s", view)
+	}
+}
+
+// The page has a margin each side; the text column inside it is what
+// reader.size sets.
+func TestReader_SideMargin(t *testing.T) {
+	m := newTestModel(t)
+	m.cfg.Reader.Size = "full"
+	long := strings.Repeat("word ", 60)
+	m.feeds[0].Posts[0].Content = "<p>" + long + "</p>"
+	m, _ = keys(m, "l", "enter")
+	body := strings.Split(m.View().Content, "\n")[1:39]
+	widest := 0
+	for i, line := range body {
+		plain := ansi.Strip(line)
+		if strings.TrimSpace(plain) == "" {
+			continue
+		}
+		if !strings.HasPrefix(plain, "  ") || strings.HasPrefix(plain, "   ") {
+			t.Errorf("line %d should have a two-column left margin: %q", i, plain)
+		}
+		widest = max(widest, len(strings.TrimRight(plain, " ")))
+	}
+	if widest > 118 || widest < 110 {
+		t.Errorf("text should fill the width inside both margins, widest %d", widest)
+	}
+	if got := m.readerOpts().Width; got != 116 {
+		t.Errorf("full size text width = %d, want 116", got)
+	}
+}

@@ -19,8 +19,8 @@ func makeStatuses(n int) []PostReadStatus {
 	statuses := make([]PostReadStatus, n)
 	for i := range statuses {
 		statuses[i] = PostReadStatus{
-			UUID:    fmt.Sprintf("uuid-%d", i),
 			FeedURL: fmt.Sprintf("https://example.com/feed-%d", i%20),
+			Key:     fmt.Sprintf("uuid-%d", i),
 			Read:    i%2 == 0,
 		}
 	}
@@ -57,7 +57,7 @@ func BenchmarkWriteOne(b *testing.B) {
 			i := 0
 			for b.Loop() {
 				s := statuses[i%n]
-				if err := db.SavePostReadStatus(s.UUID, s.FeedURL, !s.Read); err != nil {
+				if err := db.SavePostReadStatus(s.FeedURL, s.Key, !s.Read); err != nil {
 					b.Fatal(err)
 				}
 				i++

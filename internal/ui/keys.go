@@ -1,307 +1,96 @@
 package ui
 
 import (
-	"log"
-	"os/exec"
-	"runtime"
-	"strings"
-
+	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
-	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-
-	"github.com/isabelroses/izrss/internal/rss"
 )
 
+// keyMap is every key binding. The same bindings drive key handling, the hint
+// line and the help overlay, so they can't drift apart.
 type keyMap struct {
-	Up         key.Binding
-	Down       key.Binding
-	JumpUp     key.Binding
-	JumpDown   key.Binding
-	Back       key.Binding
-	Help       key.Binding
-	Quit       key.Binding
-	Open       key.Binding
-	Refresh    key.Binding
-	RefreshAll key.Binding
-	Search     key.Binding
-	ToggleRead key.Binding
-	ReadAll    key.Binding
+	// Movement, matched individually but shown as one hint each.
+	Up, Down, JumpUp, JumpDown, Left, Right, Tab key.Binding
+	Move, Jump, Pane                             key.Binding // help only
+
+	Open, Toggle, MarkFeed, Refresh, RefreshAll, Browser key.Binding
+	Search, Help, Quit                                   key.Binding
+
+	// Reader.
+	Back, ForceQuit key.Binding
+	Scroll, Page    key.Binding // help only: the viewport handles these
 }
 
-func (k keyMap) ShortHelp(m Model) []key.Binding {
-	if m.context.curr == "reader" {
-		return []key.Binding{k.Open, k.ToggleRead, k.Quit}
-	}
-	return []key.Binding{k.Help, k.Quit}
+func bind(keys []string, k, desc string) key.Binding {
+	return key.NewBinding(key.WithKeys(keys...), key.WithHelp(k, desc))
 }
 
-func (k keyMap) FullHelp(m Model) [][]key.Binding {
-	switch m.context.curr {
-	case "home":
-		return [][]key.Binding{
-			{k.Up, k.Down},
-			{k.JumpUp, k.JumpDown},
-			{k.Back, k.Open},
-			{k.Search, k.ReadAll},
-			{k.Refresh, k.RefreshAll},
-			{k.Help, k.Quit},
-		}
-	case "content":
-		return [][]key.Binding{
-			{k.Up, k.Down},
-			{k.JumpUp, k.JumpDown},
-			{k.Back, k.Open},
-			{k.Search},
-			{k.Refresh, k.RefreshAll},
-			{k.ToggleRead, k.ReadAll},
-			{k.Help, k.Quit},
-		}
-	case "mixed":
-		return [][]key.Binding{
-			{k.Up, k.Down},
-			{k.JumpUp, k.JumpDown},
-			{k.Back, k.Open},
-			{k.Search, k.ToggleRead},
-			{k.Help, k.Quit},
-		}
-	default:
-		return [][]key.Binding{}
-	}
+var bindings = keyMap{
+	Up:       key.NewBinding(key.WithKeys("up", "k")),
+	Down:     key.NewBinding(key.WithKeys("down", "j")),
+	JumpUp:   key.NewBinding(key.WithKeys("K", "shift+up")),
+	JumpDown: key.NewBinding(key.WithKeys("J", "shift+down")),
+	Left:     key.NewBinding(key.WithKeys("left", "h")),
+	Right:    key.NewBinding(key.WithKeys("right", "l")),
+	Tab:      key.NewBinding(key.WithKeys("tab")),
+	Move:     bind([]string{"up", "down", "k", "j"}, "↑↓", "move"),
+	Jump:     bind([]string{"K", "J", "shift+up", "shift+down"}, "J K", "jump 5"),
+	Pane:     bind([]string{"left", "right", "h", "l", "tab"}, "←→", "pane"),
+
+	Open:       bind([]string{"enter"}, "⏎", "open"),
+	Toggle:     bind([]string{"x"}, "x", "toggle read"),
+	MarkFeed:   bind([]string{"X"}, "X", "mark feed read"),
+	Refresh:    bind([]string{"r"}, "r", "refresh feed"),
+	RefreshAll: bind([]string{"R"}, "R", "refresh all"),
+	Browser:    bind([]string{"o"}, "o", "open in browser"),
+	Search:     bind([]string{"/"}, "/", "search"),
+	Help:       bind([]string{"?"}, "?", "help"),
+	Quit:       bind([]string{"q", "ctrl+c"}, "q", "quit"),
+
+	Back:      bind([]string{"esc", "q", "h", "left"}, "esc", "back"),
+	ForceQuit: bind([]string{"ctrl+c"}, "ctrl+c", "quit"),
+	Scroll:    bind([]string{"up", "down", "k", "j"}, "↑↓", "scroll"),
+	Page:      bind([]string{"pgup", "pgdown", "space"}, "pgup pgdn", "page"),
 }
 
-func (m Model) handleKeys(msg tea.KeyPressMsg) (Model, tea.Cmd) {
-	switch m.context.curr {
-	case "home":
-		switch {
-		case key.Matches(msg, m.keys.Open):
-			m.loadContent(m.table.Cursor())
-			m.table.SetCursor(0)
-			m.viewport.SetYOffset(0)
-
-		case key.Matches(msg, m.keys.Refresh):
-			id := m.table.Cursor()
-			if id < 0 || id >= len(m.context.feeds) {
-				return m, nil
-			}
-			return m, m.refreshFeed(id, m.context.feeds[id].URL)
-
-		case key.Matches(msg, m.keys.RefreshAll):
-			return m, m.refreshAll()
-
-		case key.Matches(msg, m.keys.ReadAll):
-			id := m.table.Cursor()
-			if id < 0 || id >= len(m.context.feeds) {
-				return m, nil
-			}
-			rss.ReadAll(m.context.feeds, id)
-			m.loadHome()
-			if err := m.context.feeds.WriteTracking(m.db); err != nil {
-				log.Printf("error writing tracking: %v", err)
-			}
-		}
-
-	case "content":
-		switch {
-		case key.Matches(msg, m.keys.Refresh):
-			return m, m.refreshFeed(m.context.feed.ID, m.context.feed.URL)
-
-		case key.Matches(msg, m.keys.Back):
-			m.loadHome()
-			m.table.SetCursor(m.context.feed.ID)
-			m.viewport.SetYOffset(0)
-
-		case key.Matches(msg, m.keys.Open):
-			m.loadReader()
-
-		case key.Matches(msg, m.keys.ToggleRead):
-			post := m.table.Cursor()
-			if post < 0 || post >= len(m.context.feeds[m.context.feed.ID].Posts) {
-				return m, nil
-			}
-			rss.ToggleRead(m.context.feeds, m.context.feed.ID, post)
-			m.loadContent(m.context.feed.ID)
-			if err := m.context.feeds.WritePostTracking(m.db, m.context.feed.ID, post); err != nil {
-				log.Printf("error writing tracking: %v", err)
-			}
-
-		case key.Matches(msg, m.keys.ReadAll):
-			rss.ReadAll(m.context.feeds, m.context.feed.ID)
-			m.loadContent(m.context.feed.ID)
-			if err := m.context.feeds.WriteTracking(m.db); err != nil {
-				log.Printf("error writing tracking: %v", err)
-			}
-		}
-
-	case "mixed":
-		switch {
-		case key.Matches(msg, m.keys.Open):
-			m.loadReader()
-
-		case key.Matches(msg, m.keys.ToggleRead):
-			post := m.table.Cursor()
-			if post < 0 || post >= len(m.context.feeds[m.context.feed.ID].Posts) {
-				return m, nil
-			}
-			rss.ToggleRead(m.context.feeds, m.context.feed.ID, post)
-			m.loadMixed()
-			if err := m.context.feeds.WritePostTracking(m.db, m.context.feed.ID, post); err != nil {
-				log.Printf("error writing tracking: %v", err)
-			}
-
-		case key.Matches(msg, m.keys.ReadAll):
-			rss.ReadAll(m.context.feeds, m.context.feed.ID)
-			m.loadMixed()
-			if err := m.context.feeds.WriteTracking(m.db); err != nil {
-				log.Printf("error writing tracking: %v", err)
-			}
-		}
-
-	case "reader":
-		switch {
-		case key.Matches(msg, m.keys.Back):
-			if m.context.prev == "mixed" {
-				m.loadMixed()
-			} else {
-				m.loadContent(m.context.feed.ID)
-			}
-			m.table.SetCursor(m.context.post.ID)
-			m.viewport.SetYOffset(0)
-
-		case key.Matches(msg, m.keys.Open):
-			if err := openURL(m.context.post.Link); err != nil {
-				log.Printf("error opening URL: %v", err)
-			}
-
-		case key.Matches(msg, m.keys.ToggleRead):
-			rss.ToggleRead(m.context.feeds, m.context.feed.ID, m.context.post.ID)
-			m.loadContent(m.context.feed.ID)
-			if err := m.context.feeds.WritePostTracking(m.db, m.context.feed.ID, m.context.post.ID); err != nil {
-				log.Printf("error writing tracking: %v", err)
-			}
-		}
-
-	case "search":
-		switch msg.String() {
-		case "enter":
-			m.loadSearchValues()
-
-		case "ctrl+c", "esc", "/":
-			m.loadContent(m.table.Cursor())
-			m.table.Focus()
-			m.filter.Blur()
-		}
-	}
-
+// shortHelp is the hint line for a screen and focus.
+func (k keyMap) shortHelp(s screen, focus pane) []key.Binding {
 	switch {
-	case key.Matches(msg, m.keys.JumpUp):
-		m.table.MoveUp(5)
-	case key.Matches(msg, m.keys.JumpDown):
-		m.table.MoveDown(5)
-
-	case key.Matches(msg, m.keys.Search):
-		if m.context.curr != "search" {
-			m.loadSearch()
-		}
-
-	case key.Matches(msg, m.keys.Help):
-		m.help.ShowAll = !m.help.ShowAll
-		m.table.SetHeight(m.viewport.Height() - lipgloss.Height(m.help.View(m.keys, m)))
-
-	case key.Matches(msg, m.keys.Quit):
-		if err := m.context.feeds.WriteTracking(m.db); err != nil {
-			log.Printf("error writing tracking: %v", err)
-		}
-		return m, tea.Quit
+	case s == screenReader:
+		return []key.Binding{k.Scroll, k.Back, k.Browser, k.Toggle, k.Help}
+	case focus == panePosts:
+		return []key.Binding{k.Move, k.Pane, k.Open, k.Toggle, k.Search, k.Help}
 	}
-
-	return m, nil
+	return []key.Binding{k.Move, k.Pane, k.Open, k.Search, k.Help}
 }
 
-var defaultKeyMap = keyMap{
-	Up: key.NewBinding(
-		key.WithKeys("up", "k"),
-		key.WithHelp("↑/k", "move up"),
-	),
-	Down: key.NewBinding(
-		key.WithKeys("down", "j"),
-		key.WithHelp("↓/j", "move down"),
-	),
-	JumpUp: key.NewBinding(
-		key.WithKeys("shift+up", "K"),
-		key.WithHelp("↑/k", "jump move up"),
-	),
-	JumpDown: key.NewBinding(
-		key.WithKeys("shift+down", "J"),
-		key.WithHelp("↓/j", "jump move down"),
-	),
-	Back: key.NewBinding(
-		key.WithKeys("left", "h", "shift+tab"),
-		key.WithHelp("←/h", "back"),
-	),
-	Open: key.NewBinding(
-		key.WithKeys("enter", "o", "right", "l", "tab"),
-		key.WithHelp("o/enter", "open"),
-	),
-	Help: key.NewBinding(
-		key.WithKeys("?"),
-		key.WithHelp("?", "toggle help"),
-	),
-	Quit: key.NewBinding(
-		key.WithKeys("q", "esc", "ctrl+c"),
-		key.WithHelp("q/esc", "quit"),
-	),
-	Refresh: key.NewBinding(
-		key.WithKeys("r"),
-		key.WithHelp("r", "refresh"),
-	),
-	RefreshAll: key.NewBinding(
-		key.WithKeys("R"),
-		key.WithHelp("R", "refresh all"),
-	),
-	Search: key.NewBinding(
-		key.WithKeys("/"),
-		key.WithHelp("/", "search"),
-	),
-	ToggleRead: key.NewBinding(
-		key.WithKeys("x"),
-		key.WithHelp("x", "toggle read"),
-	),
-	ReadAll: key.NewBinding(
-		key.WithKeys("X"),
-		key.WithHelp("X", "mark all as read"),
-	),
-}
-
-// openURL opens the specified URL in the default browser
-func openURL(url string) error {
-	var cmd string
-	var args []string
-
-	switch runtime.GOOS {
-	case "windows":
-		cmd = "cmd"
-		args = []string{"/c", "start", url}
-	case "darwin":
-		cmd = "open"
-		args = []string{url}
-	default:
-		if isWSL() {
-			cmd = "cmd.exe"
-			args = []string{"/c", "start", url}
-		} else {
-			cmd = "xdg-open"
-			args = []string{url}
+// fullHelp is the help overlay for a screen, in columns.
+func (k keyMap) fullHelp(s screen) [][]key.Binding {
+	if s == screenReader {
+		return [][]key.Binding{
+			{k.Scroll, k.Page, k.Back},
+			{k.Toggle, k.Browser, k.Search, k.ForceQuit},
 		}
 	}
-
-	return exec.Command(cmd, args...).Start()
+	return [][]key.Binding{
+		{k.Move, k.Jump, k.Pane, k.Open, k.Search, k.Quit},
+		{k.Toggle, k.MarkFeed, k.Refresh, k.RefreshAll, k.Browser},
+	}
 }
 
-func isWSL() bool {
-	releaseData, err := exec.Command("uname", "-r").Output()
-	if err != nil {
-		return false
+// newHelp styles bubbles' help renderer with the palette.
+func newHelp(st *Styles) help.Model {
+	h := help.New()
+	h.ShortSeparator = "  "
+	h.FullSeparator = "    "
+	h.Styles = help.Styles{
+		ShortKey:       st.Key,
+		ShortDesc:      st.Hint,
+		ShortSeparator: st.Hint,
+		Ellipsis:       st.Hint,
+		FullKey:        st.Key,
+		FullDesc:       st.Hint,
+		FullSeparator:  lipgloss.NewStyle(),
 	}
-	return strings.Contains(strings.ToLower(string(releaseData)), "microsoft")
+	return h
 }

@@ -1,0 +1,174 @@
+<h1>Building a terminal RSS reader</h1>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<ul><li>Fast startup with cached feeds</li><li>Read tracking stored in SQLite<ul><li>per-post status</li><li>bulk writes in one transaction</li></ul></li><li>Inline images in supporting terminals</li></ul>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<h2>Code</h2>
+<pre><code class="language-go">package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func main() {
+	if len(os.Args) &lt; 2 {
+		fmt.Println("usage: izrss &lt;feed&gt;")
+		os.Exit(1)
+	}
+	for i, arg := range os.Args[1:] {
+		fmt.Printf("%d: %s\n", i, arg)
+	}
+}
+</code></pre>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<p><img src="/images/screenshot-1.png" alt="the home view"></p>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<blockquote><p>The best interface is the one that gets out of your way and lets you read.</p></blockquote>
+<table><thead><tr><th>Terminal</th><th>Images</th><th>Notes</th></tr></thead><tbody><tr><td>Ghostty</td><td>yes</td><td>unicode placeholders</td></tr><tr><td>kitty</td><td>yes</td><td>the original protocol</td></tr><tr><td>Alacritty</td><td>no</td><td>alt text fallback</td></tr></tbody></table>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<pre><code class="language-go">package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func main() {
+	if len(os.Args) &lt; 2 {
+		fmt.Println("usage: izrss &lt;feed&gt;")
+		os.Exit(1)
+	}
+	for i, arg := range os.Args[1:] {
+		fmt.Printf("%d: %s\n", i, arg)
+	}
+}
+</code></pre>
+<figure><img src="https://example.com/img/2.jpg" alt="reader"><figcaption>The reader view</figcaption></figure>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<ul><li>Fast startup with cached feeds</li><li>Read tracking stored in SQLite<ul><li>per-post status</li><li>bulk writes in one transaction</li></ul></li><li>Inline images in supporting terminals</li></ul>
+<p><img src="https://example.com/img/3.webp" alt="search"></p>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<h1>Building a terminal RSS reader</h1>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<ul><li>Fast startup with cached feeds</li><li>Read tracking stored in SQLite<ul><li>per-post status</li><li>bulk writes in one transaction</li></ul></li><li>Inline images in supporting terminals</li></ul>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<h2>Code</h2>
+<pre><code class="language-go">package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func main() {
+	if len(os.Args) &lt; 2 {
+		fmt.Println("usage: izrss &lt;feed&gt;")
+		os.Exit(1)
+	}
+	for i, arg := range os.Args[1:] {
+		fmt.Printf("%d: %s\n", i, arg)
+	}
+}
+</code></pre>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<p><img src="/images/screenshot-1.png" alt="the home view"></p>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<blockquote><p>The best interface is the one that gets out of your way and lets you read.</p></blockquote>
+<table><thead><tr><th>Terminal</th><th>Images</th><th>Notes</th></tr></thead><tbody><tr><td>Ghostty</td><td>yes</td><td>unicode placeholders</td></tr><tr><td>kitty</td><td>yes</td><td>the original protocol</td></tr><tr><td>Alacritty</td><td>no</td><td>alt text fallback</td></tr></tbody></table>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<pre><code class="language-go">package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func main() {
+	if len(os.Args) &lt; 2 {
+		fmt.Println("usage: izrss &lt;feed&gt;")
+		os.Exit(1)
+	}
+	for i, arg := range os.Args[1:] {
+		fmt.Printf("%d: %s\n", i, arg)
+	}
+}
+</code></pre>
+<figure><img src="https://example.com/img/2.jpg" alt="reader"><figcaption>The reader view</figcaption></figure>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<ul><li>Fast startup with cached feeds</li><li>Read tracking stored in SQLite<ul><li>per-post status</li><li>bulk writes in one transaction</li></ul></li><li>Inline images in supporting terminals</li></ul>
+<p><img src="https://example.com/img/3.webp" alt="search"></p>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<h1>Building a terminal RSS reader</h1>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<ul><li>Fast startup with cached feeds</li><li>Read tracking stored in SQLite<ul><li>per-post status</li><li>bulk writes in one transaction</li></ul></li><li>Inline images in supporting terminals</li></ul>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<h2>Code</h2>
+<pre><code class="language-go">package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func main() {
+	if len(os.Args) &lt; 2 {
+		fmt.Println("usage: izrss &lt;feed&gt;")
+		os.Exit(1)
+	}
+	for i, arg := range os.Args[1:] {
+		fmt.Printf("%d: %s\n", i, arg)
+	}
+}
+</code></pre>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<p><img src="/images/screenshot-1.png" alt="the home view"></p>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<blockquote><p>The best interface is the one that gets out of your way and lets you read.</p></blockquote>
+<table><thead><tr><th>Terminal</th><th>Images</th><th>Notes</th></tr></thead><tbody><tr><td>Ghostty</td><td>yes</td><td>unicode placeholders</td></tr><tr><td>kitty</td><td>yes</td><td>the original protocol</td></tr><tr><td>Alacritty</td><td>no</td><td>alt text fallback</td></tr></tbody></table>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<pre><code class="language-go">package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func main() {
+	if len(os.Args) &lt; 2 {
+		fmt.Println("usage: izrss &lt;feed&gt;")
+		os.Exit(1)
+	}
+	for i, arg := range os.Args[1:] {
+		fmt.Printf("%d: %s\n", i, arg)
+	}
+}
+</code></pre>
+<figure><img src="https://example.com/img/2.jpg" alt="reader"><figcaption>The reader view</figcaption></figure>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<ul><li>Fast startup with cached feeds</li><li>Read tracking stored in SQLite<ul><li>per-post status</li><li>bulk writes in one transaction</li></ul></li><li>Inline images in supporting terminals</li></ul>
+<p><img src="https://example.com/img/3.webp" alt="search"></p>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>
+<p>Terminal user interfaces are having a moment. With libraries like <a href="https://example.com/bubbletea">Bubble Tea</a> and <a href="/lipgloss">Lip Gloss</a>, building <strong>delightful</strong> tools is easier than ever, and <em>people notice</em>. This paragraph talks about <code>tea.Model</code> and why the Elm architecture fits.</p>

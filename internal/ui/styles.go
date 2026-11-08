@@ -2,37 +2,46 @@
 package ui
 
 import (
-	"charm.land/bubbles/v2/table"
+	"cmp"
+	"image/color"
+
 	"charm.land/lipgloss/v2"
 
 	"github.com/isabelroses/izrss/internal/config"
+	"github.com/isabelroses/izrss/internal/reader"
 )
 
+// Styles are the UI's fixed styles, built from the configured palette.
 type Styles struct {
-	Main lipgloss.Style
-	Help lipgloss.Style
+	Header lipgloss.Style // reader title line
+	Hint   lipgloss.Style // hint descriptions, status, placeholders
+	Key    lipgloss.Style // hint keys
+	Border lipgloss.Style // pane separator
 }
+
+func hex(s string) color.Color { return lipgloss.Color(s) }
 
 // NewStyles creates styles based on the configuration
 func NewStyles(cfg *config.Config) *Styles {
+	c := cfg.Colors
 	return &Styles{
-		Main: lipgloss.NewStyle().
-			Foreground(lipgloss.Color(cfg.Colors.Text)).
-			Border(lipgloss.RoundedBorder(), true).
-			BorderForeground(lipgloss.Color(cfg.Colors.Borders)).
-			Padding(0, 1).
-			Margin(0),
-		Help: lipgloss.NewStyle().Foreground(lipgloss.Color(cfg.Colors.Subtext)),
+		Header: lipgloss.NewStyle().Bold(true).Foreground(hex(c.Text)),
+		Hint:   lipgloss.NewStyle().Foreground(hex(c.Subtext)),
+		Key:    lipgloss.NewStyle().Foreground(hex(c.Accent)),
+		Border: lipgloss.NewStyle().Foreground(hex(c.Borders)),
 	}
 }
 
-// TableStyles returns the style for tables based on the configuration
-func TableStyles(cfg *config.Config) table.Styles {
-	return table.Styles{
-		Header: lipgloss.NewStyle().Bold(true),
-		Cell:   lipgloss.NewStyle(),
-		Selected: lipgloss.NewStyle().
-			Foreground(lipgloss.Color(cfg.Colors.Inverttext)).
-			Background(lipgloss.Color(cfg.Colors.Accent)),
+// readerTheme builds the reader's colours, falling back to the palette.
+func readerTheme(cfg *config.Config) reader.Theme {
+	c, r := cfg.Colors, cfg.Reader
+	return reader.Theme{
+		Text:      hex(c.Text),
+		Subtle:    hex(c.Subtext),
+		Heading:   hex(cmp.Or(r.Heading, c.Accent)),
+		Link:      hex(cmp.Or(r.Link, c.Accent)),
+		Code:      hex(cmp.Or(r.Code, c.Subtext)),
+		Quote:     hex(cmp.Or(r.Quote, c.Subtext)),
+		CodeTheme: r.CodeTheme,
 	}
 }

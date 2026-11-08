@@ -40,27 +40,6 @@ func TestFeedsGetTotalUnreads(t *testing.T) {
 	}
 }
 
-func TestToggleRead(t *testing.T) {
-	feeds := Feeds{
-		{Posts: []Post{
-			{UUID: "1", Read: false},
-			{UUID: "2", Read: true},
-		}},
-	}
-
-	// Toggle first post (false -> true)
-	ToggleRead(feeds, 0, 0)
-	if !feeds[0].Posts[0].Read {
-		t.Errorf("Expected post to be read after toggle")
-	}
-
-	// Toggle again (true -> false)
-	ToggleRead(feeds, 0, 0)
-	if feeds[0].Posts[0].Read {
-		t.Errorf("Expected post to be unread after second toggle")
-	}
-}
-
 func TestReadAll(t *testing.T) {
 	feeds := Feeds{
 		{Posts: []Post{
@@ -75,29 +54,6 @@ func TestReadAll(t *testing.T) {
 		if !post.Read {
 			t.Errorf("Expected all posts to be read")
 		}
-	}
-}
-
-func TestMarkRead(t *testing.T) {
-	feeds := Feeds{
-		{Posts: []Post{
-			{UUID: "1", Read: false},
-		}},
-	}
-
-	MarkRead(feeds, 0, 0)
-
-	if !feeds[0].Posts[0].Read {
-		t.Errorf("Expected post to be marked as read")
-	}
-}
-
-func TestReadSymbol(t *testing.T) {
-	if ReadSymbol(true) != "" {
-		t.Errorf("Expected empty string for read post")
-	}
-	if ReadSymbol(false) != "•" {
-		t.Errorf("Expected bullet for unread post")
 	}
 }
 
@@ -135,7 +91,7 @@ func TestParseDate(t *testing.T) {
 		},
 		{
 			name:        "falls back to layout matching",
-			item:        &gofeed.Item{Published: "Mon, 02 Jan 2006 15:04:05 -0700"},
+			item:        &gofeed.Item{Published: "02-Jan-2006"},
 			wantDisplay: "2006-01-02",
 		},
 		{

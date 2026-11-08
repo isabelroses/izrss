@@ -3,226 +3,243 @@ package ui
 import (
 	"log"
 	"os"
+	"runtime/debug"
+	"time"
 
-	"charm.land/bubbles/v2/table"
+	"charm.land/bubbles/v2/help"
+	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textinput"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
-	"charm.land/glamour/v2"
 	"charm.land/lipgloss/v2"
 
 	"github.com/isabelroses/izrss/internal/config"
+	"github.com/isabelroses/izrss/internal/images"
+	"github.com/isabelroses/izrss/internal/reader"
 	"github.com/isabelroses/izrss/internal/rss"
 	"github.com/isabelroses/izrss/internal/storage"
 )
 
-// Model is the main model for the application
+type screen int
+
+const (
+	screenMain screen = iota
+	screenReader
+)
+
+type pane int
+
+const (
+	paneFeeds pane = iota
+	panePosts
+)
+
+// Model is the application state.
 type Model struct {
-	help     HelpModel
-	keys     keyMap
-	glam     *glamour.TermRenderer
-	context  context
+	cfg     *config.Config
+	db      *storage.DB
+	fetcher *rss.Fetcher
+	styles  *Styles
+	help    help.Model
+
+	width, height int
+	ready         bool
+	started       bool // initial feed selection has been made
+
+	screen   screen
+	overlay  overlay
+	palette  palette
+	focus    pane
+	postsFor string // the feed key the posts pane was built for
+	feeds    rss.Feeds
+	feedList list
+	postList list
+	refresh  refreshState
+	toasts   toasts
+	now      func() time.Time
+	openURL  func(string) error
+
+	// reader
 	viewport viewport.Model
-	filter   textinput.Model
-	table    table.Model
-	ready    bool
+	open     openRef         // the post in the reader
+	post     rss.Post        // a copy of it, for rendering
+	doc      reader.Document // the open post, as last rendered
+	docWidth []int           // the cell width of each of doc.Lines
 
-	cfg       *config.Config
-	db        *storage.DB
-	fetcher   *rss.Fetcher
-	styles    *Styles
-	glamStyle string
+	imgOn      bool
+	imgFetcher *images.Fetcher
+	ids        *images.IDs
+	cell       images.Cell
+	imgs       map[string]*postImage // images of imgPost, by resolved src
+	imgPost    string
+	imgToasted bool // the open post's image failures were reported
+
+	warnings []string // config warnings, toasted at startup
 }
 
-// Init loads feeds from cache for an instant first paint, then refreshes them
-// over the network, so the UI never blocks on startup.
-func (m Model) Init() tea.Cmd {
-	return tea.Sequence(m.loadCachedFeeds(), m.refreshAll())
-}
+// openRef identifies the post in the reader independently of row order.
+type openRef struct{ feedURL, key string }
 
-// NewModel creates a new model with sensible defaults
-func NewModel(cfg *config.Config, db *storage.DB, fetcher *rss.Fetcher) *Model {
+// NewModel creates a model; nothing touches the terminal or network here.
+func NewModel(cfg *config.Config, db *storage.DB, fetcher *rss.Fetcher, imgFetcher *images.Fetcher, warnings []string) *Model {
 	styles := NewStyles(cfg)
+	m := &Model{
+		cfg:      cfg,
+		help:     newHelp(styles),
+		db:       db,
+		fetcher:  fetcher,
+		styles:   styles,
+		palette:  newPalette(),
+		viewport: viewport.New(),
+		now:      time.Now,
+		openURL:  openURL,
 
-	t := table.New(table.WithFocused(true))
-	t.SetStyles(TableStyles(cfg))
-
-	// Resolve the background now, before bubbletea owns stdin: querying it later
-	// means bubbletea swallows the terminal's reply and we block ~5s waiting on a
-	// response that never arrives. Glamour v2 has no auto-style, so we pick one.
-	isDark := lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
-	glamStyle := "light"
-	if isDark {
-		glamStyle = "dark"
+		imgOn:      imgFetcher != nil && images.Enabled(cfg.Reader.Images, os.Getenv),
+		imgFetcher: imgFetcher,
+		ids:        images.NewIDs(),
+		imgs:       map[string]*postImage{},
+		warnings:   warnings,
 	}
-
-	f := textinput.New()
-	f.Prompt = "Filter: "
-	fStyles := textinput.DefaultStyles(isDark)
-	fStyles.Focused.Prompt = lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("229"))
-	f.SetStyles(fStyles)
-
-	return &Model{
-		context:   context{},
-		viewport:  viewport.New(),
-		table:     t,
-		ready:     false,
-		help:      NewHelp(styles),
-		keys:      defaultKeyMap,
-		filter:    f,
-		cfg:       cfg,
-		db:        db,
-		fetcher:   fetcher,
-		styles:    styles,
-		glamStyle: glamStyle,
-	}
-}
-
-// Update handles messages and updates the model
-func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var (
-		cmd  tea.Cmd
-		cmds []tea.Cmd
-	)
-
-	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		m = m.handleWindowSize(msg)
-	case tea.KeyPressMsg:
-		m, cmd = m.handleKeys(msg)
-		cmds = append(cmds, cmd)
-	case feedsRefreshedMsg:
-		m.context.feeds = msg.feeds
-		m.reloadList()
-	case feedRefreshedMsg:
-		if msg.id >= 0 && msg.id < len(m.context.feeds) {
-			m.context.feeds[msg.id].Posts = msg.posts
-			if err := m.context.feeds.ReadTracking(m.db); err != nil {
-				log.Printf("error reading tracking: %v", err)
-			}
-		}
-		m.reloadList()
-	}
-
-	m, cmd = m.updateViewport(msg)
-	cmds = append(cmds, cmd)
-
-	return m, tea.Batch(cmds...)
-}
-
-func (m Model) handleWindowSize(msg tea.WindowSizeMsg) Model {
-	framew, frameh := m.styles.Main.GetFrameSize()
-
-	height := msg.Height - frameh
-	width := msg.Width - framew
-
-	m.table.SetWidth(width)
-	m.table.SetHeight(height - lipgloss.Height(m.help.View(m.keys, m)))
-
-	if !m.ready {
-		m.viewport = viewport.New(viewport.WithWidth(width), viewport.WithHeight(height))
-
-		m.setupGlamour(width)
-
-		if m.cfg.Home == "mixed" {
-			m.loadMixed()
-		} else {
-			m.loadHome()
-		}
-
-		m.ready = true
-	} else {
-		m.viewport.SetWidth(width)
-		m.viewport.SetHeight(height)
-	}
-
+	// Assume a dark background until the terminal answers asynchronously; a
+	// synchronous query blocks startup for up to 4s on some terminals.
+	m.setBackground(true)
+	m.rebuildFeeds()
 	return m
 }
 
-func (m *Model) setupGlamour(width int) {
-	var glamWidth glamour.TermRendererOption
-	switch size := m.cfg.Reader.Size.(type) {
-	case string:
-		switch size {
-		case "full", "fullscreen":
-			glamWidth = glamour.WithWordWrap(width)
-		case "most":
-			glamWidth = glamour.WithWordWrap(int(float64(width) * 0.75))
-		case "recomended":
-			glamWidth = glamour.WithWordWrap(80)
-		default:
-			glamWidth = glamour.WithWordWrap(80)
-		}
-	case int64:
-		glamWidth = glamour.WithWordWrap(int(size))
-	default:
-		log.Printf("invalid reader size: %v, using default", m.cfg.Reader.Size)
-		glamWidth = glamour.WithWordWrap(80)
-	}
-
-	var glamTheme glamour.TermRendererOption
-	switch m.cfg.Reader.Theme {
-	case "environment":
-		glamTheme = glamour.WithEnvironmentConfig()
-	case "":
-		glamTheme = glamour.WithStandardStyle(m.glamStyle)
-	default:
-		glamTheme = glamour.WithStylePath(m.cfg.Reader.Theme)
-	}
-
-	m.glam, _ = glamour.NewTermRenderer(
-		glamTheme,
-		glamWidth,
-		glamour.WithChromaFormatter("terminal256"),
+// Init loads cached feeds for an instant first paint, then refreshes them over
+// the network. The terminal background arrives as a tea.BackgroundColorMsg.
+func (m Model) Init() tea.Cmd {
+	return tea.Batch(
+		tea.RequestBackgroundColor,
+		minuteTick(),
+		m.warningsCmd(),
+		tea.Sequence(m.loadCachedFeeds(), m.refreshFeeds(m.allIndexes())),
 	)
 }
 
-func (m Model) updateViewport(msg tea.Msg) (Model, tea.Cmd) {
-	var (
-		cmd  tea.Cmd
-		cmds []tea.Cmd
-	)
-
-	m.help, cmd = m.help.Update(msg)
-	cmds = append(cmds, cmd)
-	m.table, cmd = m.table.Update(msg)
-	cmds = append(cmds, cmd)
-
-	if m.context.curr != "reader" && m.context.curr != "search" {
-		view := lipgloss.JoinVertical(
-			lipgloss.Top,
-			m.table.View(),
-			m.help.View(m.keys, m),
-		)
-		m.viewport.SetContent(view)
-	} else if m.context.curr == "search" {
-		m.filter, cmd = m.filter.Update(msg)
-		cmds = append(cmds, cmd)
-
-		view := lipgloss.JoinVertical(
-			lipgloss.Top,
-			m.filter.View(),
-			m.table.View(),
-			m.help.View(m.keys, m),
-		)
-
-		m.viewport.SetContent(view)
+// warningsCmd turns config warnings into toasts.
+func (m Model) warningsCmd() tea.Cmd {
+	cmds := make([]tea.Cmd, len(m.warnings))
+	for i, w := range m.warnings {
+		cmds[i] = func() tea.Msg { return notifyWarn(w) }
 	}
+	return tea.Batch(cmds...)
+}
 
-	if m.context.curr == "reader" && m.viewport.ScrollPercent() >= m.cfg.Reader.ReadThreshold {
-		post := &m.context.feeds[m.context.feed.ID].Posts[m.context.post.ID]
-		if !post.Read {
-			rss.MarkRead(m.context.feeds, m.context.feed.ID, m.context.post.ID)
-			if err := m.context.feeds.WritePostTracking(m.db, m.context.feed.ID, m.context.post.ID); err != nil {
-				log.Printf("error writing tracking: %v", err)
-			}
+// setBackground applies the styles that depend on the terminal background.
+func (m *Model) setBackground(isDark bool) {
+	st := textinput.DefaultStyles(isDark)
+	st.Focused.Prompt = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(m.cfg.Colors.Accent))
+	st.Cursor.Blink = false // a steady cursor needs no redraw timer
+	m.palette.input.SetStyles(st)
+}
+
+// Update routes messages to the current screen.
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	defer logPanic()
+	var cmds []tea.Cmd
+
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.resize(msg.Width, msg.Height)
+		m.refreshCellSize()
+		if m.screen == screenReader {
+			cmds = append(cmds, m.resizeImages())
+			m.rerenderReader()
 		}
+	case tea.BackgroundColorMsg:
+		m.setBackground(msg.IsDark())
+	case tea.ResumeMsg:
+		if m.screen == screenReader {
+			cmds = append(cmds, m.reuploadImages())
+		}
+	case tea.KeyPressMsg:
+		switch {
+		case m.overlay == overlayHelp:
+			m.overlay = overlayNone // any key closes help
+		case m.overlay == overlayPalette:
+			cmds = append(cmds, m.paletteKey(msg))
+		case key.Matches(msg, bindings.Search): // both screens
+			cmds = append(cmds, m.openPalette())
+		case key.Matches(msg, bindings.Help):
+			m.overlay = overlayHelp
+		case m.screen == screenReader:
+			cmds = append(cmds, m.readerKey(msg))
+		default:
+			cmds = append(cmds, m.mainKey(msg))
+		}
+	case tea.MouseWheelMsg:
+		if m.screen == screenReader {
+			var cmd tea.Cmd
+			m.viewport, cmd = m.viewport.Update(msg)
+			cmds = append(cmds, cmd, m.markReadIfScrolled())
+		}
+	case feedsRefreshedMsg:
+		for _, e := range msg.errs {
+			cmds = append(cmds, m.notify(toastError, e))
+		}
+		m.feeds = msg.feeds
+		m.feedsChanged()
+		if !msg.at.IsZero() {
+			m.refresh.at = msg.at
+		}
+		m.rebuildFeeds()
+		m.selectInitialFeed()
+	case refreshStartedMsg:
+		m.refresh.total += msg.total
+	case feedLoadedMsg:
+		cmds = append(cmds, m.feedLoaded(msg))
+	case minuteTickMsg:
+		cmds = append(cmds, minuteTick())
+	case imageLoadedMsg:
+		cmds = append(cmds, m.imageLoaded(msg), m.imageFailureToast())
+	case imageReadyMsg:
+		m.imageReady(msg)
+	case toastExpiredMsg:
+		m.toasts.expire(msg)
+	case notifyMsg:
+		cmds = append(cmds, m.notify(msg.kind, msg.text))
 	}
-
-	m.viewport, cmd = m.viewport.Update(msg)
-	cmds = append(cmds, cmd)
-
 	return m, tea.Batch(cmds...)
+}
+
+// resize lays out both screens for a width×height terminal.
+func (m *Model) resize(width, height int) {
+	m.width, m.height = width, height
+	m.viewport.SetWidth(width)
+	m.viewport.Style = pageStyle(width)
+	m.viewport.SetHeight(max(height-2, 1)) // header and hint lines; the page style pads inside
+	body := max(height-1, 0)               // the hint/status line
+	m.feedList.setHeight(body)
+	m.postList.setHeight(body)
+	m.ready = true
+}
+
+func (m *Model) selectInitialFeed() {
+	if m.started || len(m.feeds) == 0 {
+		return
+	}
+	m.started = true
+	if m.cfg.Home != "mixed" && len(m.feedList.items) > 1 {
+		m.feedList.move(1 - m.feedList.cursor)
+		m.rebuildPosts()
+	}
+}
+
+// quit saves read state and exits.
+func (m *Model) quit() tea.Cmd {
+	if err := m.feeds.WriteTracking(m.db); err != nil {
+		log.Printf("error writing tracking: %v", err)
+	}
+	return tea.Quit
+}
+
+// logPanic records a panic and its stack in the log file, then lets it
+// continue so Bubble Tea restores the terminal. Use as `defer logPanic()`.
+func logPanic() {
+	if r := recover(); r != nil {
+		log.Printf("panic: %v\n%s", r, debug.Stack())
+		panic(r)
+	}
 }

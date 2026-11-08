@@ -2,8 +2,10 @@
 package storage
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/adrg/xdg"
@@ -57,12 +59,6 @@ func (db *DB) Close() error {
 
 func (db *DB) createTables() error {
 	_, err := db.conn.Exec(`
-		CREATE TABLE IF NOT EXISTS post_read_status (
-			uuid TEXT PRIMARY KEY,
-			feed_url TEXT NOT NULL,
-			read INTEGER NOT NULL DEFAULT 0
-		);
-
 		CREATE TABLE IF NOT EXISTS cache_metadata (
 			key TEXT PRIMARY KEY,
 			value TEXT NOT NULL
@@ -73,31 +69,118 @@ func (db *DB) createTables() error {
 			content BLOB NOT NULL,
 			fetched_at TEXT NOT NULL
 		);
-
-		CREATE INDEX IF NOT EXISTS idx_feed_url ON post_read_status(feed_url);
 	`)
-	return err
+	if err != nil {
+		return err
+	}
+	return db.migrate()
 }
 
+// schemaVersion is the PRAGMA user_version of the current schema.
+//
+//	0: post_read_status keyed by uuid (the item GUID) alone, so GUID-less
+//	   posts shared one row and a GUID in two feeds shared one read flag.
+//	1: post_read_status keyed by (feed_url, key), key being rss.Post.Key().
+const schemaVersion = 1
+
+// migrate brings the schema up to schemaVersion. It is a single PRAGMA read
+// when the database is already current.
+func (db *DB) migrate() error {
+	var v int
+	if err := db.conn.QueryRow(`PRAGMA user_version`).Scan(&v); err != nil {
+		return fmt.Errorf("reading schema version: %w", err)
+	}
+	if v >= schemaVersion {
+		return nil
+	}
+
+	ctx := context.Background()
+	conn, err := db.conn.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+	// IMMEDIATE takes the write lock up front, so two instances starting at
+	// once migrate one after the other rather than racing.
+	if _, err := conn.ExecContext(ctx, `BEGIN IMMEDIATE`); err != nil {
+		return fmt.Errorf("beginning migration: %w", err)
+	}
+	if err := migrateV1(ctx, conn); err != nil {
+		_, _ = conn.ExecContext(ctx, `ROLLBACK`)
+		return fmt.Errorf("migrating schema to v1: %w", err)
+	}
+	if _, err := conn.ExecContext(ctx, `COMMIT`); err != nil {
+		return fmt.Errorf("committing migration: %w", err)
+	}
+	return nil
+}
+
+// migrateV1 rebuilds post_read_status keyed by (feed_url, key). A v0 row's
+// uuid is a GUID, which is exactly Post.Key() for that post, and its feed_url
+// is the feed it was first saved from, so rows carry over as they are. The
+// empty-uuid row, shared by every GUID-less post, is meaningless and dropped:
+// those posts start unread under their new link- or title-based keys. Must
+// run inside a transaction.
+func migrateV1(ctx context.Context, conn *sql.Conn) error {
+	var v int
+	if err := conn.QueryRowContext(ctx, `PRAGMA user_version`).Scan(&v); err != nil {
+		return err
+	}
+	if v >= 1 { // another instance got here first
+		return nil
+	}
+	var old int
+	if err := conn.QueryRowContext(ctx,
+		`SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'post_read_status'`).Scan(&old); err != nil {
+		return err
+	}
+	stmts := []string{`
+		CREATE TABLE post_read_status_v1 (
+			feed_url TEXT NOT NULL,
+			key TEXT NOT NULL,
+			read INTEGER NOT NULL DEFAULT 0,
+			PRIMARY KEY (feed_url, key)
+		)`}
+	if old > 0 {
+		stmts = append(stmts,
+			`INSERT INTO post_read_status_v1 (feed_url, key, read)
+				SELECT feed_url, uuid, read FROM post_read_status WHERE uuid <> ''`,
+			`DROP TABLE post_read_status`, // and its idx_feed_url; the primary key covers feed_url
+		)
+	}
+	stmts = append(stmts,
+		`ALTER TABLE post_read_status_v1 RENAME TO post_read_status`,
+		`PRAGMA user_version = 1`,
+	)
+	for _, q := range stmts {
+		if _, err := conn.ExecContext(ctx, q); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// PostReadStatus is one post's read state; Key is rss.Post.Key().
 type PostReadStatus struct {
-	UUID    string
 	FeedURL string
+	Key     string
 	Read    bool
 }
 
+// ReadKey identifies a post's read state: the feed it is in and its key.
+type ReadKey struct{ FeedURL, Key string }
+
+// upsertReadStatus saves one post's read status; go-sqlite3 stores bools as
+// INTEGER 1 or 0.
+const upsertReadStatus = `
+	INSERT INTO post_read_status (feed_url, key, read)
+	VALUES (?, ?, ?)
+	ON CONFLICT(feed_url, key) DO UPDATE SET read = excluded.read
+`
+
 // SavePostReadStatus saves the read status for a single post
-func (db *DB) SavePostReadStatus(uuid, feedURL string, read bool) error {
-	readInt := 0
-	if read {
-		readInt = 1
-	}
-
-	_, err := db.conn.Exec(`
-		INSERT INTO post_read_status (uuid, feed_url, read)
-		VALUES (?, ?, ?)
-		ON CONFLICT(uuid) DO UPDATE SET read = excluded.read
-	`, uuid, feedURL, readInt)
-
+func (db *DB) SavePostReadStatus(feedURL, key string, read bool) error {
+	_, err := db.conn.Exec(upsertReadStatus, feedURL, key, read)
 	return err
 }
 
@@ -110,27 +193,19 @@ func (db *DB) SavePostReadStatuses(statuses []PostReadStatus) error {
 	defer func() {
 		err := tx.Rollback()
 		if err != nil && err != sql.ErrTxDone {
-			fmt.Printf("transaction rollback error: %v\n", err)
+			log.Printf("transaction rollback error: %v", err)
 		}
 	}()
 
-	stmt, err := tx.Prepare(`
-		INSERT INTO post_read_status (uuid, feed_url, read)
-		VALUES (?, ?, ?)
-		ON CONFLICT(uuid) DO UPDATE SET read = excluded.read
-	`)
+	stmt, err := tx.Prepare(upsertReadStatus)
 	if err != nil {
 		return fmt.Errorf("preparing statement: %w", err)
 	}
 	defer func() { _ = stmt.Close() }()
 
 	for _, status := range statuses {
-		readInt := 0
-		if status.Read {
-			readInt = 1
-		}
-		if _, err = stmt.Exec(status.UUID, status.FeedURL, readInt); err != nil {
-			return fmt.Errorf("saving post %s: %w", status.UUID, err)
+		if _, err = stmt.Exec(status.FeedURL, status.Key, status.Read); err != nil {
+			return fmt.Errorf("saving post %s: %w", status.Key, err)
 		}
 	}
 
@@ -140,22 +215,22 @@ func (db *DB) SavePostReadStatuses(statuses []PostReadStatus) error {
 	return nil
 }
 
-// LoadPostReadStatuses returns a map of UUID to read status
-func (db *DB) LoadPostReadStatuses() (map[string]bool, error) {
-	rows, err := db.conn.Query(`SELECT uuid, read FROM post_read_status`)
+// LoadPostReadStatuses returns every saved read status
+func (db *DB) LoadPostReadStatuses() (map[ReadKey]bool, error) {
+	rows, err := db.conn.Query(`SELECT feed_url, key, read FROM post_read_status`)
 	if err != nil {
 		return nil, fmt.Errorf("querying read statuses: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
-	statuses := make(map[string]bool)
+	statuses := make(map[ReadKey]bool)
 	for rows.Next() {
-		var uuid string
-		var read int
-		if err := rows.Scan(&uuid, &read); err != nil {
+		var k ReadKey
+		var read bool
+		if err := rows.Scan(&k.FeedURL, &k.Key, &read); err != nil {
 			return nil, fmt.Errorf("scanning row: %w", err)
 		}
-		statuses[uuid] = read == 1
+		statuses[k] = read
 	}
 
 	if err := rows.Err(); err != nil {
@@ -215,10 +290,4 @@ func (db *DB) LoadFeedCache(url string) ([]byte, error) {
 		return nil, fmt.Errorf("querying feed cache: %w", err)
 	}
 	return content, nil
-}
-
-// ClearFeedCache removes all cached feed content
-func (db *DB) ClearFeedCache() error {
-	_, err := db.conn.Exec(`DELETE FROM feed_cache`)
-	return err
 }
