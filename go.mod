@@ -10,7 +10,7 @@ require (
 	github.com/alecthomas/chroma/v2 v2.27.0
 	github.com/alecthomas/kong v1.17.0
 	github.com/charmbracelet/x/ansi v0.11.9
-	github.com/mattn/go-sqlite3 v1.14.52
+	github.com/mattn/go-sqlite3 v1.14.53
 	github.com/mmcdole/gofeed v1.5.0
 	github.com/pelletier/go-toml/v2 v2.4.3
 	golang.org/x/image v0.47.0
